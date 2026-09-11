@@ -5,19 +5,20 @@ const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_32dg2CRsZ2Nws6qA6x8JgQ_Jgs3Ta-e';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 🛡️ تابع جلوگیری از حملات XSS
+// 🛡️ جلوگیری از XSS
 const esc = (str) => {
     if (str === null || str === undefined) return '';
     return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 };
 
 // ============================================
-// 🗓️ کتابخانه تقویم شمسی
+// 🗓️ کتابخانه تقویم شمسی (اصلاح شده)
 // ============================================
 const Jalaali = {
     jMonthName: ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'],
     today() {
         const now = new Date();
+        // ✅ اصلاح خطای تقویم: باید 3 پارامتر دریافت کند نه یک شیء Date
         const j = libToJalaali(now.getFullYear(), now.getMonth() + 1, now.getDate());
         return { year: j.jy, month: j.jm, day: j.jd };
     },
@@ -38,7 +39,7 @@ const Jalaali = {
         const date1 = new Date(g1.gy, g1.gm - 1, g1.gd);
         const g2 = libToGregorian(j2.year, j2.month, j2.day);
         const date2 = new Date(g2.gy, g2.gm - 1, g2.gd);
-        return Math.round((date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24));
+        return Math.round((date2.getTime() - date1.getTime()) / 86400000);
     },
     isLeapJalaali(jy) { return libIsLeap(jy); },
     jMonthLength(jy, jm) { return libMonthLength(jy, jm); },
@@ -50,26 +51,27 @@ const Jalaali = {
 // 📦 مدیریت داده‌ها (Supabase)
 // ============================================
 let projectsCache = [];
+let calendarTargetInput = null;
 
 async function loadProjects() {
     const { data, error } = await supabase.from('typists').select('*, typist_reports(*)').is('deleted_at', null).order('created_at', { ascending: false });
-    if (error) { console.error("خطا در دریافت اطلاعات:", error); return []; }
+    if (error) { console.error("خطا:", error); return []; }
     projectsCache = data.map(p => {
-        const createdDate = p.created_at ? new Date(p.created_at) : new Date();
-        const jCreated = Jalaali.toJalaali(createdDate.getFullYear(), createdDate.getMonth() + 1, createdDate.getDate());
+        const cd = p.created_at ? new Date(p.created_at) : new Date();
+        const jc = Jalaali.toJalaali(cd.getFullYear(), cd.getMonth()+1, cd.getDate());
         return {
             id: p.id, name: p.name, phone: p.phone, title: p.title, deliveryDate: p.delivery_date,
-            createdAt: Jalaali.formatJalali(jCreated.year, jCreated.month, jCreated.day),
+            createdAt: Jalaali.formatJalali(jc.year, jc.month, jc.day),
             reports: p.typist_reports || [], completed: p.completed || false
         };
     });
     return projectsCache;
 }
 
-async function saveProjectToSupabase(project) {
-    const payload = { name: project.name, phone: project.phone, title: project.title, delivery_date: project.deliveryDate };
-    if (project.id) {
-        const { error } = await supabase.from('typists').update(payload).eq('id', project.id);
+async function saveProjectToSupabase(p) {
+    const payload = { name: p.name, phone: p.phone, title: p.title, delivery_date: p.deliveryDate };
+    if (p.id) {
+        const { error } = await supabase.from('typists').update(payload).eq('id', p.id);
         if (error) throw error;
     } else {
         const { error } = await supabase.from('typists').insert([payload]);
@@ -87,170 +89,174 @@ async function completeProjectInSupabase(id) {
     if (error) throw error;
 }
 
-async function insertReportToSupabase(projectId, period, pages, text, isLate, delayDays) {
-    const { error } = await supabase.from('typist_reports').insert([{ typist_id: projectId, period, pages, description: text, is_late: isLate, delay_days: delayDays }]);
+async function insertReportToSupabase(pid, per, pg, txt, isLate, delay) {
+    const { error } = await supabase.from('typist_reports').insert([{ typist_id: pid, period: per, pages: pg, description: txt, is_late: isLate, delay_days: delay }]);
     if (error) throw error;
 }
 
 // ============================================
 // 🧮 منطق وضعیت و دوره‌های ۱۰ روزه
 // ============================================
-function calculateProjectStatus(project) {
-    const today = Jalaali.today();
-    const createdJalali = Jalaali.parseJalali(project.createdAt);
-    if (!createdJalali) return { status: 'active', daysLeft: 0 };
-    const deliveryJalali = Jalaali.parseJalali(project.deliveryDate);
-    const daysSinceCreation = Jalaali.daysBetween(createdJalali, today);
-    const daysUntilDelivery = deliveryJalali ? Jalaali.daysBetween(today, deliveryJalali) : 0;
-    
-    if (project.completed) return { status: 'delivered', daysLeft: 0, currentPeriod: 0, daysUntilDelivery };
-    
-    const currentPeriod = Math.floor(daysSinceCreation / 10) + 1;
-    const deadlineDayForCurrentPeriod = currentPeriod * 10 - 1;
-    const reports = project.reports || [];
-    const reportedPeriods = reports.map(r => r.period);
-    const lastReportedPeriod = reportedPeriods.length > 0 ? Math.max(...reportedPeriods) : 0;
-    
-    if (reportedPeriods.includes(currentPeriod)) return { status: 'active', daysLeft: 0, currentPeriod, daysUntilDelivery, isLate: false };
-    if (lastReportedPeriod < currentPeriod - 1) return { status: 'delayed', daysLeft: 0, currentPeriod, daysUntilDelivery, delayText: `${currentPeriod - lastReportedPeriod - 1} دوره جا افتاده است` };
-    
-    const daysLeftInPeriod = deadlineDayForCurrentPeriod - daysSinceCreation + 1;
-    if (daysLeftInPeriod < 0) return { status: 'delayed', daysLeft: 0, currentPeriod, daysUntilDelivery, delayText: `${Math.abs(daysLeftInPeriod)} روز از موعد گزارش گذشته`, isLate: true, delayDays: Math.abs(daysLeftInPeriod) };
-    
-    const isUrgent = daysLeftInPeriod <= 3;
-    return { status: isUrgent ? 'pending' : 'active', daysLeft: daysLeftInPeriod, currentPeriod, daysUntilDelivery };
+function calculateProjectStatus(p) {
+    const t = Jalaali.today(); const c = Jalaali.parseJalali(p.createdAt); if (!c) return { status: 'active', daysLeft: 0 };
+    const d = Jalaali.parseJalali(p.deliveryDate); const ds = Jalaali.daysBetween(c, t); const dd = d ? Jalaali.daysBetween(t, d) : 0;
+    if (p.completed) return { status: 'delivered', daysLeft: 0, currentPeriod: 0, daysUntilDelivery: dd };
+    const cp = Math.floor(ds / 10) + 1; const dl = cp * 10 - 1;
+    const reps = p.reports || []; const rp = reps.map(r => r.period); const lp = rp.length > 0 ? Math.max(...rp) : 0;
+    if (rp.includes(cp)) return { status: 'active', daysLeft: 0, currentPeriod: cp, daysUntilDelivery: dd };
+    if (lp < cp - 1) return { status: 'delayed', daysLeft: 0, currentPeriod: cp, daysUntilDelivery: dd, delayText: `${cp - lp - 1} دوره جا افتاده` };
+    const dlip = dl - ds + 1;
+    if (dlip < 0) return { status: 'delayed', daysLeft: 0, currentPeriod: cp, daysUntilDelivery: dd, delayText: `${Math.abs(dlip)} روز تاخیر`, isLate: true, delayDays: Math.abs(dlip) };
+    return { status: dlip <= 3 ? 'pending' : 'active', daysLeft: dlip, currentPeriod: cp, daysUntilDelivery: dd };
 }
 
 // ============================================
-// 🎨 رندر کارت پروژه (طراحی آکاردئون - بسیار فشرده)
+// 🎨 رندر کارت پروژه (آکاردئونی - بدون onclick)
 // ============================================
-function renderProjectCard(project) {
-    const status = calculateProjectStatus(project);
-    const colors = {
-        active: { badge: 'bg-blue-50 text-blue-700 border-blue-100', bar: 'bg-blue-500' },
-        pending: { badge: 'bg-amber-50 text-amber-700 border-amber-100', bar: 'bg-amber-500' },
-        delayed: { badge: 'bg-red-50 text-red-700 border-red-100', bar: 'bg-red-500' },
-        delivered: { badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', bar: 'bg-emerald-500' }
-    }[status.status];
+function renderProjectCard(p) {
+    const s = calculateProjectStatus(p);
+    const isDelayed = s.status === 'delayed';
+    const badgeClass = isDelayed 
+        ? 'bg-red-50 dark:bg-red-500/10 text-red-600 border-red-100 dark:border-red-500/20' 
+        : 'bg-primary-50 dark:bg-primary-500/10 text-primary-600 border-primary-100 dark:border-primary-500/20';
     
-    const statusText = { active: 'به‌موقع', pending: `${status.daysLeft} روز مانده`, delayed: status.delayText || 'تاخیر', delivered: 'تکمیل شده' }[status.status];
-    
-    const totalPages = (project.reports || []).reduce((s, r) => s + (r.pages || 0), 0);
-    const reportsCount = (project.reports || []).length;
-    const initials = esc(project.name.split(' ').map(n => n[0]).join('').slice(0, 2));
-    
-    const reportsHtml = (project.reports || []).sort((a,b) => b.period - a.period).map(r => `
-        <div class="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg bg-slate-50 text-[11px] border border-slate-100">
-            <span class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full ${r.is_late ? 'bg-red-500' : 'bg-emerald-500'}"></span>دوره ${Jalaali.toPersianDigits(r.period)} • ${Jalaali.toPersianDigits(r.pages)} صفحه</span>
-        </div>`).join('');
+    let timeText = '';
+    if (s.status === 'delivered') timeText = 'تکمیل شده';
+    else if (s.daysUntilDelivery < 0) timeText = `${Jalaali.toPersianDigits(Math.abs(s.daysUntilDelivery))} روز گذشته`;
+    else if (s.daysUntilDelivery === 0) timeText = 'امروز';
+    else timeText = `${Jalaali.toPersianDigits(s.daysUntilDelivery)} روز مانده`;
 
-    return `<div class="project-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl transition-all animate-slide-up" data-id="${project.id}" data-status="${status.status}">
-        <!-- بخش بالایی (همیشه-visible) -->
-        <div class="flex items-center justify-between p-3 cursor-pointer toggle-card-details">
-            <div class="flex items-center gap-3 min-w-0 flex-1">
-                <div class="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 flex-shrink-0">${initials}</div>
-                <div class="min-w-0 flex-1">
-                    <h3 class="font-bold text-slate-900 text-sm truncate">${esc(project.name)}</h3>
-                    <span class="text-[10px] px-2 py-0.5 rounded-md font-bold border inline-block mt-0.5 ${colors.badge}">${statusText}</span>
-                </div>
+    const initials = esc(p.name.split(' ').map(n => n[0]).join('').slice(0, 2));
+    const reportsHtml = (p.reports || []).sort((a,b) => b.period - a.period).map(r => `
+        <div class="flex items-center justify-between gap-2 py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs border border-slate-100 dark:border-slate-700/50">
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+                <span class="w-2 h-2 rounded-full ${r.is_late ? 'bg-red-500' : 'bg-emerald-500'} flex-shrink-0"></span>
+                <span class="text-slate-700 dark:text-slate-300 font-medium truncate">دوره ${Jalaali.toPersianDigits(r.period)} • ${Jalaali.toPersianDigits(r.pages)} صفحه</span>
             </div>
-            <button class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 flex-shrink-0">
-                <svg class="w-5 h-5 transition-transform card-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </button>
         </div>
+    `).join('');
+
+    return `
+    <div class="project-card group glass rounded-2xl border border-slate-200/50 dark:border-slate-800/50 hover:shadow-lg transition-all duration-300 animate-slide-up" data-id="${p.id}" data-status="${s.status}">
         
-        <!-- بخش جزئیات (باز و بسته شونده) -->
-        <div class="card-details hidden px-3 pb-3 border-t border-slate-100 dark:border-slate-800 pt-3 space-y-3">
-            <div>
-                <p class="text-[10px] text-slate-400 font-bold uppercase mb-1">عنوان پروژه</p>
-                <p class="text-xs text-slate-700 font-medium">${esc(project.title)}</p>
-            </div>
-            <div class="flex items-center justify-between text-[11px]">
-                <span class="text-slate-500">تحویل: ${esc(project.deliveryDate)}</span>
-                <span class="text-slate-500" dir="ltr">${esc(Jalaali.toPersianDigits(project.phone))}</span>
-            </div>
-
-            ${status.status !== 'delivered' ? `
-            <div>
-                <div class="flex items-center justify-between mb-1">
-                    <span class="text-[10px] text-slate-400">دوره ${Jalaali.toPersianDigits(status.currentPeriod)} • ${status.daysLeft > 0 ? `${Jalaali.toPersianDigits(status.daysLeft)} روز مانده` : 'پایان یافته'}</span>
+        <!-- هدر کارت -->
+        <div class="p-5 flex items-center justify-between cursor-pointer select-none toggle-card-details">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-sm font-black text-white shadow-md flex-shrink-0">${initials}</div>
+                <div class="min-w-0">
+                    <h3 class="font-black text-slate-900 dark:text-white text-sm truncate">${esc(p.name)}</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono" dir="ltr" style="text-align:right;">${esc(Jalaali.toPersianDigits(p.phone))}</p>
                 </div>
-                <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                    <div class="${colors.bar} h-1.5 rounded-full" style="width: ${Math.min(100, ((10 - status.daysLeft) / 10) * 100)}%"></div>
+            </div>
+            <div class="flex items-center gap-3 flex-shrink-0">
+                <span class="px-2.5 py-1 rounded-lg text-[11px] font-black border ${badgeClass} whitespace-nowrap">${timeText}</span>
+                <svg class="card-chevron w-5 h-5 text-slate-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+        </div>
+
+        <!-- بدنه کارت (آکاردئون) -->
+        <div class="card-details-wrapper">
+            <div class="p-5 pt-0 space-y-4">
+                <div class="border-t border-slate-100 dark:border-slate-800 my-2"></div>
+
+                <div>
+                    <p class="text-[10px] font-black text-slate-400 mb-1 uppercase tracking-wider">عنوان پروژه</p>
+                    <p class="text-sm text-slate-800 dark:text-slate-100 font-bold leading-relaxed">${esc(p.title)}</p>
                 </div>
-            </div>` : ''}
 
-            <div class="flex items-center justify-between text-[11px] bg-slate-50 p-2 rounded-lg border border-slate-100">
-                <span class="text-slate-500">گزارش‌ها: ${Jalaali.toPersianDigits(reportsCount)} • ${Jalaali.toPersianDigits(totalPages)} صفحه</span>
-                ${reportsCount > 0 ? `<button type="button" class="toggle-reports text-primary-600 font-bold">جزئیات گزارش‌ها</button>` : ''}
-            </div>
-            
-            <div class="report-list hidden space-y-1.5 max-h-28 overflow-y-auto pr-1">
-                ${reportsHtml}
-            </div>
+                ${s.status !== 'delivered' ? `
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-[11px] text-slate-500 font-bold">دوره ${Jalaali.toPersianDigits(s.currentPeriod)} از ۱۰ روز</span>
+                        <span class="text-[11px] font-black ${isDelayed ? 'text-red-500' : 'text-primary-600'}">${s.daysLeft > 0 ? `${Jalaali.toPersianDigits(s.daysLeft)} روز مانده` : 'پایان یافته'}</span>
+                    </div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                        <div class="h-2 rounded-full transition-all duration-700 ease-out ${isDelayed ? 'bg-red-500' : 'bg-primary-500'}" style="width: ${Math.min(100, ((10 - s.daysLeft) / 10) * 100)}%"></div>
+                    </div>
+                </div>` : ''}
 
-            <div class="flex gap-2 pt-1">
-                ${status.status !== 'delivered' ? `
-                <button class="report-btn flex-1 py-2 rounded-lg ${status.status === 'delayed' ? 'bg-red-600' : 'bg-primary-600'} text-white text-[11px] font-bold" data-id="${project.id}">ثبت گزارش</button>
-                <button class="complete-btn py-2 px-3 rounded-lg bg-emerald-50 text-emerald-600 text-[11px] font-medium border border-emerald-100" data-id="${project.id}">تکمیل</button>` : `<div class="flex-1 py-2 rounded-lg bg-emerald-50 text-emerald-600 text-[11px] font-bold text-center">پروژه تکمیل شده است</div>`}
-                <button class="delete-btn p-2 rounded-lg bg-red-50 text-red-500 border border-red-100" data-id="${project.id}"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                ${(p.reports || []).length > 0 ? `
+                <div>
+                    <p class="text-[10px] font-black text-slate-400 mb-2 uppercase tracking-wider">سوابق گزارش</p>
+                    <div class="space-y-2 max-h-32 overflow-y-auto pr-1">${reportsHtml}</div>
+                </div>` : `<div class="py-4 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-dashed border-slate-200 dark:border-slate-700 text-center"><p class="text-xs text-slate-400 font-medium">هنوز گزارشی ثبت نشده است</p></div>`}
+
+                <div class="flex gap-3 pt-2">
+                    ${s.status !== 'delivered' ? `
+                    <button class="report-btn flex-1 py-2.5 rounded-xl ${isDelayed ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-600 hover:bg-primary-700'} text-white text-xs font-black transition flex items-center justify-center gap-2 shadow-lg" data-id="${p.id}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                        ثبت گزارش
+                    </button>
+                    <button class="complete-btn py-2.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 text-emerald-700 text-xs font-black transition flex items-center justify-center gap-2 border border-emerald-100" data-id="${p.id}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                        تکمیل
+                    </button>` : `
+                    <div class="flex-1 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 text-xs font-black transition flex items-center justify-center gap-2 border border-emerald-100">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        تکمیل شده
+                    </div>`}
+                    <button class="delete-btn w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-red-50 text-slate-500 hover:text-red-600 flex items-center justify-center transition border border-slate-200 dark:border-slate-700" data-id="${p.id}">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                </div>
             </div>
         </div>
     </div>`;
 }
 
 async function renderProjects() {
-    const projects = await loadProjects();
-    const listEl = document.getElementById('typistList');
-    const emptyEl = document.getElementById('emptyState');
-    if (projects.length === 0) { listEl.innerHTML = ''; emptyEl.classList.remove('hidden'); }
-    else { emptyEl.classList.add('hidden'); listEl.innerHTML = projects.map(renderProjectCard).join(''); }
-    updateStats(projects); applyFilter();
+    const ps = await loadProjects(); const l = document.getElementById('typistList'); const e = document.getElementById('emptyState');
+    if (ps.length === 0) { l.innerHTML = ''; e.classList.remove('hidden'); e.classList.add('flex','flex-col','items-center','justify-center'); }
+    else { e.classList.add('hidden'); const pr = { delayed: 0, pending: 1, active: 2, delivered: 3 }; const sorted = ps.slice().sort((a,b) => pr[calculateProjectStatus(a).status] - pr[calculateProjectStatus(b).status]); l.innerHTML = sorted.map(renderProjectCard).join(''); }
+    updateStats(ps); applyFilter();
 }
 
-function updateStats(projects) {
-    const stats = { active: 0, pending: 0, delayed: 0, delivered: 0 };
-    projects.forEach(p => { stats[calculateProjectStatus(p).status]++; });
-    document.getElementById('stat-active').textContent = Jalaali.toPersianDigits(stats.active);
-    document.getElementById('stat-pending').textContent = Jalaali.toPersianDigits(stats.pending);
-    document.getElementById('stat-delayed').textContent = Jalaali.toPersianDigits(stats.delayed);
-    document.getElementById('stat-delivered').textContent = Jalaali.toPersianDigits(stats.delivered);
+function updateStats(ps) {
+    const s = { active: 0, pending: 0, delayed: 0, delivered: 0 };
+    ps.forEach(p => s[calculateProjectStatus(p).status]++);
+    document.getElementById('stat-active').textContent = Jalaali.toPersianDigits(s.active);
+    document.getElementById('stat-pending').textContent = Jalaali.toPersianDigits(s.pending);
+    document.getElementById('stat-delayed').textContent = Jalaali.toPersianDigits(s.delayed);
+    document.getElementById('stat-delivered').textContent = Jalaali.toPersianDigits(s.delivered);
 }
 
+let currentFilter = 'all';
+function applyFilter() { document.querySelectorAll('.project-card').forEach(c => c.style.display = (currentFilter === 'all' || c.dataset.status === currentFilter) ? '' : 'none'); }
+document.querySelectorAll('.filter-btn').forEach(b => b.addEventListener('click', () => { currentFilter = b.dataset.filter; document.querySelectorAll('.filter-btn').forEach(x => x.classList.remove('bg-white','text-slate-900','shadow-sm')); b.classList.add('bg-white','text-slate-900','shadow-sm'); applyFilter(); }));
+document.querySelector('[data-filter="all"]').classList.add('bg-white','text-slate-900','shadow-sm');
+
 // ============================================
-// 🔐 احراز هویت
+// 📅 تقویم پاپ آپ مودال
 // ============================================
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = document.getElementById('loginBtn');
-    btn.disabled = true;
-    document.getElementById('loginSpinner').classList.remove('hidden');
-    document.getElementById('loginError').classList.add('hidden');
-    const email = document.getElementById('emailInput').value;
-    const password = document.getElementById('passwordInput').value;
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-        document.getElementById('loginError').classList.remove('hidden');
-        btn.disabled = false;
-        document.getElementById('loginSpinner').classList.add('hidden');
-    }
+let calendarState = { viewYear: null, viewMonth: null, selected: null };
+function openCalendar(inputEl, val = null) {
+    calendarTargetInput = inputEl; const t = Jalaali.today();
+    if (val && Jalaali.parseJalali(val)) { const p = Jalaali.parseJalali(val); calendarState.viewYear = p.year; calendarState.viewMonth = p.month; calendarState.selected = p; }
+    else { calendarState.viewYear = t.year; calendarState.viewMonth = t.month; calendarState.selected = null; }
+    renderCalendarModal(); document.getElementById('calendarModal').classList.remove('hidden');
+}
+function closeCalendar() { document.getElementById('calendarModal').classList.add('hidden'); }
+function renderCalendarModal() {
+    const c = document.getElementById('calendarContainer'); const t = Jalaali.today(); const { viewYear: vy, viewMonth: vm, selected: sel } = calendarState;
+    const fg = Jalaali.toGregorian(vy, vm, 1); const sd = (new Date(fg.year, fg.month-1, fg.day).getDay() + 1) % 7; const dm = Jalaali.jMonthLength(vy, vm);
+    let h = `<div class="flex items-center justify-between mb-6"><button type="button" class="cal-prev w-9 h-9 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button><div class="text-base font-black text-slate-900 dark:text-white">${Jalaali.jMonthName[vm-1]} ${Jalaali.toPersianDigits(vy)}</div><button type="button" class="cal-next w-9 h-9 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button></div><div class="grid grid-cols-7 gap-2 mb-3">${['ش','ی','د','س','چ','پ','ج'].map(d => `<div class="text-xs font-black text-slate-400 text-center">${d}</div>`).join('')}</div><div class="grid grid-cols-7 gap-2">`;
+    for (let i=0; i<sd; i++) h += `<div></div>`;
+    for (let d=1; d<=dm; d++) { const isT = vy === t.year && vm === t.month && d === t.day; const isS = sel && sel.year === vy && sel.month === vm && sel.day === d; h += `<div class="cal-day ${isT ? 'today' : ''} ${isS ? 'selected' : ''}" data-day="${d}">${Jalaali.toPersianDigits(d)}</div>`; }
+    h += `</div><div class="mt-6 pt-4 border-t flex justify-between"><button type="button" class="cal-today text-sm text-primary-600 font-black">انتخاب امروز</button><button type="button" class="cal-close text-sm text-slate-500 font-bold">بستن</button></div>`;
+    c.innerHTML = h;
+}
+document.getElementById('calendarModal').addEventListener('click', e => {
+    if (e.target.classList.contains('cal-backdrop')) return closeCalendar();
+    if (e.target.closest('.cal-prev')) { calendarState.viewMonth--; if (calendarState.viewMonth < 1) { calendarState.viewMonth = 12; calendarState.viewYear--; } renderCalendarModal(); }
+    else if (e.target.closest('.cal-next')) { calendarState.viewMonth++; if (calendarState.viewMonth > 12) { calendarState.viewMonth = 1; calendarState.viewYear++; } renderCalendarModal(); }
+    else if (e.target.closest('.cal-today')) { const t = Jalaali.today(); calendarState.selected = { year: t.year, month: t.month, day: t.day }; if (calendarTargetInput) calendarTargetInput.value = Jalaali.formatJalali(t.year, t.month, t.day); closeCalendar(); }
+    else if (e.target.closest('.cal-close')) { closeCalendar(); }
+    else if (e.target.closest('.cal-day')) { const de = e.target.closest('.cal-day'); if (!de.dataset.day) return; const d = parseInt(de.dataset.day); calendarState.selected = { year: calendarState.viewYear, month: calendarState.viewMonth, day: d }; if (calendarTargetInput) calendarTargetInput.value = Jalaali.formatJalali(calendarState.viewYear, calendarState.viewMonth, d); closeCalendar(); }
 });
-
-document.getElementById('logoutBtn').addEventListener('click', async () => await supabase.auth.signOut());
-
-supabase.auth.onAuthStateChange((event, session) => {
-    if (session) {
-        document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('appWrapper').classList.remove('hidden');
-        renderProjects();
-    } else {
-        document.getElementById('loginScreen').classList.remove('hidden');
-        document.getElementById('appWrapper').classList.add('hidden');
-    }
-});
+document.getElementById('deliveryDate').addEventListener('click', function() { openCalendar(this, this.value); });
 
 // ============================================
-// 🚪 مودال‌ها و اکشن‌ها (Event Delegation)
+// 🚪 مودال‌ها و اکشن‌ها (بدون onclick با Event Delegation)
 // ============================================
 document.getElementById('openProjectBtn').addEventListener('click', () => openProjectModal());
 document.getElementById('emptyAddBtn').addEventListener('click', () => openProjectModal());
@@ -261,248 +267,94 @@ document.getElementById('reportBackdrop').addEventListener('click', closeReportM
 document.getElementById('cancelDeleteBtn').addEventListener('click', () => document.getElementById('deleteModal').classList.add('hidden'));
 document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
 document.getElementById('exportBtn').addEventListener('click', exportToCSV);
+document.getElementById('submitReportBtn').addEventListener('click', submitReport);
 
 document.getElementById('typistList').addEventListener('click', (e) => {
     const card = e.target.closest('.project-card');
     if (!card) return;
     const id = card.dataset.id;
 
-    // باز و بسته کردن کارت اصلی (آکاردئون)
+    // باز و بسته کردن کارت آکاردئون
     if (e.target.closest('.toggle-card-details')) {
-        const details = card.querySelector('.card-details');
-        const chevron = card.querySelector('.card-chevron');
-        if (details) {
-            details.classList.toggle('hidden');
-            if (chevron) chevron.classList.toggle('rotate-180');
-        }
+        document.querySelectorAll('.project-card.is-expanded').forEach(c => { if (c.dataset.id !== id) c.classList.remove('is-expanded'); });
+        card.classList.toggle('is-expanded');
     } 
-    // باز و بسته کردن لیست گزارش‌ها
-    else if (e.target.closest('.toggle-reports')) {
-        const list = card.querySelector('.report-list');
-        if (list) list.classList.toggle('hidden');
-    } 
-    // دکمه ثبت گزارش
-    else if (e.target.closest('.report-btn')) {
-        openReportModal(id);
-    } 
-    // دکمه تکمیل
-    else if (e.target.closest('.complete-btn')) {
-        completeProject(id);
-    } 
-    // دکمه حذف
-    else if (e.target.closest('.delete-btn')) {
-        document.getElementById('deleteProjectId').value = id;
-        document.getElementById('deleteModal').classList.remove('hidden');
-    }
+    else if (e.target.closest('.report-btn')) { openReportModal(id); } 
+    else if (e.target.closest('.complete-btn')) { completeProject(id); } 
+    else if (e.target.closest('.delete-btn')) { document.getElementById('deleteProjectId').value = id; document.getElementById('deleteModal').classList.remove('hidden'); }
 });
 
-function openProjectModal(projectId = null) {
-    const modal = document.getElementById('formModal'); const backdrop = document.getElementById('modalBackdrop'); const content = document.getElementById('modalContent');
+function openProjectModal(id = null) {
+    const m = document.getElementById('formModal'); const b = document.getElementById('modalBackdrop'); const c = document.getElementById('modalContent');
     document.getElementById('typistForm').reset(); document.getElementById('editId').value = '';
-    if (projectId) {
-        const p = projectsCache.find(x => x.id === projectId);
-        if (p) {
-            document.getElementById('editId').value = p.id; document.getElementById('name').value = p.name;
-            document.getElementById('phone').value = p.phone; document.getElementById('title').value = p.title;
-            document.getElementById('deliveryDate').value = p.deliveryDate;
-            document.getElementById('formTitle').textContent = 'ویرایش پروژه'; document.getElementById('submitBtnText').textContent = 'ذخیره تغییرات';
-        }
-    } else {
-        document.getElementById('formTitle').textContent = 'ثبت پروژه جدید'; document.getElementById('submitBtnText').textContent = 'ذخیره پروژه';
-    }
-    modal.classList.remove('hidden'); requestAnimationFrame(() => { backdrop.classList.remove('opacity-0'); content.classList.remove('scale-95', 'opacity-0'); });
+    if (id) { const p = projectsCache.find(x => x.id === id); if (p) { document.getElementById('editId').value = p.id; document.getElementById('name').value = p.name; document.getElementById('phone').value = p.phone; document.getElementById('title').value = p.title; document.getElementById('deliveryDate').value = p.deliveryDate; document.getElementById('formTitle').textContent = 'ویرایش پروژه'; document.getElementById('submitBtnText').textContent = 'ذخیره تغییرات'; } }
+    else { document.getElementById('formTitle').textContent = 'ثبت پروژه جدید'; document.getElementById('submitBtnText').textContent = 'ذخیره پروژه'; }
+    m.classList.remove('hidden'); requestAnimationFrame(() => { b.classList.remove('opacity-0'); c.classList.remove('scale-95', 'opacity-0'); });
 }
+function closeProjectModal() { const m = document.getElementById('formModal'); const b = document.getElementById('modalBackdrop'); const c = document.getElementById('modalContent'); b.classList.add('opacity-0'); c.classList.add('scale-95', 'opacity-0'); setTimeout(() => m.classList.add('hidden'), 300); }
 
-function closeProjectModal() {
-    const modal = document.getElementById('formModal'); const backdrop = document.getElementById('modalBackdrop'); const content = document.getElementById('modalContent');
-    backdrop.classList.add('opacity-0'); content.classList.add('scale-95', 'opacity-0'); setTimeout(() => modal.classList.add('hidden'), 300);
-}
-
-function openReportModal(projectId) {
-    const project = projectsCache.find(p => p.id === projectId);
-    if (!project) return;
-    const status = calculateProjectStatus(project);
-    if (status.status === 'delivered') return;
-    if (project.reports && project.reports.some(r => r.period === status.currentPeriod)) {
-        showAlert('برای این دوره قبلاً گزارش ثبت شده است.', 'warning'); return;
-    }
-    document.getElementById('reportProjectId').value = projectId;
-    document.getElementById('reportPeriod').value = status.currentPeriod;
-    document.getElementById('reportProjectTitle').textContent = `${project.name} - دوره ${Jalaali.toPersianDigits(status.currentPeriod)}`;
+function openReportModal(id) {
+    const p = projectsCache.find(x => x.id === id); if (!p) return; const s = calculateProjectStatus(p); if (s.status === 'delivered') return;
+    if (p.reports && p.reports.some(r => r.period === s.currentPeriod)) { showAlert('برای این دوره قبلاً گزارش ثبت شده است.', 'warning'); return; }
+    document.getElementById('reportProjectId').value = id; document.getElementById('reportPeriod').value = s.currentPeriod;
+    document.getElementById('reportProjectTitle').textContent = `${p.name} - دوره ${Jalaali.toPersianDigits(s.currentPeriod)}`;
     document.getElementById('reportPages').value = ''; document.getElementById('reportText').value = '';
-    const statusBox = document.getElementById('reportStatusBox');
-    if (status.status === 'delayed' && status.isLate) {
-        statusBox.className = 'p-4 rounded-xl text-xs font-medium bg-red-50 border border-red-200 text-red-700 flex items-center gap-2';
-        statusBox.innerHTML = `<span>این گزارش <strong>${Jalaali.toPersianDigits(status.delayDays)} روز</strong> تاخیر دارد</span>`;
-        statusBox.classList.remove('hidden');
-    } else { statusBox.classList.add('hidden'); }
-    const modal = document.getElementById('reportModal'); const content = document.getElementById('reportContent');
-    modal.classList.remove('hidden'); requestAnimationFrame(() => content.classList.remove('scale-95', 'opacity-0'));
+    const sb = document.getElementById('reportStatusBox');
+    if (s.status === 'delayed' && s.isLate) { sb.className = 'p-4 rounded-xl text-xs font-medium bg-red-50 border border-red-200 text-red-700 flex items-center gap-2'; sb.innerHTML = `<span>این گزارش <strong>${Jalaali.toPersianDigits(s.delayDays)} روز</strong> تاخیر دارد</span>`; sb.classList.remove('hidden'); }
+    else { sb.classList.add('hidden'); }
+    const m = document.getElementById('reportModal'); const c = document.getElementById('reportContent');
+    m.classList.remove('hidden'); requestAnimationFrame(() => c.classList.remove('scale-95', 'opacity-0'));
+}
+function closeReportModal() { const m = document.getElementById('reportModal'); const c = document.getElementById('reportContent'); c.classList.add('scale-95', 'opacity-0'); setTimeout(() => m.classList.add('hidden'), 300); }
+
+async function submitReport() {
+    const btn = document.getElementById('submitReportBtn'); btn.disabled = true; btn.innerText = 'در حال ثبت...';
+    const pid = document.getElementById('reportProjectId').value; const per = parseInt(document.getElementById('reportPeriod').value);
+    const pg = parseInt(document.getElementById('reportPages').value); const txt = document.getElementById('reportText').value.trim();
+    if (!pg || pg <= 0) { showAlert('لطفاً تعداد صفحات معتبر وارد کنید', 'warning'); btn.disabled = false; btn.innerText = 'ثبت گزارش'; return; }
+    const p = projectsCache.find(x => x.id === pid); const s = calculateProjectStatus(p);
+    try { await insertReportToSupabase(pid, per, pg, txt, s.isLate || false, s.delayDays || 0); closeReportModal(); showAlert('گزارش ثبت شد', 'success'); }
+    catch (e) { showAlert('خطا در ثبت', 'error'); } finally { btn.disabled = false; btn.innerText = 'ثبت گزارش'; }
 }
 
-function closeReportModal() {
-    const modal = document.getElementById('reportModal'); const content = document.getElementById('reportContent');
-    content.classList.add('scale-95', 'opacity-0'); setTimeout(() => modal.classList.add('hidden'), 300);
-}
-
-document.getElementById('submitReportBtn').addEventListener('click', async () => {
-    const btn = document.getElementById('submitReportBtn');
-    btn.disabled = true; btn.innerText = 'در حال ثبت...';
-    const projectId = document.getElementById('reportProjectId').value;
-    const period = parseInt(document.getElementById('reportPeriod').value);
-    const pages = parseInt(document.getElementById('reportPages').value);
-    const text = document.getElementById('reportText').value.trim();
-    if (!pages || pages <= 0) { showAlert('لطفاً تعداد صفحات معتبر وارد کنید', 'warning'); btn.disabled = false; btn.innerText = 'ثبت گزارش'; return; }
-    const project = projectsCache.find(p => p.id === projectId);
-    const status = calculateProjectStatus(project);
-    try {
-        await insertReportToSupabase(projectId, period, pages, text, status.isLate || false, status.delayDays || 0);
-        closeReportModal(); showAlert('گزارش با موفقیت ثبت شد', 'success');
-    } catch (err) {
-        showAlert('خطا در ثبت گزارش', 'error');
-    } finally {
-        btn.disabled = false; btn.innerText = 'ثبت گزارش';
-    }
-});
-
-async function completeProject(projectId) {
-    if (!confirm('آیا از تکمیل نهایی پروژه اطمینان دارید؟')) return;
-    try { await completeProjectInSupabase(projectId); showAlert('پروژه تکمیل شد', 'success'); } 
-    catch (err) { showAlert('خطا در ثبت', 'error'); }
-}
-
-async function confirmDelete() {
-    const id = document.getElementById('deleteProjectId').value;
-    const btn = document.getElementById('confirmDeleteBtn');
-    btn.disabled = true; btn.innerText = 'در حال حذف...';
-    try { await softDeleteProject(id); document.getElementById('deleteModal').classList.add('hidden'); showAlert('پروژه حذف شد', 'success'); } 
-    catch (err) { showAlert('خطا در حذف', 'error'); } 
-    finally { btn.disabled = false; btn.innerText = 'بله، حذف شود'; }
-}
+async function completeProject(id) { if (!confirm('تکمیل نهایی؟')) return; try { await completeProjectInSupabase(id); showAlert('تکمیل شد', 'success'); } catch (e) { showAlert('خطا', 'error'); } }
+async function confirmDelete() { const id = document.getElementById('deleteProjectId').value; const btn = document.getElementById('confirmDeleteBtn'); btn.disabled = true; btn.innerText = 'حذف...'; try { await softDeleteProject(id); document.getElementById('deleteModal').classList.add('hidden'); showAlert('حذف شد', 'success'); } catch (e) { showAlert('خطا', 'error'); } finally { btn.disabled = false; btn.innerText = 'حذف'; } }
 
 document.getElementById('typistForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = document.getElementById('submitBtn');
-    btn.disabled = true; document.getElementById('submitBtnText').innerText = 'در حال ذخیره...';
-    const id = document.getElementById('editId').value;
-    const name = document.getElementById('name').value.trim();
-    const phone = document.getElementById('phone').value.trim();
-    const title = document.getElementById('title').value.trim();
-    const deliveryDate = document.getElementById('deliveryDate').value.trim();
-    if (!Jalaali.parseJalali(deliveryDate)) { showAlert('تاریخ تحویل نامعتبر است', 'warning'); btn.disabled = false; document.getElementById('submitBtnText').innerText = 'ذخیره پروژه'; return; }
-    try {
-        await saveProjectToSupabase({ id, name, phone, title, deliveryDate });
-        closeProjectModal(); showAlert(id ? 'پروژه ویرایش شد' : 'پروژه جدید ثبت شد', 'success');
-    } catch (err) {
-        showAlert('خطا در ذخیره‌سازی', 'error');
-    } finally {
-        btn.disabled = false; document.getElementById('submitBtnText').innerText = 'ذخیره پروژه';
-    }
+    e.preventDefault(); const btn = document.getElementById('submitBtn'); btn.disabled = true; document.getElementById('submitBtnText').innerText = 'ذخیره...';
+    const id = document.getElementById('editId').value; const n = document.getElementById('name').value.trim(); const ph = document.getElementById('phone').value.trim(); const t = document.getElementById('title').value.trim(); const dd = document.getElementById('deliveryDate').value.trim();
+    if (!Jalaali.parseJalali(dd)) { showAlert('تاریخ نامعتبر', 'warning'); btn.disabled = false; document.getElementById('submitBtnText').innerText = 'ذخیره'; return; }
+    try { await saveProjectToSupabase({ id, name: n, phone: ph, title: t, deliveryDate: dd }); closeProjectModal(); showAlert(id ? 'ویرایش شد' : 'ثبت شد', 'success'); } catch (er) { showAlert('خطا', 'error'); } finally { btn.disabled = false; document.getElementById('submitBtnText').innerText = 'ذخیره پروژه'; }
 });
 
 // ============================================
-// 📤 خروجی CSV
+// 📤 خروجی CSV و آلرت‌ها
 // ============================================
 function exportToCSV() {
-    if (!projectsCache || projectsCache.length === 0) { showAlert('پروژه‌ای برای خروجی وجود ندارد', 'warning'); return; }
-    const headers = ['نام', 'شماره', 'عنوان', 'تحویل', 'وضعیت', 'مجموع صفحات', 'گزارش‌ها'];
-    let csv = "\uFEFF" + headers.map(h => `"${h}"`).join(',') + '\n';
-    projectsCache.forEach(p => {
-        const status = calculateProjectStatus(p).status;
-        const totalPages = (p.reports || []).reduce((s, r) => s + r.pages, 0);
-        const repText = (p.reports || []).map(r => `دوره ${r.period}: ${r.pages} صفحه`).join(' | ');
-        csv += [esc(p.name), esc(p.phone), esc(p.title), esc(p.deliveryDate), esc(status), totalPages, esc(repText)].map(v => `"${v}"`).join(',') + '\n';
-    });
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `گزارش.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+    if (!projectsCache || projectsCache.length === 0) { showAlert('پروژه‌ای نیست', 'warning'); return; }
+    const h = ['نام', 'شماره', 'عنوان', 'تحویل', 'وضعیت', 'صفحات', 'گزارش‌ها']; let c = "\uFEFF" + h.map(x => `"${x}"`).join(',') + '\n';
+    projectsCache.forEach(p => { const s = calculateProjectStatus(p).status; const tp = (p.reports || []).reduce((a, r) => a + r.pages, 0); const rt = (p.reports || []).map(r => `دوره ${r.period}:${r.pages}ص`).join(' | '); c += [esc(p.name), esc(p.phone), esc(p.title), esc(p.deliveryDate), esc(s), tp, esc(rt)].map(v => `"${v}"`).join(',') + '\n'; });
+    const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement('a'); l.href = URL.createObjectURL(b); l.download = `گزارش.csv`; l.click();
 }
 
-// ============================================
-// 💬 آلرت‌ها و فیلترها
-// ============================================
-function showAlert(message, type = 'success') {
-    const container = document.getElementById('alertContainer');
-    const colors = { success: 'bg-emerald-50 text-emerald-700 border-emerald-200', warning: 'bg-amber-50 text-amber-700 border-amber-200', error: 'bg-red-50 text-red-700 border-red-200' };
-    const alert = document.createElement('div');
-    alert.className = `animate-fade-in flex items-center gap-3 border px-4 py-3 rounded-xl text-sm font-medium ${colors[type]}`;
-    alert.textContent = message;
-    container.appendChild(alert);
-    setTimeout(() => { alert.style.opacity = '0'; setTimeout(() => alert.remove(), 300); }, 3000);
-}
-
-let currentFilter = 'all';
-function applyFilter() { document.querySelectorAll('.project-card').forEach(c => c.style.display = (currentFilter === 'all' || c.dataset.status === currentFilter) ? '' : 'none'); }
-document.querySelectorAll('.filter-btn').forEach(btn => btn.addEventListener('click', () => {
-    currentFilter = btn.dataset.filter;
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('bg-white', 'text-slate-900', 'shadow-sm'));
-    btn.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
-    applyFilter();
-}));
-document.querySelector('[data-filter="all"]').classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+function showAlert(m, t = 'success') { const c = document.getElementById('alertContainer'); const cl = { success: 'bg-emerald-50 text-emerald-700 border-emerald-200', warning: 'bg-amber-50 text-amber-700 border-amber-200', error: 'bg-red-50 text-red-700 border-red-200' }; const a = document.createElement('div'); a.className = `animate-fade-in flex items-center gap-3 border px-4 py-3 rounded-xl text-sm font-medium ${cl[t]}`; a.textContent = m; c.appendChild(a); setTimeout(() => { a.style.opacity = '0'; setTimeout(() => a.remove(), 300); }, 3000); }
 
 // ============================================
-// 📅 تقویم شمسی (پاپ آپ مودال)
+// 🔐 احراز هویت
 // ============================================
-let calendarState = { viewYear: null, viewMonth: null, selected: null, inputEl: null };
-
-function openCalendar(inputEl, initialValue = null) {
-    const today = Jalaali.today(); calendarState.inputEl = inputEl;
-    if (initialValue && Jalaali.parseJalali(initialValue)) { const p = Jalaali.parseJalali(initialValue); calendarState.viewYear = p.year; calendarState.viewMonth = p.month; calendarState.selected = p; }
-    else { calendarState.viewYear = today.year; calendarState.viewMonth = today.month; calendarState.selected = null; }
-    renderCalendar(); document.getElementById('calendarModal').classList.remove('hidden');
-}
-
-function closeCalendar() { document.getElementById('calendarModal').classList.add('hidden'); }
-
-function renderCalendar() {
-    const container = document.getElementById('calendarContainer'); 
-    const today = Jalaali.today(); 
-    const { viewYear, viewMonth, selected } = calendarState;
-    const firstDayGreg = Jalaali.toGregorian(viewYear, viewMonth, 1);
-    const jsDay = new Date(firstDayGreg.year, firstDayGreg.month - 1, firstDayGreg.day).getDay();
-    const startOffset = (jsDay + 1) % 7; 
-    const daysInMonth = Jalaali.jMonthLength(viewYear, viewMonth);
-    
-    let html = `<div class="flex items-center justify-between mb-4">
-        <button type="button" class="cal-prev w-9 h-9 rounded-lg hover:bg-slate-100 text-slate-600 flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
-        <div class="text-base font-black text-slate-900">${Jalaali.jMonthName[viewMonth - 1]} ${Jalaali.toPersianDigits(viewYear)}</div>
-        <button type="button" class="cal-next w-9 h-9 rounded-lg hover:bg-slate-100 text-slate-600 flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
-    </div>
-    <div class="grid grid-cols-7 gap-1 mb-2">${['ش','ی','د','س','چ','پ','ج'].map(d => `<div class="text-xs font-bold text-slate-400 text-center pb-2">${d}</div>`).join('')}</div>
-    <div class="grid grid-cols-7 gap-1">`;
-    
-    for (let i=0; i<startOffset; i++) html += `<div></div>`;
-    for (let d=1; d<=daysInMonth; d++) {
-        const isT = viewYear === today.year && viewMonth === today.month && d === today.day;
-        const isS = selected && selected.year === viewYear && selected.month === viewMonth && selected.day === d;
-        html += `<div class="cal-day ${isT ? 'today' : ''} ${isS ? 'selected' : ''}" data-day="${d}">${Jalaali.toPersianDigits(d)}</div>`;
-    }
-    html += `</div><div class="mt-5 pt-4 border-t flex justify-between"><button class="cal-today text-xs text-primary-600 font-medium bg-primary-50 px-3 py-1.5 rounded-lg">امروز</button><button class="cal-close text-xs text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">بستن</button></div>`;
-    container.innerHTML = html;
-}
-
-document.getElementById('calendarModal').addEventListener('click', e => {
-    if (e.target.classList.contains('cal-backdrop')) return closeCalendar();
-    if (e.target.closest('.cal-prev')) { calendarState.viewMonth--; if (calendarState.viewMonth < 1) { calendarState.viewMonth = 12; calendarState.viewYear--; } renderCalendar(); }
-    else if (e.target.closest('.cal-next')) { calendarState.viewMonth++; if (calendarState.viewMonth > 12) { calendarState.viewMonth = 1; calendarState.viewYear++; } renderCalendar(); }
-    else if (e.target.closest('.cal-today')) { const t = Jalaali.today(); calendarState.sel = { year: t.year, month: t.month, day: t.day }; calendarState.inputEl.value = Jalaali.formatJalali(t.year, t.month, t.day); closeCalendar(); }
-    else if (e.target.closest('.cal-close')) { closeCalendar(); }
-    else if (e.target.closest('.cal-day')) { const de = e.target.closest('.cal-day'); if (!de.dataset.day) return; const d = parseInt(de.dataset.day); calendarState.sel = { year: calendarState.viewYear, month: calendarState.viewMonth, day: d }; calendarState.inputEl.value = Jalaali.formatJalali(calendarState.viewYear, calendarState.viewMonth, d); closeCalendar(); }
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault(); const btn = document.getElementById('loginBtn'); btn.disabled = true; document.getElementById('loginSpinner').classList.remove('hidden'); document.getElementById('loginError').classList.add('hidden');
+    const { error } = await supabase.auth.signInWithPassword({ email: document.getElementById('emailInput').value, password: document.getElementById('passwordInput').value });
+    if (error) { document.getElementById('loginError').classList.remove('hidden'); btn.disabled = false; document.getElementById('loginSpinner').classList.add('hidden'); }
 });
+document.getElementById('logoutBtn').addEventListener('click', async () => await supabase.auth.signOut());
+supabase.auth.onAuthStateChange((e, s) => { if (s) { document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('appWrapper').classList.remove('hidden'); renderProjects(); } else { document.getElementById('loginScreen').classList.remove('hidden'); document.getElementById('appWrapper').classList.add('hidden'); } });
 
-document.getElementById('deliveryDate').addEventListener('click', function() { openCalendar(this, this.value); });
-
-// 🌓 Theme Toggle
+// Theme & Realtime
 const tt = document.getElementById('themeToggle'); const he = document.documentElement;
 if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) he.classList.add('dark'); else he.classList.remove('dark');
 tt.addEventListener('click', () => { if (he.classList.contains('dark')) { he.classList.remove('dark'); localStorage.theme = 'light'; } else { he.classList.add('dark'); localStorage.theme = 'dark'; } });
 
-// 🔄 Realtime
 supabase.channel('public:typists').on('postgres_changes', { event: '*', schema: 'public', table: 'typists' }, renderProjects).subscribe();
 supabase.channel('public:typist_reports').on('postgres_changes', { event: '*', schema: 'public', table: 'typist_reports' }, renderProjects).subscribe();
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeProjectModal(); closeReportModal(); closeCalendar(); document.getElementById('deleteModal').classList.add('hidden'); } });
