@@ -26,7 +26,7 @@ const Jalaali = {
     
     toPersianDigits(str) { 
         if(!str) return ''; 
-        const p = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹']; 
+        const p = ['۰','۱','۲','','۴','۵','۶','','۸','۹']; 
         return String(str).replace(/[0-9]/g, d => p[+d]); 
     },
     
@@ -41,6 +41,7 @@ const Jalaali = {
         return { year: p[0], month: p[1], day: p[2] }; 
     },
     
+    // ✅ اصلاح: استفاده از Math.ceil برای محاسبه دقیق روزها
     daysBetween(j1, j2) { 
         if(!j1||!j2) return 0; 
         try {
@@ -48,7 +49,11 @@ const Jalaali = {
             const d1 = new Date(g1.gy, g1.gm-1, g1.gd); 
             const g2 = libToGregorian(j2.year, j2.month, j2.day); 
             const d2 = new Date(g2.gy, g2.gm-1, g2.gd); 
-            return Math.round((d2.getTime() - d1.getTime()) / 86400000);
+            
+            const diffTime = d2.getTime() - d1.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+            
+            return diffDays;
         } catch (e) {
             console.error('daysBetween error:', e);
             return 0;
@@ -65,7 +70,6 @@ let projectsCache = [];
 let calendarTargetInput = null;
 
 async function loadProjects() {
-    // ✅ اصلاح: حذف شرط deleted_at اگر فیلد وجود ندارد
     const { data, error } = await supabase
         .from('typists')
         .select('*, typist_reports(*)')
@@ -152,7 +156,11 @@ function calculateProjectStatus(p) {
     }
     
     const d = Jalaali.parseJalali(p.deliveryDate); 
+    
+    // ✅ اصلاح: محاسبه دقیق روزهای سپری‌شده
     const ds = Jalaali.daysBetween(c, t); 
+    
+    // ✅ اصلاح: محاسبه دقیق روزهای تا تحویل
     const dd = d ? Jalaali.daysBetween(t, d) : 0;
     
     if (p.completed) {
@@ -167,7 +175,6 @@ function calculateProjectStatus(p) {
     
     const cp = Math.floor(ds / 10) + 1;
     const periodStart = (cp - 1) * 10;
-    const periodEnd = cp * 10;
     const daysInCurrentPeriod = ds - periodStart;
     const daysLeftInPeriod = 10 - daysInCurrentPeriod;
     
@@ -175,7 +182,6 @@ function calculateProjectStatus(p) {
     const rp = reps.map(r => r.period); 
     const lp = rp.length > 0 ? Math.max(...rp) : 0;
     
-    // اگر گزارش دوره فعلی ثبت شده
     if (rp.includes(cp)) {
         return { 
             status: 'active', 
@@ -187,7 +193,6 @@ function calculateProjectStatus(p) {
         };
     }
     
-    // اگر گزارش دوره‌های قبل ثبت نشده
     if (lp < cp - 1) {
         const missedPeriods = cp - 1 - lp;
         return { 
@@ -201,7 +206,6 @@ function calculateProjectStatus(p) {
         };
     }
     
-    // اگر در دوره فعلی هستیم و گزارش نداده‌ایم
     if (daysLeftInPeriod <= 0) {
         const delayDays = Math.abs(daysLeftInPeriod);
         return { 
@@ -229,7 +233,6 @@ function calculateProjectStatus(p) {
 function renderProjectCard(project) {
     const status = calculateProjectStatus(project);
     
-    // ✅ اصلاح: نمایش واضح‌تر وضعیت زمانی
     let timeText = '';
     let timeBadgeClass = '';
     
@@ -292,15 +295,23 @@ function renderProjectCard(project) {
                     <p class="text-sm text-slate-800 dark:text-slate-100 font-bold leading-relaxed">${esc(project.title)}</p>
                 </div>
 
+                <!-- ✅ اصلاح: نمایش صحیح روزهای سپری‌شده و باقی‌مانده -->
                 <div class="grid grid-cols-2 gap-3 text-xs">
                     <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 dark:border-slate-700">
-                        <p class="text-slate-400 dark:text-slate-500 mb-1">از شروع پروژه</p>
-                        <p class="font-black text-slate-900 dark:text-white text-lg">${Jalaali.toPersianDigits(status.daysSinceCreation)} روز</p>
+                        <p class="text-slate-400 dark:text-slate-500 mb-1 text-[10px]">روزهای سپری‌شده</p>
+                        <p class="font-black text-slate-900 dark:text-white text-lg">
+                            ${Jalaali.toPersianDigits(status.daysSinceCreation)} روز
+                        </p>
                     </div>
                     <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 dark:border-slate-700">
-                        <p class="text-slate-400 dark:text-slate-500 mb-1">تا تحویل نهایی</p>
+                        <p class="text-slate-400 dark:text-slate-500 mb-1 text-[10px]">
+                            ${status.daysUntilDelivery < 0 ? 'تاخیر از تحویل' : 'روزهای باقی‌مانده'}
+                        </p>
                         <p class="font-black ${status.daysUntilDelivery < 0 ? 'text-red-600' : status.daysUntilDelivery <= 7 ? 'text-amber-600' : 'text-emerald-600'} text-lg">
-                            ${status.daysUntilDelivery < 0 ? Jalaali.toPersianDigits(Math.abs(status.daysUntilDelivery)) + ' روز تاخیر' : Jalaali.toPersianDigits(status.daysUntilDelivery) + ' روز'}
+                            ${status.daysUntilDelivery < 0 
+                                ? Jalaali.toPersianDigits(Math.abs(status.daysUntilDelivery)) + ' روز' 
+                                : Jalaali.toPersianDigits(status.daysUntilDelivery) + ' روز'
+                            }
                         </p>
                     </div>
                 </div>
@@ -406,7 +417,6 @@ document.querySelectorAll('.filter-btn').forEach(b =>
 const allFilterBtn = document.querySelector('[data-filter="all"]');
 if (allFilterBtn) allFilterBtn.classList.add('bg-white','text-slate-900','shadow-sm');
 
-// تقویم
 let calendarState = { viewYear: null, viewMonth: null, selected: null };
 
 function openCalendar(inp, val = null) { 
@@ -495,7 +505,6 @@ document.getElementById('deliveryDate').addEventListener('click', function() {
     openCalendar(this, this.value); 
 });
 
-// مودال‌ها
 document.getElementById('openProjectBtn').addEventListener('click', () => openProjectModal());
 document.getElementById('emptyAddBtn').addEventListener('click', () => openProjectModal());
 document.getElementById('closeFormBtn').addEventListener('click', closeProjectModal);
@@ -634,7 +643,7 @@ async function submitReport() {
         await insertReportToSupabase(pid, per, pg, txt, s.isLate || false, s.delayDays || 0); 
         closeReportModal(); 
         showAlert('گزارش ثبت شد', 'success'); 
-        await renderProjects(); // ✅ اصلاح: به‌روزرسانی UI
+        await renderProjects();
     } catch (e) { 
         console.error('Submit report error:', e);
         showAlert('خطا در ثبت گزارش', 'error'); 
@@ -649,7 +658,7 @@ async function completeProject(id) {
     try { 
         await completeProjectInSupabase(id); 
         showAlert('پروژه تکمیل شد', 'success'); 
-        await renderProjects(); // ✅ اصلاح: به‌روزرسانی UI
+        await renderProjects();
     } catch (e) { 
         console.error('Complete error:', e);
         showAlert('خطا در تکمیل پروژه', 'error'); 
@@ -666,7 +675,7 @@ async function confirmDelete() {
         await softDeleteProject(id); 
         document.getElementById('deleteModal').classList.add('hidden'); 
         showAlert('پروژه حذف شد', 'success'); 
-        await renderProjects(); // ✅ اصلاح: به‌روزرسانی UI
+        await renderProjects();
     } catch (e) { 
         console.error('Delete error:', e);
         showAlert('خطا در حذف پروژه', 'error'); 
@@ -699,7 +708,7 @@ document.getElementById('typistForm').addEventListener('submit', async (e) => {
         await saveProjectToSupabase({ id, name: n, phone: ph, title: t, deliveryDate: dd }); 
         closeProjectModal(); 
         showAlert(id ? 'پروژه ویرایش شد' : 'پروژه ثبت شد', 'success'); 
-        await renderProjects(); // ✅ اصلاح: به‌روزرسانی UI
+        await renderProjects();
     } catch (er) { 
         console.error('Save error:', er);
         showAlert('خطا در ذخیره پروژه', 'error'); 
@@ -750,7 +759,6 @@ function showAlert(m, t = 'success') {
     }, 3000); 
 }
 
-// احراز هویت
 document.getElementById('loginForm').addEventListener('submit', async (e) => { 
     e.preventDefault(); 
     const btn = document.getElementById('loginBtn'); 
@@ -785,7 +793,6 @@ supabase.auth.onAuthStateChange((e, s) => {
     } 
 });
 
-// Theme & Realtime
 const tt = document.getElementById('themeToggle'); 
 const he = document.documentElement;
 
@@ -822,6 +829,5 @@ document.addEventListener('keydown', e => {
     } 
 });
 
-// تست سلامت سیستم
 console.log('%c✅ پنل مدیریت تایپ بارگذاری شد', 'color: #14b8a6; font-weight: bold; font-size: 14px');
 console.log('📅 تاریخ امروز:', Jalaali.formatJalali(Jalaali.today().year, Jalaali.today().month, Jalaali.today().day));
