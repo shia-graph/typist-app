@@ -2,11 +2,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_32dg2CRsZ2Nws6qA6x8JgQ_Jgs3Ta-e';
-const APP_PASSWORD = '7853421';
+const APP_PASSWORD = '7853421'; // رمز ورود شما
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// --- لاگین ---
+// --- منطق لاگین ---
 const loginForm = document.getElementById('loginForm');
 const passwordInput = document.getElementById('passwordInput');
 const loginError = document.getElementById('loginError');
@@ -29,6 +29,7 @@ loginForm.addEventListener('submit', (e) => {
 const typistForm = document.getElementById('typistForm');
 const typistList = document.getElementById('typistList');
 const alertContainer = document.getElementById('alertContainer');
+const submitBtn = document.getElementById('submitBtn');
 
 function toPersianNum(num) {
     if (!num) return '۰';
@@ -64,7 +65,6 @@ async function fetchTypists() {
         const lastCheck = data.last_reminder_date ? new Date(data.last_reminder_date) : (data.created_at ? new Date(data.created_at) : new Date());
         const diffDays = Math.floor((today - lastCheck) / (1000 * 60 * 60 * 24));
         
-        // اگر ۱۰ روز گذشته بود و پروژه تمام نشده بود -> نیاز به گزارش
         let shouldAlert = (diffDays >= 10 && data.status !== 'delivered');
         if (diffDays >= 15 && data.status !== 'delivered') delayedCount++; // تاخیر بیش از ۱۵ روز
 
@@ -102,15 +102,18 @@ async function fetchTypists() {
                     <span class="text-slate-800 dark:text-slate-100 font-medium">${data.latest_report ? data.latest_report : 'گزارشی ثبت نشده است'}</span>
                 </div>
                 <div class="flex items-center justify-between text-xs">
-                    <span class="text-slate-500 dark:text-slate-400">تاریخ تحویل نهایی: ${toPersianNum(data.delivery_date)}</span>
+                    <span class="text-slate-500 dark:text-slate-400">تاریخ تحویل: ${toPersianNum(data.delivery_date)}</span>
                 </div>
             </div>
 
             <div class="flex gap-2 pt-4 border-t border-slate-100 dark:border-slate-800 mt-auto">
                 ${data.status !== 'delivered' ? `
-                <button onclick="markDelivered('${id}')" class="flex-1 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium transition border border-emerald-100 dark:border-emerald-500/20">تکمیل نهایی</button>
-                ` : ''}
-                <button onclick="deleteTypist('${id}')" class="flex-1 py-2 rounded-xl bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-medium transition border border-red-100 dark:border-red-500/20">حذف</button>
+                <button onclick="openReportModal('${id}')" class="flex-1 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium transition border border-emerald-100 dark:border-emerald-500/20">گزارش ۱۰ روزه</button>
+                <button onclick="openEditModal('${id}')" class="flex-1 py-2 rounded-xl bg-primary-50 dark:bg-primary-500/10 hover:bg-primary-100 dark:hover:bg-primary-500/20 text-primary-600 dark:text-primary-400 text-xs font-medium transition border border-primary-100 dark:border-primary-500/20">ویرایش</button>
+                ` : `
+                <button onclick="openEditModal('${id}')" class="flex-1 py-2 rounded-xl bg-primary-50 dark:bg-primary-500/10 hover:bg-primary-100 dark:hover:bg-primary-500/20 text-primary-600 dark:text-primary-400 text-xs font-medium transition border border-primary-100 dark:border-primary-500/20">ویرایش</button>
+                `}
+                <button onclick="deleteTypist('${id}')" class="py-2 px-3 rounded-xl bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-medium transition border border-red-100 dark:border-red-500/20">حذف</button>
             </div>
         `;
         typistList.appendChild(card);
@@ -118,19 +121,14 @@ async function fetchTypists() {
         if (shouldAlert) {
             pendingCount++;
             const alert = document.createElement('div');
-            alert.className = 'animate-fade-in flex flex-col md:flex-row items-start gap-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 px-4 py-3 rounded-xl';
+            alert.className = 'animate-fade-in flex items-center gap-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 px-4 py-3 rounded-xl';
             alert.innerHTML = `
-                <div class="flex items-start gap-3 flex-grow">
-                    <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <div class="w-full">
-                        <span class="text-sm font-bold block mb-1">یادآوری گزارش ۱۰ روزه</span>
-                        <span class="text-xs text-amber-600 dark:text-amber-500 block mb-2">${data.name} از آخرین گزارش ${toPersianNum(diffDays)} روز می‌گذرد. آیا کاری انجام داده است؟</span>
-                        <div class="flex items-center gap-2">
-                            <input type="number" id="pages_${id}" placeholder="تعداد صفحات تایپ شده" class="w-40 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-500/30 rounded-lg py-1.5 px-2 text-xs text-slate-700 dark:text-white focus:outline-none focus:border-amber-500">
-                            <button onclick="submitReport('${id}', 'pages_${id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-bold transition">ثبت گزارش</button>
-                        </div>
-                    </div>
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <div class="text-xs flex-grow">
+                    <span class="font-bold block">یادآوری گزارش ۱۰ روزه</span>
+                    <span>${data.name} از آخرین گزارش ${toPersianNum(diffDays)} روز می‌گذرد. روی دکمه "گزارش ۱۰ روزه" در کارت بزنید.</span>
                 </div>
+                <button onclick="openReportModal('${id}')" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-1.5 rounded-lg font-bold transition">ثبت گزارش</button>
             `;
             alertContainer.appendChild(alert);
         }
@@ -146,54 +144,85 @@ function updateStats(active, delivered, pending, delayed) {
     document.getElementById('stat-delayed').textContent = toPersianNum(delayed);
 }
 
-// --- سوپابیس Realtime ---
+// --- همگام‌سازی لحظه‌ای ---
 supabase.channel('public:typists').on('postgres_changes', { event: '*', schema: 'public', table: 'typists' }, fetchTypists).subscribe();
 
-// --- ثبت پروژه جدید ---
+// --- ثبت یا ویرایش پروژه ---
 typistForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const id = document.getElementById('editId').value;
     const name = document.getElementById('name').value;
     const phone = document.getElementById('phone').value;
     const title = document.getElementById('title').value;
     const deliveryDate = document.getElementById('deliveryDate').value;
 
-    const { error } = await supabase.from('typists').insert([
-        { name, phone, title, delivery_date: deliveryDate, status: 'progress' }
-    ]);
+    submitBtn.disabled = true;
+    submitBtn.innerText = 'در حال ذخیره...';
 
-    if (error) { alert("خطا در ثبت: " + error.message); } 
-    else {
+    if (id) {
+        // ویرایش
+        const { error } = await supabase.from('typists').update({ name, phone, title, delivery_date: deliveryDate }).eq('id', id);
+        if (error) { alert("خطا در ویرایش: " + error.message); }
+    } else {
+        // ثبت جدید
+        const { error } = await supabase.from('typists').insert([{ name, phone, title, delivery_date: deliveryDate, status: 'progress' }]);
+        if (error) { alert("خطا در ثبت: " + error.message); }
+    }
+
+    submitBtn.disabled = false;
+    submitBtn.innerText = 'ذخیره اطلاعات پروژه';
+    
+    if (!error) {
         typistForm.reset();
-        const formModal = document.getElementById('formModal');
-        const modalBackdrop = document.getElementById('modalBackdrop');
-        const modalContent = document.getElementById('modalContent');
-        modalBackdrop.classList.add('opacity-0');
-        modalContent.classList.remove('scale-100');
-        modalContent.classList.add('opacity-0', 'scale-95');
-        setTimeout(() => { formModal.classList.add('hidden'); }, 300);
+        document.getElementById('editId').value = '';
+        closeModal();
     }
 });
 
-// --- ثبت گزارش ۱۰ روزه ---
-window.submitReport = async (id, inputId) => {
-    const pages = document.getElementById(inputId).value;
+// --- باز کردن مودال ویرایش ---
+window.openEditModal = async (id) => {
+    const { data, error } = await supabase.from('typists').select('*').eq('id', id).single();
+    if (error) return alert("خطا در دریافت اطلاعات");
+    
+    document.getElementById('formTitle').innerText = 'ویرایش پروژه';
+    document.getElementById('editId').value = id;
+    document.getElementById('name').value = data.name;
+    document.getElementById('phone').value = data.phone || '';
+    document.getElementById('title').value = data.title;
+    document.getElementById('deliveryDate').value = data.delivery_date;
+    
+    openModal();
+};
+
+// --- مودال گزارش ۱۰ روزه ---
+let currentReportId = null;
+window.openReportModal = (id) => {
+    currentReportId = id;
+    document.getElementById('reportPages').value = '';
+    document.getElementById('reportText').value = '';
+    document.getElementById('reportModal').classList.remove('hidden');
+};
+
+document.getElementById('submitReportBtn').addEventListener('click', async () => {
+    const pages = document.getElementById('reportPages').value;
+    const text = document.getElementById('reportText').value;
     if (!pages) { alert("لطفاً تعداد صفحات را وارد کنید"); return; }
     
     const today = new Date().toLocaleDateString('fa-IR');
-    const reportText = `${toPersianNum(pages)} صفحه در تاریخ ${today}`;
+    let reportStr = `${toPersianNum(pages)} صفحه در تاریخ ${today}`;
+    if (text) reportStr += ` - ${text}`;
     
-    await supabase.from('typists').update({ 
+    const { error } = await supabase.from('typists').update({ 
         last_reminder_date: new Date().toISOString(),
-        latest_report: reportText
-    }).eq('id', id);
-};
+        latest_report: reportStr
+    }).eq('id', currentReportId);
 
-// --- تکمیل نهایی پروژه ---
-window.markDelivered = async (id) => {
-    if(confirm("آیا این پروژه به طور کامل پایان یافت؟")) {
-        await supabase.from('typists').update({ status: 'delivered' }).eq('id', id);
+    if (!error) {
+        document.getElementById('reportModal').classList.add('hidden');
+    } else {
+        alert("خطا در ثبت گزارش");
     }
-};
+});
 
 // --- حذف ---
 window.deleteTypist = async (id) => {
