@@ -3,12 +3,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // ⚠️ اطلاعات سوپابیس شما
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_32dg2CRsZ2Nws6qA6x8JgQ_Jgs3Ta-e';
-const PASSWORD = '7853421'; // رمز ورود
+const PASSWORD = '7853421'; // رمز ورود (میتوانید تغییر دهید)
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ============================================
-// 🗓️ کتابخانه تقویم شمسی
+// 🗓️ کتابخانه تقویم شمسی (دقیقا مثل کد شما)
 // ============================================
 const Jalaali = {
     g_days_in_month: [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
@@ -113,7 +113,6 @@ async function saveProjectToSupabase(project) {
         completed: project.completed,
         reports: project.reports || []
     };
-    
     if (project.id) {
         await supabase.from('typists').update(payload).eq('id', project.id);
     } else {
@@ -125,10 +124,8 @@ async function deleteProjectFromSupabase(id) {
     await supabase.from('typists').delete().eq('id', id);
 }
 
-function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
-
 // ============================================
-// 🧮 منطق وضعیت و محاسبات (دقیقا مثل کد شما)
+// 🧮 منطق وضعیت و محاسبات
 // ============================================
 function calculateProjectStatus(project) {
     const today = Jalaali.today();
@@ -167,7 +164,7 @@ function calculateProjectStatus(project) {
 }
 
 // ============================================
-// 🎨 رندر کارت پروژه (دقیقا مثل کد شما)
+// 🎨 رندر کارت پروژه
 // ============================================
 function renderProjectCard(project) {
     const status = calculateProjectStatus(project);
@@ -333,7 +330,7 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 document.querySelector('[data-filter="all"]').classList.add('bg-white', 'dark:bg-slate-700', 'text-slate-900', 'dark:text-white', 'shadow-sm');
 
 // ============================================
-// 📅 تقویم شمسی (دقیقا مثل کد شما)
+// 📅 تقویم شمسی
 // ============================================
 let calendarState = { viewYear: null, viewMonth: null, selected: null, inputEl: null };
 function openCalendar(inputEl, initialValue = null) {
@@ -476,14 +473,21 @@ window.completeProject = async function(projectId) {
     await saveProjectToSupabase(project);
     showAlert('پروژه با موفقیت تکمیل شد', 'success');
 };
-window.showMenu = async function(e, projectId) {
+
+// تابع باز کردن پنجره حذف اختصاصی شما
+window.showMenu = function(e, projectId) {
     e.stopPropagation();
-    if (confirm('آیا از حذف این پروژه اطمینان دارید؟ این عمل غیرقابل بازگشت است.')) {
-        await deleteProjectFromSupabase(projectId);
-        showAlert('پروژه حذف شد', 'success');
-    }
+    document.getElementById('deleteProjectId').value = projectId;
+    document.getElementById('deleteModal').classList.remove('hidden');
 };
-window.confirmDelete = function() {};
+
+// تابع تایید حذف و اتصال به سوپابیس
+window.confirmDelete = async function() {
+    const id = document.getElementById('deleteProjectId').value;
+    await deleteProjectFromSupabase(id);
+    document.getElementById('deleteModal').classList.add('hidden');
+    showAlert('پروژه حذف شد', 'success');
+};
 
 // ============================================
 // 💬 نمایش پیام و ثبت فرم
