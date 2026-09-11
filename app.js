@@ -12,7 +12,7 @@ const esc = (str) => {
 };
 
 // ============================================
-// 🗓️ کتابخانه تقویم شمسی (اصلاح شده)
+// 🗓️ کتابخانه تقویم شمسی
 // ============================================
 const Jalaali = {
     jMonthName: ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'],
@@ -122,14 +122,15 @@ function calculateProjectStatus(project) {
 }
 
 // ============================================
-// 🎨 رندر کارت پروژه (کامپکت و مینیمال)
+// 🎨 رندر کارت پروژه
 // ============================================
 function renderProjectCard(project) {
     const status = calculateProjectStatus(project);
+    // تطبیق رنگ‌ها با UI جدید (سبز نفتی و قرمز)
     const colors = {
         active: { badge: 'bg-blue-50 text-blue-700 border-blue-100', bar: 'bg-blue-500', text: 'text-blue-600' },
         pending: { badge: 'bg-amber-50 text-amber-700 border-amber-100', bar: 'bg-amber-500', text: 'text-amber-600' },
-        delayed: { badge: 'bg-accent-50 text-accent-700 border-accent-100', bar: 'bg-accent-500', text: 'text-accent-600' },
+        delayed: { badge: 'bg-red-50 text-red-700 border-red-100', bar: 'bg-red-500', text: 'text-red-600' },
         delivered: { badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', bar: 'bg-emerald-500', text: 'text-emerald-600' }
     }[status.status];
     
@@ -142,7 +143,7 @@ function renderProjectCard(project) {
     const reportsHtml = (project.reports || []).sort((a,b) => b.period - a.period).map(r => `
         <div class="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg bg-slate-50 dark:bg-slate-800 text-[11px] border border-slate-100 dark:border-slate-700/50">
             <div class="flex items-center gap-2 flex-1 min-w-0">
-                <span class="w-1.5 h-1.5 rounded-full ${r.is_late ? 'bg-accent-500' : 'bg-emerald-500'} flex-shrink-0"></span>
+                <span class="w-1.5 h-1.5 rounded-full ${r.is_late ? 'bg-red-500' : 'bg-emerald-500'} flex-shrink-0"></span>
                 <span class="text-slate-700 dark:text-slate-300 truncate">دوره ${Jalaali.toPersianDigits(r.period)} • ${Jalaali.toPersianDigits(r.pages)} صفحه</span>
             </div>
         </div>`).join('');
@@ -188,7 +189,7 @@ function renderProjectCard(project) {
 
         <div class="flex gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             ${status.status !== 'delivered' ? `
-            <button class="report-btn flex-1 py-2 rounded-lg ${status.status === 'delayed' ? 'bg-accent-600 hover:bg-accent-500' : 'bg-primary-600 hover:bg-primary-500'} text-white text-[11px] font-bold transition" data-id="${project.id}">ثبت گزارش</button>
+            <button class="report-btn flex-1 py-2 rounded-lg ${status.status === 'delayed' ? 'bg-red-600 hover:bg-red-500' : 'bg-primary-600 hover:bg-primary-500'} text-white text-[11px] font-bold transition" data-id="${project.id}">ثبت گزارش</button>
             <button class="complete-btn py-2 px-3 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 text-[11px] font-medium border border-emerald-100" data-id="${project.id}">تکمیل</button>` : `<div class="flex-1 py-2 rounded-lg bg-emerald-50 text-emerald-600 text-[11px] font-bold text-center">پروژه تکمیل شده است</div>`}
         </div>
     </div>`;
@@ -312,7 +313,7 @@ function openReportModal(projectId) {
     document.getElementById('reportPages').value = ''; document.getElementById('reportText').value = '';
     const statusBox = document.getElementById('reportStatusBox');
     if (status.status === 'delayed' && status.isLate) {
-        statusBox.className = 'p-4 rounded-xl text-xs font-medium bg-accent-50 dark:bg-accent-500/10 border border-accent-200 text-accent-700 flex items-center gap-2';
+        statusBox.className = 'p-4 rounded-xl text-xs font-medium bg-red-50 dark:bg-red-500/10 border border-red-200 text-red-700 flex items-center gap-2';
         statusBox.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span>این گزارش <strong>${Jalaali.toPersianDigits(status.delayDays)} روز</strong> تاخیر دارد</span>`;
         statusBox.classList.remove('hidden');
     } else { statusBox.classList.add('hidden'); }
@@ -408,7 +409,7 @@ function exportToCSV() {
 // ============================================
 function showAlert(message, type = 'success') {
     const container = document.getElementById('alertContainer');
-    const colors = { success: 'bg-emerald-50 text-emerald-700 border-emerald-200', warning: 'bg-amber-50 text-amber-700 border-amber-200', error: 'bg-accent-50 text-accent-700 border-accent-200' };
+    const colors = { success: 'bg-emerald-50 text-emerald-700 border-emerald-200', warning: 'bg-amber-50 text-amber-700 border-amber-200', error: 'bg-red-50 text-red-700 border-red-200' };
     const alert = document.createElement('div');
     alert.className = `animate-fade-in flex items-center gap-3 border px-4 py-3 rounded-xl text-sm font-medium ${colors[type]}`;
     alert.textContent = message;
@@ -427,7 +428,7 @@ document.querySelectorAll('.filter-btn').forEach(btn => btn.addEventListener('cl
 document.querySelector('[data-filter="all"]').classList.add('bg-white', 'dark:bg-slate-700', 'text-slate-900', 'dark:text-white', 'shadow-sm');
 
 // ============================================
-// 📅 تقویم شمسی (پاپ آپ مودال با Event Delegation)
+// 📅 تقویم شمسی (پاپ آپ مودال)
 // ============================================
 let calendarState = { viewYear: null, viewMonth: null, selected: null, inputEl: null };
 
