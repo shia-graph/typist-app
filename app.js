@@ -1,9 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { toJalaali as libToJalaali, toGregorian as libToGregorian, isLeapJalaali as libIsLeap, jalaaliMonthLength as libMonthLength } from 'https://esm.sh/jalaali-js@1.1.0';
 
-// ⚠️ اطلاعات سوپابیس شما
+// ⚠️ نکته امنیتی: کلید Publishable (Anon) برای استفاده در فرانت‌اند ایمن است، 
+// اما حتماً Row Level Security (RLS) را در پنل Supabase برای جدول typists فعال کنید.
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_32dg2CRsZ2Nws6qA6x8JgQ_Jgs3Ta-e';
-const PASSWORD = '7853421'; // رمز ورود (میتوانید تغییر دهید)
+const PASSWORD = '1234';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -11,75 +13,45 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // 🗓️ کتابخانه تقویم شمسی
 // ============================================
 const Jalaali = {
-    g_days_in_month: [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
-    j_days_in_month: [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29],
     jMonthName: ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'],
-    isLeapGregorian(year) { return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0); },
-    isLeapJalaali(jy) { return this.jalCal(jy).leap === 0; },
-    jalCal(jy) {
-        const breaks = [ -61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178 ];
-        const bl = breaks.length;
-        let jp = breaks[0], jm, jump, leapYear = -14, n, i;
-        const jyPlus1 = jy + 1;
-        for (i = 1; i < bl; i += 1) {
-            jm = breaks[i];
-            jump = jm - jp;
-            if (jyPlus1 < jm) break;
-            leapYear += Math.floor(jump / 33) * 8 + Math.floor((jump % 33) / 4);
-            jp = jm;
-        }
-        n = jyPlus1 - jp;
-        leapYear += Math.floor(n / 33) * 8 + Math.floor((n % 33 + 3) / 4);
-        if ((jump % 33) === 4 && (jump - n) === 4) leapYear += 1;
-        const leapJ = (jump % 33 === 4 && (n - 1) % 33 === 0) || (jump % 33 === 5 && n % 33 === 0) || (jump % 33 === 5 && (n + 1) % 33 === 0);
-        let marchDay = 20;
-        if (leapYear === 1) marchDay = 21;
-        return { leap: leapYear % 33 === 0 || leapJ, gy: jy + 621, march: marchDay };
+    today() {
+        const now = new Date();
+        const j = libToJalaali(now);
+        return { year: j.jy, month: j.jm, day: j.jd };
     },
-    j2d(jy, jm, jd) { const r = this.jalCal(jy); return this.gregorian2julianday(r.gy, 3, r.march) + (jm <= 6 ? (jm - 1) * 31 : ((jm - 7) * 30 + 186)) + jd - 1; },
-    d2j(jdn) {
-        const gy = this.julianday2gregorian(jdn).year - 621;
-        const r = this.jalCal(gy);
-        const jdn1f = this.gregorian2julianday(gy + 621, 3, r.march);
-        let k = jdn - jdn1f;
-        let jy, jm, jd;
-        if (k >= 0) {
-            if (k <= 185) { jm = 1 + Math.floor(k / 31); jd = (k % 31) + 1; }
-            else { k -= 186; jm = 7 + Math.floor(k / 30); jd = (k % 30) + 1; }
-            jy = gy;
-        } else {
-            jy = gy - 1; k += 179;
-            if (r.leap === 1) k += 1;
-            if (k <= 185) { jm = 1 + Math.floor(k / 31); jd = (k % 31) + 1; }
-            else { k -= 186; jm = 7 + Math.floor(k / 30); jd = (k % 30) + 1; }
-        }
-        return { year: jy, month: jm, day: jd };
+    toPersianDigits(str) {
+        if (!str) return '';
+        const p = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+        return String(str).replace(/[0-9]/g, d => p[+d]);
     },
-    gregorian2julianday(year, month, day) { return 367 * year - Math.floor((7 * (year + Math.floor((month + 9) / 12))) / 4) + Math.floor((275 * month) / 9) + day + 1721013.5; },
-    julianday2gregorian(jd) {
-        const l = jd + 68569;
-        const n = Math.floor((4 * l) / 146097);
-        const l2 = l - Math.floor((146097 * n + 3) / 4);
-        const i = Math.floor((4000 * (l2 + 1)) / 1461001);
-        const l3 = l2 - Math.floor((1461 * i) / 4) + 31;
-        const j = Math.floor((80 * l3) / 2447);
-        const day = l3 - Math.floor((2447 * j) / 80);
-        const l4 = Math.floor(j / 11);
-        const month = j + 2 - 12 * l4;
-        const year = 100 * (n - 49) + i + l4;
-        return { year, month, day };
+    formatJalali(jy, jm, jd) {
+        return this.toPersianDigits(`${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`);
     },
-    toJalaali(gy, gm, gd) { return this.d2j(this.gregorian2julianday(gy, gm, gd)); },
-    toGregorian(jy, jm, jd) { return this.julianday2gregorian(this.j2d(jy, jm, jd)); },
-    today() { const now = new Date(); return this.toJalaali(now.getFullYear(), now.getMonth() + 1, now.getDate()); },
-    toPersianDigits(str) { const p = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹']; return String(str).replace(/[0-9]/g, d => p[+d]); },
-    formatJalali(jy, jm, jd) { return this.toPersianDigits(`${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`); },
-    parseJalali(str) { const parts = String(str).split('/').map(p => +String(p).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))); return { year: parts[0], month: parts[1], day: parts[2] }; },
-    daysBetween(j1, j2) { return this.j2d(j2.year, j2.month, j2.day) - this.j2d(j1.year, j1.month, j1.day); }
+    parseJalali(str) {
+        const parts = String(str).split('/').map(p => +String(p).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+        return { year: parts[0], month: parts[1], day: parts[2] };
+    },
+    daysBetween(j1, j2) {
+        const g1 = libToGregorian(j1.year, j1.month, j1.day);
+        const date1 = new Date(g1.gy, g1.gm - 1, g1.gd);
+        const g2 = libToGregorian(j2.year, j2.month, j2.day);
+        const date2 = new Date(g2.gy, g2.gm - 1, g2.gd);
+        return Math.round((date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24));
+    },
+    isLeapJalaali(jy) { return libIsLeap(jy); },
+    jMonthLength(jy, jm) { return libMonthLength(jy, jm); },
+    toGregorian(jy, jm, jd) {
+        const g = libToGregorian(jy, jm, jd);
+        return { year: g.gy, month: g.gm, day: g.gd };
+    },
+    toJalaali(gy, gm, gd) {
+        const j = libToJalaali(gy, gm, gd);
+        return { year: j.jy, month: j.jm, day: j.jd };
+    }
 };
 
 // ============================================
-// 📦 مدیریت داده‌ها (اتصال به سوپابیس)
+// 📦 مدیریت داده‌ها (Supabase)
 // ============================================
 let projectsCache = [];
 
@@ -89,14 +61,14 @@ async function loadProjects() {
     
     projectsCache = data.map(p => {
         const createdDate = p.created_at ? new Date(p.created_at) : new Date();
-        const jToday = Jalaali.toJalaali(createdDate.getFullYear(), createdDate.getMonth() + 1, createdDate.getDate());
+        const jCreated = Jalaali.toJalaali(createdDate.getFullYear(), createdDate.getMonth() + 1, createdDate.getDate());
         return {
             id: p.id,
             name: p.name,
             phone: p.phone,
             title: p.title,
             deliveryDate: p.delivery_date,
-            createdAt: Jalaali.formatJalali(jToday.year, jToday.month, jToday.day),
+            createdAt: Jalaali.formatJalali(jCreated.year, jCreated.month, jCreated.day),
             reports: p.reports || [],
             completed: p.completed || false
         };
@@ -168,7 +140,6 @@ function calculateProjectStatus(project) {
 // ============================================
 function renderProjectCard(project) {
     const status = calculateProjectStatus(project);
-    const today = Jalaali.today();
     const colorMap = {
         active: { badge: 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-100 dark:border-blue-500/20', bar: 'bg-blue-500', icon: 'text-blue-600 dark:text-blue-400' },
         pending: { badge: 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-100 dark:border-amber-500/20', bar: 'bg-amber-500', icon: 'text-amber-600 dark:text-amber-400' },
@@ -184,6 +155,7 @@ function renderProjectCard(project) {
     };
     const periodProgress = status.status !== 'delivered' ? Math.min(100, ((10 - status.daysLeft) / 10) * 100) : 100;
     const initials = project.name.split(' ').map(n => n[0]).join('').slice(0, 2);
+    
     const reportsHtml = (project.reports || []).slice().reverse().map(r => {
         const isLate = r.isLate;
         return `<div class="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-xs">
@@ -272,12 +244,13 @@ function renderProjectCard(project) {
 }
 
 // ============================================
-// 🖥️ رندر لیست
+// 🖥️ رندر لیست و آمار
 // ============================================
 async function renderProjects() {
     const projects = await loadProjects();
     const listEl = document.getElementById('typistList');
     const emptyEl = document.getElementById('emptyState');
+    
     if (projects.length === 0) {
         listEl.innerHTML = '';
         emptyEl.classList.remove('hidden');
@@ -298,10 +271,7 @@ async function renderProjects() {
 
 function updateStats(projects) {
     const stats = { active: 0, pending: 0, delayed: 0, delivered: 0 };
-    projects.forEach(p => {
-        const s = calculateProjectStatus(p).status;
-        stats[s]++;
-    });
+    projects.forEach(p => { stats[calculateProjectStatus(p).status]++; });
     document.getElementById('stat-active').textContent = Jalaali.toPersianDigits(stats.active);
     document.getElementById('stat-pending').textContent = Jalaali.toPersianDigits(stats.pending);
     document.getElementById('stat-delayed').textContent = Jalaali.toPersianDigits(stats.delayed);
@@ -314,9 +284,7 @@ function updateStats(projects) {
 let currentFilter = 'all';
 function applyFilter() {
     document.querySelectorAll('.project-card').forEach(card => {
-        const status = card.dataset.status;
-        if (currentFilter === 'all' || status === currentFilter) card.style.display = '';
-        else card.style.display = 'none';
+        card.style.display = (currentFilter === 'all' || card.dataset.status === currentFilter) ? '' : 'none';
     });
 }
 document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -353,8 +321,8 @@ function renderCalendar() {
     const firstDayGreg = Jalaali.toGregorian(viewYear, viewMonth, 1);
     const firstDayOfWeek = new Date(firstDayGreg.year, firstDayGreg.month - 1, firstDayGreg.day).getDay();
     const startOffset = (firstDayOfWeek + 1) % 7;
-    const isLeap = Jalaali.isLeapJalaali(viewYear);
-    const daysInMonth = viewMonth <= 6 ? 31 : (viewMonth === 12 && !isLeap ? 29 : 30);
+    const daysInMonth = Jalaali.jMonthLength(viewYear, viewMonth);
+    
     let html = `<div class="flex items-center justify-between mb-3">
         <button type="button" onclick="calendarPrev()" class="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
         <div class="text-center"><div class="text-sm font-bold text-slate-900 dark:text-white">${Jalaali.jMonthName[viewMonth - 1]} ${Jalaali.toPersianDigits(viewYear)}</div></div>
@@ -362,6 +330,7 @@ function renderCalendar() {
     </div>
     <div class="grid grid-cols-7 gap-1 mb-2">${['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'].map(d => `<div class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 text-center">${d}</div>`).join('')}</div>
     <div class="grid grid-cols-7 gap-1">`;
+    
     for (let i = 0; i < startOffset; i++) html += `<div class="cal-day"></div>`;
     for (let d = 1; d <= daysInMonth; d++) {
         const isToday = viewYear === today.year && viewMonth === today.month && d === today.day;
@@ -389,9 +358,9 @@ window.openProjectModal = function(projectId = null) {
     const modal = document.getElementById('formModal');
     const backdrop = document.getElementById('modalBackdrop');
     const content = document.getElementById('modalContent');
-    const form = document.getElementById('typistForm');
-    form.reset();
+    document.getElementById('typistForm').reset();
     document.getElementById('editId').value = '';
+    
     if (projectId) {
         const p = projectsCache.find(x => x.id === projectId);
         if (p) {
@@ -424,15 +393,18 @@ window.openReportModal = function(projectId) {
     const content = document.getElementById('reportContent');
     const statusBox = document.getElementById('reportStatusBox');
     const status = calculateProjectStatus(project);
+    
     document.getElementById('reportProjectId').value = projectId;
     document.getElementById('reportProjectTitle').textContent = project.name + ' - ' + project.title;
     document.getElementById('reportPages').value = '';
     document.getElementById('reportText').value = '';
+    
     if (status.status === 'delayed' && status.isLate) {
         statusBox.className = 'p-3 rounded-xl text-xs bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 flex items-center gap-2';
         statusBox.innerHTML = `<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span>این گزارش <strong>${Jalaali.toPersianDigits(status.delayDays)} روز</strong> تاخیر دارد</span>`;
         statusBox.classList.remove('hidden');
     } else { statusBox.classList.add('hidden'); }
+    
     modal.classList.remove('hidden');
     requestAnimationFrame(() => content.classList.remove('scale-95', 'opacity-0'));
 };
@@ -442,47 +414,62 @@ window.closeReportModal = function() {
     content.classList.add('scale-95', 'opacity-0');
     setTimeout(() => modal.classList.add('hidden'), 300);
 };
+
 window.submitReport = async function() {
     const projectId = document.getElementById('reportProjectId').value;
     const pages = parseInt(document.getElementById('reportPages').value) || 0;
     const text = document.getElementById('reportText').value.trim();
     if (pages <= 0) { alert('لطفاً تعداد صفحات را وارد کنید'); return; }
+    
     const project = projectsCache.find(p => p.id === projectId);
     if (!project) return;
+    
     const today = Jalaali.today();
     const created = Jalaali.parseJalali(project.createdAt);
     const daysSinceCreation = Jalaali.daysBetween(created, today);
     const currentPeriod = Math.floor(daysSinceCreation / 10) + 1;
+    
     const reports = project.reports || [];
-    const lastReportedPeriod = reports.length > 0 ? reports[reports.length - 1].period : 0;
-    const expectedPeriod = lastReportedPeriod + 1;
+    const expectedEndDay = currentPeriod * 10;
     let isLate = false, delayDays = 0;
-    const expectedEndDay = expectedPeriod * 10;
-    if (daysSinceCreation > expectedEndDay) { isLate = true; delayDays = daysSinceCreation - expectedEndDay; }
+    
+    if (daysSinceCreation > expectedEndDay) { 
+        isLate = true; 
+        delayDays = daysSinceCreation - expectedEndDay; 
+    }
+    
     reports.push({ period: currentPeriod, date: today, pages, text, isLate, delayDays, timestamp: Date.now() });
     project.reports = reports;
+    
     await saveProjectToSupabase(project);
     closeReportModal();
     showAlert(isLate ? `گزارش با ${Jalaali.toPersianDigits(delayDays)} روز تاخیر ثبت شد` : 'گزارش با موفقیت ثبت شد', isLate ? 'warning' : 'success');
+    await renderProjects(); // ✅ به‌روزرسانی UI
 };
+
 window.completeProject = async function(projectId) {
     const project = projectsCache.find(p => p.id === projectId);
     if (!project) return;
     if (!confirm('آیا از تکمیل پروژه اطمینان دارید؟')) return;
+    
     project.completed = true;
     await saveProjectToSupabase(project);
     showAlert('پروژه با موفقیت تکمیل شد', 'success');
+    await renderProjects(); // ✅ به‌روزرسانی UI
 };
+
 window.showMenu = function(e, projectId) {
     e.stopPropagation();
     document.getElementById('deleteProjectId').value = projectId;
     document.getElementById('deleteModal').classList.remove('hidden');
 };
+
 window.confirmDelete = async function() {
     const id = document.getElementById('deleteProjectId').value;
     await deleteProjectFromSupabase(id);
     document.getElementById('deleteModal').classList.add('hidden');
     showAlert('پروژه حذف شد', 'success');
+    await renderProjects(); // ✅ به‌روزرسانی UI
 };
 
 // ============================================
@@ -493,7 +480,6 @@ window.exportToCSV = function() {
         showAlert('هیچ پروژه‌ای برای خروجی وجود ندارد', 'warning');
         return;
     }
-
     const headers = ['نام تایپیست', 'شماره تماس', 'عنوان پروژه', 'تاریخ تحویل', 'وضعیت', 'مجموع صفحات', 'تعداد گزارش‌ها', 'جزئیات گزارش‌ها'];
     let csvContent = "\uFEFF"; 
     csvContent += headers.map(h => `"${h}"`).join(',') + '\n';
@@ -507,47 +493,30 @@ window.exportToCSV = function() {
             case 'delayed': statusText = status.delayText || 'تاخیر دارد'; break;
             case 'delivered': statusText = 'تکمیل شده'; break;
         }
-
         const totalPages = (p.reports || []).reduce((sum, r) => sum + (r.pages || 0), 0);
         const reportsCount = (p.reports || []).length;
-        
         let reportsDetails = (p.reports || []).map(r => {
             const dateStr = Jalaali.formatJalali(r.date.year, r.date.month, r.date.day);
             const lateStr = r.isLate ? ` (تاخیر ${r.delayDays} روز)` : '';
             return `دوره ${Jalaali.toPersianDigits(r.period)}: ${Jalaali.toPersianDigits(r.pages)} صفحه - تاریخ: ${dateStr}${lateStr}`;
         }).join(' | ');
-
         if (!reportsDetails) reportsDetails = 'بدون گزارش';
 
-        const row = [
-            p.name || '',
-            p.phone || '',
-            p.title || '',
-            p.deliveryDate || '',
-            statusText,
-            Jalaali.toPersianDigits(totalPages),
-            Jalaali.toPersianDigits(reportsCount),
-            reportsDetails
-        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
-
+        const row = [p.name || '', p.phone || '', p.title || '', p.deliveryDate || '', statusText, Jalaali.toPersianDigits(totalPages), Jalaali.toPersianDigits(reportsCount), reportsDetails]
+            .map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
         csvContent += row + '\n';
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    
     const today = Jalaali.today();
-    const fileName = `گزارش-تایپیست‌ها-${Jalaali.formatJalali(today.year, today.month, today.day)}.csv`;
-    
     link.setAttribute('href', url);
-    link.setAttribute('download', fileName);
+    link.setAttribute('download', `گزارش-تایپیست‌ها-${Jalaali.formatJalali(today.year, today.month, today.day)}.csv`);
     link.style.visibility = 'hidden';
-    
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
     showAlert('فایل اکسل با موفقیت دانلود شد', 'success');
 };
 
@@ -556,8 +525,16 @@ window.exportToCSV = function() {
 // ============================================
 function showAlert(message, type = 'success') {
     const container = document.getElementById('alertContainer');
-    const colors = { success: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400', warning: 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400', error: 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400' };
-    const icon = { success: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>', warning: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>', error: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>' };
+    const colors = { 
+        success: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400', 
+        warning: 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400', 
+        error: 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400' 
+    };
+    const icon = { 
+        success: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>', 
+        warning: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>', 
+        error: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>' 
+    };
     const alert = document.createElement('div');
     alert.className = `animate-fade-in flex items-center gap-3 border px-4 py-3 rounded-xl text-sm ${colors[type]}`;
     alert.innerHTML = `<svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${icon[type]}</svg><span class="font-medium flex-1">${message}</span>`;
@@ -572,6 +549,7 @@ document.getElementById('typistForm').addEventListener('submit', async (e) => {
     const phone = document.getElementById('phone').value.trim();
     const title = document.getElementById('title').value.trim();
     const deliveryDate = document.getElementById('deliveryDate').value.trim();
+    
     if (!name || !title || !deliveryDate) { alert('لطفاً تمام فیلدهای الزامی را پر کنید'); return; }
     
     if (id) {
@@ -592,10 +570,11 @@ document.getElementById('typistForm').addEventListener('submit', async (e) => {
         showAlert('پروژه جدید با موفقیت ثبت شد. اولین گزارش ظرف ۱۰ روز آینده', 'success');
     }
     closeProjectModal();
+    await renderProjects(); // ✅ به‌روزرسانی UI
 });
 
 // ============================================
-// 📅 Event Listeners
+// 📅 Event Listeners و راه‌اندازی
 // ============================================
 document.getElementById('deliveryDate').addEventListener('click', function(e) {
     e.stopPropagation();
@@ -611,6 +590,7 @@ const themeToggleBtn = document.getElementById('themeToggle');
 const htmlElement = document.documentElement;
 if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) htmlElement.classList.add('dark');
 else htmlElement.classList.remove('dark');
+
 themeToggleBtn.addEventListener('click', () => {
     if (htmlElement.classList.contains('dark')) { htmlElement.classList.remove('dark'); localStorage.theme = 'light'; }
     else { htmlElement.classList.add('dark'); localStorage.theme = 'dark'; }
@@ -624,21 +604,29 @@ if (localStorage.getItem('isLoggedIn') === 'true') {
     document.getElementById('appWrapper').classList.remove('hidden');
     renderProjects();
 }
+
 document.getElementById('loginForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    const pwd = document.getElementById('passwordInput').value;
-    if (pwd === PASSWORD) {
+    if (document.getElementById('passwordInput').value === PASSWORD) {
         localStorage.setItem('isLoggedIn', 'true');
         document.getElementById('loginScreen').classList.add('hidden');
         document.getElementById('appWrapper').classList.remove('hidden');
         renderProjects();
-    } else { document.getElementById('loginError').classList.remove('hidden'); }
+    } else { 
+        document.getElementById('loginError').classList.remove('hidden'); 
+    }
 });
 
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { closeProjectModal(); closeReportModal(); closeCalendar(); }
+    if (e.key === 'Escape') { closeProjectModal(); closeReportModal(); closeCalendar(); document.getElementById('deleteModal').classList.add('hidden'); }
 });
 
-supabase.channel('public:typists').on('postgres_changes', { event: '*', schema: 'public', table: 'typists' }, renderProjects).subscribe();
+// Real-time Supabase Subscription
+supabase.channel('public:typists')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'typists' }, () => {
+        renderProjects();
+    })
+    .subscribe();
 
+// به‌روزرسانی خودکار هر ساعت برای محاسبه دقیق تاخیرها
 setInterval(renderProjects, 60 * 60 * 1000);
