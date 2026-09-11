@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // ⚠️ اطلاعات سوپابیس شما
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_32dg2CRsZ2Nws6qA6x8JgQ_Jgs3Ta-e';
-const PASSWORD = '1234'; // رمز ورود
+const PASSWORD = '7853421'; // رمز ورود
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
