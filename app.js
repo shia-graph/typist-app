@@ -26,7 +26,7 @@ const Jalaali = {
     
     toPersianDigits(str) { 
         if(!str) return ''; 
-        const p = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹']; 
+        const p = ['۰','۱','۲','','۴','۵','۶','','۸','۹']; 
         return String(str).replace(/[0-9]/g, d => p[+d]); 
     },
     
@@ -34,22 +34,41 @@ const Jalaali = {
         return this.toPersianDigits(`${jy}/${String(jm).padStart(2,'0')}/${String(jd).padStart(2,'0')}`); 
     },
     
+    // ✅ اصلاح کامل: تبدیل صحیح اعداد فارسی به انگلیسی
     parseJalali(str) { 
         if (!str || typeof str !== 'string') return null;
-        const p = String(str).split('/').map(p => +String(p).replace(/[۰-۹]/g, d => '۰۱۲۴۵۶۷۸'.indexOf(d))); 
-        if (p.length !== 3 || p.some(isNaN)) return null; 
-        return { year: p[0], month: p[1], day: p[2] }; 
+        
+        // تبدیل اعداد فارسی و عربی به انگلیسی
+        const persianDigits = '۰۲۳۴۵۶۸۹';
+        const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+        
+        const normalized = String(str)
+            .replace(/[۰-۹]/g, d => persianDigits.indexOf(d))
+            .replace(/[٠-]/g, d => arabicDigits.indexOf(d));
+        
+        const parts = normalized.split('/').map(p => parseInt(p.trim(), 10));
+        
+        if (parts.length !== 3 || parts.some(isNaN) || parts.some(p => p <= 0)) {
+            console.warn('parseJalali failed for:', str, '-> parts:', parts);
+            return null;
+        }
+        
+        return { year: parts[0], month: parts[1], day: parts[2] };
     },
     
+    // ✅ اصلاح: محاسبه دقیق اختلاف روزها
     daysBetween(j1, j2) { 
-        if(!j1||!j2) return 0; 
+        if(!j1 || !j2) return 0; 
         try {
             const g1 = libToGregorian(j1.year, j1.month, j1.day); 
-            const d1 = new Date(g1.gy, g1.gm-1, g1.gd); 
+            const d1 = new Date(g1.gy, g1.gm - 1, g1.gd); 
             const g2 = libToGregorian(j2.year, j2.month, j2.day); 
-            const d2 = new Date(g2.gy, g2.gm-1, g2.gd); 
+            const d2 = new Date(g2.gy, g2.gm - 1, g2.gd); 
+            
             const diffTime = d2.getTime() - d1.getTime();
-            return Math.round(diffTime / (1000 * 60 * 60 * 24));
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+            
+            return diffDays;
         } catch (e) {
             console.error('daysBetween error:', e);
             return 0;
@@ -81,15 +100,23 @@ async function loadProjects() {
         const jc = Jalaali.toJalaali(cd.getFullYear(), cd.getMonth()+1, cd.getDate());
         return { 
             id: p.id, 
-            name: p.name||'بدون نام', 
-            phone: p.phone||'-', 
-            title: p.title||'بدون عنوان', 
+            name: p.name || 'بدون نام', 
+            phone: p.phone || '-', 
+            title: p.title || 'بدون عنوان', 
             deliveryDate: p.delivery_date, 
             createdAt: Jalaali.formatJalali(jc.year, jc.month, jc.day), 
             reports: p.typist_reports || [], 
             completed: p.completed || false 
         };
     });
+    
+    // ✅ لاگ برای دیباگ
+    console.log('Loaded projects:', projectsCache.map(p => ({
+        id: p.id,
+        deliveryDate: p.deliveryDate,
+        parsed: Jalaali.parseJalali(p.deliveryDate)
+    })));
+    
     return projectsCache;
 }
 
@@ -136,11 +163,9 @@ async function insertReportToSupabase(pid, per, pg, txt, isLate, delay) {
     if (error) throw error; 
 }
 
-// ✅ منطق اصلی: deliveryDate = تاریخ تحویل کار به تایپیست (شروع دوره‌های ۱ روزه)
+// ✅ منطق اصلی: deliveryDate = تاریخ تحویل کار به تایپیست (شروع دوره‌های ۱۰ روزه)
 function calculateProjectStatus(p) {
     const today = Jalaali.today();
-
-    // deliveryDate = تاریخ تحویل کار به تایپیست (شروع دوره)
     const startDate = Jalaali.parseJalali(p.deliveryDate);
 
     if (!startDate) {
@@ -156,10 +181,9 @@ function calculateProjectStatus(p) {
         };
     }
 
-    // تعداد روزهای گذشته از دریافت کار
+    // ✅ روزهای سپری‌شده (همیشه مثبت)
     const daysSinceStart = Math.max(0, Jalaali.daysBetween(startDate, today));
 
-    // اگر پروژه تکمیل شده باشد
     if (p.completed) {
         return {
             status: 'delivered',
@@ -173,24 +197,12 @@ function calculateProjectStatus(p) {
     }
 
     // محاسبه دوره فعلی
-    // روزهای 0 تا 9 → دوره اول
-    // روزهای 10 تا 19 → دوره دوم
     const currentPeriod = Math.floor(daysSinceStart / 10) + 1;
-
-    // روز داخل دوره
     const dayInPeriod = daysSinceStart % 10;
-
-    // چند روز تا پایان دوره / گزارش
-    // روز 0 → 10 روز مانده
-    // روز 1 → 9 روز مانده
-    // روز 2 → 8 روز مانده
     const daysUntilReport = 10 - dayInPeriod;
 
-    // گزارش‌های ثبت شده
     const reports = Array.isArray(p.reports) ? p.reports : [];
     const reportedPeriods = reports.map(r => Number(r.period)).filter(Number.isFinite);
-
-    // آیا گزارش دوره جاری ثبت شده؟
     const isReported = reportedPeriods.includes(currentPeriod);
 
     if (isReported) {
@@ -205,7 +217,6 @@ function calculateProjectStatus(p) {
         };
     }
 
-    // بررسی گزارش‌های عقب‌افتاده
     const lastReportedPeriod = reportedPeriods.length > 0 ? Math.max(...reportedPeriods) : 0;
 
     if (lastReportedPeriod < currentPeriod - 1) {
@@ -223,7 +234,6 @@ function calculateProjectStatus(p) {
         };
     }
 
-    // هنوز دوره تمام نشده
     return {
         status: daysUntilReport <= 3 ? 'pending' : 'active',
         daysLeft: daysUntilReport,
@@ -238,7 +248,6 @@ function calculateProjectStatus(p) {
 function renderProjectCard(project) {
     const status = calculateProjectStatus(project);
     
-    // نمایش بر اساس daysUntilReport (روزهای مانده تا گزارش)
     let timeText = '';
     let timeBadgeClass = '';
     
@@ -299,7 +308,6 @@ function renderProjectCard(project) {
                     <p class="text-sm text-slate-800 dark:text-slate-100 font-bold leading-relaxed">${esc(project.title)}</p>
                 </div>
 
-                <!-- نمایش روزهای سپری‌شده و روزهای مانده تا گزارش -->
                 <div class="grid grid-cols-2 gap-3 text-xs">
                     <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 dark:border-slate-700">
                         <p class="text-slate-400 dark:text-slate-500 mb-1 text-[10px]">روزهای سپری‌شده</p>
@@ -323,7 +331,7 @@ function renderProjectCard(project) {
                 ${status.status !== 'delivered' ? `
                 <div>
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400">دوره ${Jalaali.toPersianDigits(status.currentPeriod)} از ۱۰ روز</span>
+                        <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400">دوره ${Jalaali.toPersianDigits(status.currentPeriod)} از ۱ روز</span>
                         <span class="text-[11px] font-black ${isDelayed ? 'text-red-500' : 'text-primary-600'}">
                             ${status.daysLeft > 0 ? `${Jalaali.toPersianDigits(status.daysLeft)} روز مانده` : 'پایان دوره'}
                         </span>
@@ -620,7 +628,7 @@ function openReportModal(id) {
     const sb = document.getElementById('reportStatusBox'); 
     if (s.status === 'delayed' && s.isLate) { 
         sb.className = 'p-4 rounded-xl text-xs font-medium bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 flex items-center gap-2'; 
-        sb.innerHTML = `<span>این گزارش <strong>${Jalaali.toPersianDigits(s.delayDays || 0)} روز</strong> تاخیر دارد</span>`; 
+        sb.innerHTML = `<span>این گزارش <strong>${Jalaali.toPersianDigits(s.daysUntilReport || 0)} روز</strong> تاخیر دارد</span>`; 
         sb.classList.remove('hidden'); 
     } else { 
         sb.classList.add('hidden'); 
@@ -660,7 +668,7 @@ async function submitReport() {
     const s = calculateProjectStatus(p); 
     
     try { 
-        await insertReportToSupabase(pid, per, pg, txt, s.isLate || false, s.daysUntilReport <= 0 ? Math.abs(s.daysUntilReport) : 0); 
+        await insertReportToSupabase(pid, per, pg, txt, s.isLate || false, s.isLate ? s.daysUntilReport : 0); 
         closeReportModal(); 
         showAlert('گزارش ثبت شد', 'success'); 
         await renderProjects();
@@ -851,3 +859,8 @@ document.addEventListener('keydown', e => {
 
 console.log('%c✅ پنل مدیریت تایپ بارگذاری شد', 'color: #14b8a6; font-weight: bold; font-size: 14px');
 console.log('📅 تاریخ امروز:', Jalaali.formatJalali(Jalaali.today().year, Jalaali.today().month, Jalaali.today().day));
+
+// ✅ تست parseJalali
+console.log('🧪 تست parseJalali:');
+console.log('  ۱۰۵/۰۶/۸ ->', Jalaali.parseJalali('۱۴۰۵/۰۶/۱۸'));
+console.log('  1405/06/18 ->', Jalaali.parseJalali('1405/06/18'));
