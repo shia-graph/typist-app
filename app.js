@@ -238,7 +238,15 @@ document.getElementById('calendarModal').addEventListener('click', e => {
     else if (e.target.closest('.cal-close')) { closeCalendar(); }
     else if (e.target.closest('.cal-day')) { const de = e.target.closest('.cal-day'); if (!de.dataset.day) return; const d = parseInt(de.dataset.day); calendarState.selected = { year: calendarState.viewYear, month: calendarState.viewMonth, day: d }; if (calendarTargetInput) calendarTargetInput.value = Jalaali.formatJalali(calendarState.viewYear, calendarState.viewMonth, d); closeCalendar(); }
 });
-document.getElementById('deliveryDate').addEventListener('click', function() { openCalendar(this, this.value); });
+
+// ✅ اتصال رویداد کلیک به کادر دور فیلد (به جای خود فیلد readonly) برای حل مشکل موبایل
+const dateWrapper = document.getElementById('deliveryDateWrapper');
+if (dateWrapper) {
+    dateWrapper.addEventListener('click', function() {
+        const input = document.getElementById('deliveryDate');
+        openCalendar(input, input.value);
+    });
+}
 
 document.getElementById('openProjectBtn').addEventListener('click', () => openProjectModal());
 document.getElementById('emptyAddBtn').addEventListener('click', () => openProjectModal());
@@ -259,7 +267,7 @@ document.getElementById('typistList').addEventListener('click', (e) => {
     else if (action === 'report') { openReportModal(id); }
     else if (action === 'complete') { completeProject(id); }
     else if (action === 'edit') { openProjectModal(id); }
-    else if (action === 'delete') { document.getElementById('deleteProjectId').value = id; document.getElementById('deleteModal').classList.remove('hidden'); }
+    else if (action === 'delete') { document.getElementById('deleteProjectId').value = id; document.getElementById('deleteModal').classList.add('hidden'); document.getElementById('deleteModal').classList.remove('hidden'); }
 });
 
 function openProjectModal(id = null) { const m = document.getElementById('formModal'); const b = document.getElementById('modalBackdrop'); const c = document.getElementById('modalContent'); document.getElementById('typistForm').reset(); document.getElementById('editId').value = ''; if (id) { const p = projectsCache.find(x => x.id === id); if (p) { document.getElementById('editId').value = p.id; document.getElementById('name').value = p.name; document.getElementById('phone').value = p.phone; document.getElementById('title').value = p.title; document.getElementById('deliveryDate').value = p.startDate; document.getElementById('formTitle').textContent = 'ویرایش پروژه'; document.getElementById('submitBtnText').textContent = 'ذخیره تغییرات'; } } else { document.getElementById('formTitle').textContent = 'ثبت پروژه جدید'; document.getElementById('submitBtnText').textContent = 'ذخیره پروژه'; } m.classList.remove('hidden'); requestAnimationFrame(() => { b.classList.remove('opacity-0'); c.classList.remove('scale-95', 'opacity-0'); }); }
@@ -273,7 +281,44 @@ async function submitReport() { const btn = document.getElementById('submitRepor
 async function completeProject(id) { if (!confirm('تکمیل نهایی؟')) return; try { await completeProjectInSupabase(id); showAlert('تکمیل شد', 'success'); await renderProjects(); } catch (e) { showAlert('خطا', 'error'); } }
 async function confirmDelete() { const id = document.getElementById('deleteProjectId').value; const btn = document.getElementById('confirmDeleteBtn'); btn.disabled = true; btn.innerText = 'حذف...'; try { await softDeleteProject(id); document.getElementById('deleteModal').classList.add('hidden'); showAlert('حذف شد', 'success'); await renderProjects(); } catch (e) { showAlert('خطا', 'error'); } finally { btn.disabled = false; btn.innerText = 'حذف'; } }
 
-document.getElementById('typistForm').addEventListener('submit', async (e) => { e.preventDefault(); const btn = document.getElementById('submitBtn'); btn.disabled = true; document.getElementById('submitBtnText').innerText = 'ذخیره...'; const id = document.getElementById('editId').value; const n = document.getElementById('name').value.trim(); const ph = document.getElementById('phone').value.trim(); const t = document.getElementById('title').value.trim(); const dd = document.getElementById('deliveryDate').value.trim(); if (!Jalaali.parseJalali(dd)) { showAlert('تاریخ نامعتبر', 'warning'); btn.disabled = false; document.getElementById('submitBtnText').innerText = id ? 'ذخیره تغییرات' : 'ذخیره پروژه'; return; } try { await saveProjectToSupabase({ id, name: n, phone: ph, title: t, startDate: dd }); closeProjectModal(); showAlert(id ? 'ویرایش شد' : 'ثبت شد', 'success'); await renderProjects(); } catch (er) { showAlert('خطا', 'error'); } finally { btn.disabled = false; document.getElementById('submitBtnText').innerText = id ? 'ذخیره تغییرات' : 'ذخیره پروژه'; } });
+document.getElementById('typistForm').addEventListener('submit', async (e) => { 
+    e.preventDefault(); 
+    const btn = document.getElementById('submitBtn'); 
+    btn.disabled = true; 
+    document.getElementById('submitBtnText').innerText = 'ذخیره...'; 
+    
+    const id = document.getElementById('editId').value; 
+    const n = document.getElementById('name').value.trim(); 
+    const ph = document.getElementById('phone').value.trim(); 
+    const t = document.getElementById('title').value.trim(); 
+    const dd = document.getElementById('deliveryDate').value.trim(); 
+    
+    // ✅ اصلاح پیام خطا: اگر تاریخ خالی بود یا نامعتبر بود
+    if (!dd) { 
+        showAlert('لطفاً تاریخ دریافت کار را از تقویم انتخاب کنید', 'warning'); 
+        btn.disabled = false; 
+        document.getElementById('submitBtnText').innerText = id ? 'ذخیره تغییرات' : 'ذخیره پروژه'; 
+        return; 
+    } 
+    if (!Jalaali.parseJalali(dd)) { 
+        showAlert('فرمت تاریخ نامعتبر است. لطفاً از تقویم برنامه انتخاب کنید.', 'warning'); 
+        btn.disabled = false; 
+        document.getElementById('submitBtnText').innerText = id ? 'ذخیره تغییرات' : 'ذخیره پروژه'; 
+        return; 
+    } 
+    
+    try { 
+        await saveProjectToSupabase({ id, name: n, phone: ph, title: t, startDate: dd }); 
+        closeProjectModal(); 
+        showAlert(id ? 'ویرایش شد' : 'ثبت شد', 'success'); 
+        await renderProjects(); 
+    } catch (er) { 
+        showAlert('خطا در ذخیره‌سازی', 'error'); 
+    } finally { 
+        btn.disabled = false; 
+        document.getElementById('submitBtnText').innerText = id ? 'ذخیره تغییرات' : 'ذخیره پروژه'; 
+    } 
+});
 
 function exportToCSV() { if (!projectsCache || projectsCache.length === 0) { showAlert('پروژه‌ای نیست', 'warning'); return; } const h = ['نام', 'شماره', 'عنوان', 'تاریخ دریافت کار', 'وضعیت', 'صفحات', 'گزارش‌ها']; let c = "\uFEFF" + h.map(x => `"${x}"`).join(',') + '\n'; projectsCache.forEach(p => { const s = calculateProjectStatus(p); const stTxt = s.status === 'active' ? 'به‌موقع' : s.status === 'pending' ? (s.isNotStarted ? 'در انتظار شروع' : 'در انتظار گزارش') : s.status === 'delayed' ? (s.delayText || 'تاخیر') : 'تکمیل'; const tp = (p.reports || []).reduce((a, r) => a + r.pages, 0); const rt = (p.reports || []).map(r => `دوره ${r.period}:${r.pages}ص`).join(' | '); c += [esc(p.name), esc(p.phone), esc(p.title), esc(p.startDate), esc(stTxt), tp, esc(rt)].map(v => `"${v}"`).join(',') + '\n'; }); const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement('a'); l.href = URL.createObjectURL(b); l.download = `گزارش.csv`; l.click(); }
 
