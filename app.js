@@ -1,20 +1,17 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { toJalaali as libToJalaali, toGregorian as libToGregorian, isLeapJalaaliYear as libIsLeap, jalaaliMonthLength as libMonthLength } from 'https://esm.sh/jalaali-js@1.1.0';
+
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_32dg2CRsZ2Nws6qA6x8JgQ_Jgs3Ta-e';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ============================================
 // 🛡️ تابع جلوگیری از حملات XSS
-// ============================================
 const esc = (str) => {
     if (str === null || str === undefined) return '';
     return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 };
 
-// ============================================
 // 🗓️ کتابخانه تقویم شمسی (اصلاح شده)
-// ============================================
 const Jalaali = {
     jMonthName: ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'],
     today() {
@@ -47,43 +44,26 @@ const Jalaali = {
     toJalaali(gy, gm, gd) { const j = libToJalaali(gy, gm, gd); return { year: j.jy, month: j.jm, day: j.jd }; }
 };
 
-// ============================================
 // 📦 مدیریت داده‌ها (Supabase)
-// ============================================
 let projectsCache = [];
 
 async function loadProjects() {
-    // دریافت پروژه‌های حذف نشده به همراه گزارش‌های آن‌ها (Relational Join)
-    const { data, error } = await supabase
-        .from('typists')
-        .select('*, typist_reports(*)')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-        
+    const { data, error } = await supabase.from('typists').select('*, typist_reports(*)').is('deleted_at', null).order('created_at', { ascending: false });
     if (error) { console.error("خطا در دریافت اطلاعات:", error); return []; }
-    
     projectsCache = data.map(p => {
         const createdDate = p.created_at ? new Date(p.created_at) : new Date();
         const jCreated = Jalaali.toJalaali(createdDate.getFullYear(), createdDate.getMonth() + 1, createdDate.getDate());
         return {
-            id: p.id,
-            name: p.name,
-            phone: p.phone,
-            title: p.title,
-            deliveryDate: p.delivery_date,
+            id: p.id, name: p.name, phone: p.phone, title: p.title, deliveryDate: p.delivery_date,
             createdAt: Jalaali.formatJalali(jCreated.year, jCreated.month, jCreated.day),
-            createdAtTimestamp: createdDate.getTime(),
-            reports: p.typist_reports || [],
-            completed: p.completed || false
+            reports: p.typist_reports || [], completed: p.completed || false
         };
     });
     return projectsCache;
 }
 
 async function saveProjectToSupabase(project) {
-    const payload = {
-        name: project.name, phone: project.phone, title: project.title, delivery_date: project.deliveryDate,
-    };
+    const payload = { name: project.name, phone: project.phone, title: project.title, delivery_date: project.deliveryDate };
     if (project.id) {
         const { error } = await supabase.from('typists').update(payload).eq('id', project.id);
         if (error) throw error;
@@ -104,20 +84,15 @@ async function completeProjectInSupabase(id) {
 }
 
 async function insertReportToSupabase(projectId, period, pages, text, isLate, delayDays) {
-    const { error } = await supabase.from('typist_reports').insert([{
-        typist_id: projectId, period, pages, description: text, is_late: isLate, delay_days: delayDays
-    }]);
+    const { error } = await supabase.from('typist_reports').insert([{ typist_id: projectId, period, pages, description: text, is_late: isLate, delay_days: delayDays }]);
     if (error) throw error;
 }
 
-// ============================================
-// 🧮 منطق وضعیت و دوره‌های ۱۰ روزه (دقیق و بی‌نقص)
-// ============================================
+// 🧮 منطق وضعیت و دوره‌های ۱۰ روزه
 function calculateProjectStatus(project) {
     const today = Jalaali.today();
     const createdJalali = Jalaali.parseJalali(project.createdAt);
     if (!createdJalali) return { status: 'active', daysLeft: 0 };
-    
     const deliveryJalali = Jalaali.parseJalali(project.deliveryDate);
     const daysSinceCreation = Jalaali.daysBetween(createdJalali, today);
     const daysUntilDelivery = deliveryJalali ? Jalaali.daysBetween(today, deliveryJalali) : 0;
@@ -125,36 +100,22 @@ function calculateProjectStatus(project) {
     if (project.completed) return { status: 'delivered', daysLeft: 0, currentPeriod: 0, daysUntilDelivery };
     
     const currentPeriod = Math.floor(daysSinceCreation / 10) + 1;
-    const deadlineDayForCurrentPeriod = currentPeriod * 10 - 1; // روز آخر دوره فعلی
-    
+    const deadlineDayForCurrentPeriod = currentPeriod * 10 - 1;
     const reports = project.reports || [];
     const reportedPeriods = reports.map(r => r.period);
     const lastReportedPeriod = reportedPeriods.length > 0 ? Math.max(...reportedPeriods) : 0;
     
-    // آیا برای دوره فعلی گزارش داده است؟
-    if (reportedPeriods.includes(currentPeriod)) {
-        return { status: 'active', daysLeft: 0, currentPeriod, daysUntilDelivery, isLate: false };
-    }
+    if (reportedPeriods.includes(currentPeriod)) return { status: 'active', daysLeft: 0, currentPeriod, daysUntilDelivery, isLate: false };
+    if (lastReportedPeriod < currentPeriod - 1) return { status: 'delayed', daysLeft: 0, currentPeriod, daysUntilDelivery, delayText: `${currentPeriod - lastReportedPeriod - 1} دوره جا افتاده است` };
     
-    // اگر دوره‌های قبلی را جا انداخته باشد
-    if (lastReportedPeriod < currentPeriod - 1) {
-        return { status: 'delayed', daysLeft: 0, currentPeriod, daysUntilDelivery, delayText: `${currentPeriod - lastReportedPeriod - 1} دوره جا افتاده است` };
-    }
-    
-    // اگر در دوره فعلی است ولی هنوز گزارش نداده
     const daysLeftInPeriod = deadlineDayForCurrentPeriod - daysSinceCreation + 1;
-    
-    if (daysLeftInPeriod < 0) { // مهلت تمام شده و گزارش نداده
-        return { status: 'delayed', daysLeft: 0, currentPeriod, daysUntilDelivery, delayText: `${Math.abs(daysLeftInPeriod)} روز از موعد گزارش گذشته`, isLate: true, delayDays: Math.abs(daysLeftInPeriod) };
-    }
+    if (daysLeftInPeriod < 0) return { status: 'delayed', daysLeft: 0, currentPeriod, daysUntilDelivery, delayText: `${Math.abs(daysLeftInPeriod)} روز از موعد گزارش گذشته`, isLate: true, delayDays: Math.abs(daysLeftInPeriod) };
     
     const isUrgent = daysLeftInPeriod <= 3;
     return { status: isUrgent ? 'pending' : 'active', daysLeft: daysLeftInPeriod, currentPeriod, daysUntilDelivery };
 }
 
-// ============================================
 // 🎨 رندر کارت پروژه
-// ============================================
 function renderProjectCard(project) {
     const status = calculateProjectStatus(project);
     const colors = {
@@ -163,11 +124,7 @@ function renderProjectCard(project) {
         delayed: { badge: 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-100 dark:border-red-500/20', bar: 'bg-red-500' },
         delivered: { badge: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20', bar: 'bg-emerald-500' }
     }[status.status];
-    
-    const statusText = {
-        active: 'به‌موقع', pending: `⚠️ ${status.daysLeft} روز تا پایان مهلت`, delayed: status.delayText || 'تاخیر دارد', delivered: '✓ تکمیل شده'
-    }[status.status];
-    
+    const statusText = { active: 'به‌موقع', pending: `⚠️ ${status.daysLeft} روز تا پایان مهلت`, delayed: status.delayText || 'تاخیر دارد', delivered: '✓ تکمیل شده' }[status.status];
     const reportsHtml = (project.reports || []).sort((a,b) => b.period - a.period).map(r => `
         <div class="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-xs">
             <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -175,7 +132,6 @@ function renderProjectCard(project) {
                 <span class="text-slate-700 dark:text-slate-300 truncate">دوره ${Jalaali.toPersianDigits(r.period)} • ${Jalaali.toPersianDigits(r.pages)} صفحه</span>
             </div>
         </div>`).join('');
-
     const initials = esc(project.name.split(' ').map(n => n[0]).join('').slice(0, 2));
     
     return `<div class="project-card group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-300 animate-slide-up" data-id="${project.id}" data-status="${status.status}">
@@ -187,7 +143,7 @@ function renderProjectCard(project) {
                     <p class="text-xs text-slate-500 dark:text-slate-400" dir="ltr" style="text-align: right;">${esc(Jalaali.toPersianDigits(project.phone))}</p>
                 </div>
             </div>
-            <button onclick="showMenu(event, '${project.id}')" class="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg></button>
+            <button class="menu-btn w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition" data-id="${project.id}"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg></button>
         </div>
         <div class="space-y-3 mb-4">
             <div><p class="text-[10px] font-semibold text-slate-400 dark:text-slate-500 mb-1 uppercase tracking-wider">عنوان پروژه</p><p class="text-sm text-slate-800 dark:text-slate-100 font-medium line-clamp-2">${esc(project.title)}</p></div>
@@ -199,7 +155,7 @@ function renderProjectCard(project) {
         <div class="mb-4"><div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${colors.badge}">${statusText}</div></div>
         ${project.reports && project.reports.length > 0 ? `<div class="mb-4"><div class="flex items-center justify-between mb-2"><p class="text-[10px] font-semibold text-slate-400 uppercase">گزارش‌ها (${Jalaali.toPersianDigits(project.reports.length)})</p></div><div class="space-y-1.5 max-h-32 overflow-y-auto">${reportsHtml}</div></div>` : `<div class="mb-4 py-4 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-dashed text-center"><p class="text-[11px] text-slate-400">هنوز گزارشی ثبت نشده</p></div>`}
         <div class="flex gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-            ${status.status !== 'delivered' ? `<button onclick="openReportModal('${project.id}')" class="flex-1 py-2.5 rounded-xl ${status.status === 'delayed' ? 'bg-red-600 animate-pulse-slow' : 'bg-primary-600'} text-white text-xs font-bold transition">ثبت گزارش دوره ${Jalaali.toPersianDigits(status.currentPeriod || 1)}</button><button onclick="completeProject('${project.id}')" class="py-2.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 text-xs font-medium border border-emerald-100">تکمیل نهایی</button>` : `<div class="flex-1 py-2.5 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold">پروژه تکمیل شده است</div>`}
+            ${status.status !== 'delivered' ? `<button class="report-btn flex-1 py-2.5 rounded-xl ${status.status === 'delayed' ? 'bg-red-600 animate-pulse-slow' : 'bg-primary-600'} text-white text-xs font-bold transition" data-id="${project.id}">ثبت گزارش دوره ${Jalaali.toPersianDigits(status.currentPeriod || 1)}</button><button class="complete-btn py-2.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 text-xs font-medium border border-emerald-100" data-id="${project.id}">تکمیل نهایی</button>` : `<div class="flex-1 py-2.5 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold">پروژه تکمیل شده است</div>`}
         </div>
     </div>`;
 }
@@ -209,10 +165,7 @@ async function renderProjects() {
     const listEl = document.getElementById('typistList');
     const emptyEl = document.getElementById('emptyState');
     if (projects.length === 0) { listEl.innerHTML = ''; emptyEl.classList.remove('hidden'); }
-    else {
-        emptyEl.classList.add('hidden');
-        listEl.innerHTML = projects.map(renderProjectCard).join('');
-    }
+    else { emptyEl.classList.add('hidden'); listEl.innerHTML = projects.map(renderProjectCard).join(''); }
     updateStats(projects); applyFilter();
 }
 
@@ -225,27 +178,21 @@ function updateStats(projects) {
     document.getElementById('stat-delivered').textContent = Jalaali.toPersianDigits(stats.delivered);
 }
 
-// ============================================
-// 🔐 مدیریت احراز هویت (Supabase Auth)
-// ============================================
+// 🔐 احراز هویت
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true;
     document.getElementById('loginSpinner').classList.remove('hidden');
     document.getElementById('loginError').classList.add('hidden');
-    
     const email = document.getElementById('emailInput').value;
     const password = document.getElementById('passwordInput').value;
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    
     if (error) {
         document.getElementById('loginError').textContent = "ایمیل یا رمز عبور اشتباه است!";
         document.getElementById('loginError').classList.remove('hidden');
         btn.disabled = false;
         document.getElementById('loginSpinner').classList.add('hidden');
-    } else {
-        // موفقیت آمیز: سوپابیس خودش اپ را باز می‌کند
     }
 });
 
@@ -264,50 +211,81 @@ supabase.auth.onAuthStateChange((event, session) => {
     }
 });
 
-// ============================================
-// 🚪 مدیریت مودال‌ها و اکشن‌ها
-// ============================================
-window.openProjectModal = function(projectId = null) { /* همان کد قبلی */
+// 🚪 مودال‌ها و اکشن‌ها (بدون onclick با Event Delegation)
+document.getElementById('openProjectBtn').addEventListener('click', () => openProjectModal());
+document.getElementById('emptyAddBtn').addEventListener('click', () => openProjectModal());
+document.getElementById('closeFormBtn').addEventListener('click', closeProjectModal);
+document.getElementById('modalBackdrop').addEventListener('click', closeProjectModal);
+document.getElementById('closeReportBtn').addEventListener('click', closeReportModal);
+document.getElementById('reportBackdrop').addEventListener('click', closeReportModal);
+document.getElementById('cancelDeleteBtn').addEventListener('click', () => document.getElementById('deleteModal').classList.add('hidden'));
+document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
+document.getElementById('exportBtn').addEventListener('click', exportToCSV);
+
+// Delegation برای دکمه‌های داخل کارت‌ها
+document.getElementById('typistList').addEventListener('click', (e) => {
+    const card = e.target.closest('.project-card');
+    if (!card) return;
+    const id = card.dataset.id;
+
+    if (e.target.closest('.menu-btn')) {
+        document.getElementById('deleteProjectId').value = id;
+        document.getElementById('deleteModal').classList.remove('hidden');
+    } else if (e.target.closest('.report-btn')) {
+        openReportModal(id);
+    } else if (e.target.closest('.complete-btn')) {
+        completeProject(id);
+    }
+});
+
+function openProjectModal(projectId = null) {
     const modal = document.getElementById('formModal'); const backdrop = document.getElementById('modalBackdrop'); const content = document.getElementById('modalContent');
     document.getElementById('typistForm').reset(); document.getElementById('editId').value = '';
-    if (projectId) { const p = projectsCache.find(x => x.id === projectId); if (p) { document.getElementById('editId').value = p.id; document.getElementById('name').value = p.name; document.getElementById('phone').value = p.phone; document.getElementById('title').value = p.title; document.getElementById('deliveryDate').value = p.deliveryDate; document.getElementById('formTitle').textContent = 'ویرایش پروژه'; document.getElementById('submitBtnText').textContent = 'ذخیره تغییرات'; } } else { document.getElementById('formTitle').textContent = 'ثبت پروژه جدید'; document.getElementById('submitBtnText').textContent = 'ذخیره پروژه'; }
+    if (projectId) {
+        const p = projectsCache.find(x => x.id === projectId);
+        if (p) {
+            document.getElementById('editId').value = p.id; document.getElementById('name').value = p.name;
+            document.getElementById('phone').value = p.phone; document.getElementById('title').value = p.title;
+            document.getElementById('deliveryDate').value = p.deliveryDate;
+            document.getElementById('formTitle').textContent = 'ویرایش پروژه'; document.getElementById('submitBtnText').textContent = 'ذخیره تغییرات';
+        }
+    } else {
+        document.getElementById('formTitle').textContent = 'ثبت پروژه جدید'; document.getElementById('submitBtnText').textContent = 'ذخیره پروژه';
+    }
     modal.classList.remove('hidden'); requestAnimationFrame(() => { backdrop.classList.remove('opacity-0'); content.classList.remove('scale-95', 'opacity-0'); });
-};
-window.closeProjectModal = function() { /* همان کد قبلی */
+}
+
+function closeProjectModal() {
     const modal = document.getElementById('formModal'); const backdrop = document.getElementById('modalBackdrop'); const content = document.getElementById('modalContent');
     backdrop.classList.add('opacity-0'); content.classList.add('scale-95', 'opacity-0'); setTimeout(() => modal.classList.add('hidden'), 300);
-};
-window.openReportModal = function(projectId) {
+}
+
+function openReportModal(projectId) {
     const project = projectsCache.find(p => p.id === projectId);
     if (!project) return;
     const status = calculateProjectStatus(project);
     if (status.status === 'delivered') return;
-    
-    // بررسی اینکه آیا قبلاً برای این دوره گزارش داده است؟
     if (project.reports && project.reports.some(r => r.period === status.currentPeriod)) {
-        showAlert('برای این دوره قبلاً گزارش ثبت شده است.', 'warning');
-        return;
+        showAlert('برای این دوره قبلاً گزارش ثبت شده است.', 'warning'); return;
     }
-    
     document.getElementById('reportProjectId').value = projectId;
     document.getElementById('reportPeriod').value = status.currentPeriod;
     document.getElementById('reportProjectTitle').textContent = `${project.name} - دوره ${Jalaali.toPersianDigits(status.currentPeriod)}`;
     document.getElementById('reportPages').value = ''; document.getElementById('reportText').value = '';
-    
     const statusBox = document.getElementById('reportStatusBox');
     if (status.status === 'delayed' && status.isLate) {
         statusBox.className = 'p-3 rounded-xl text-xs bg-red-50 dark:bg-red-500/10 border border-red-200 text-red-700 flex items-center gap-2';
         statusBox.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span>این گزارش <strong>${Jalaali.toPersianDigits(status.delayDays)} روز</strong> تاخیر دارد</span>`;
         statusBox.classList.remove('hidden');
     } else { statusBox.classList.add('hidden'); }
-    
     const modal = document.getElementById('reportModal'); const content = document.getElementById('reportContent');
     modal.classList.remove('hidden'); requestAnimationFrame(() => content.classList.remove('scale-95', 'opacity-0'));
-};
-window.closeReportModal = function() { /* همان کد قبلی */
+}
+
+function closeReportModal() {
     const modal = document.getElementById('reportModal'); const content = document.getElementById('reportContent');
     content.classList.add('scale-95', 'opacity-0'); setTimeout(() => modal.classList.add('hidden'), 300);
-};
+}
 
 document.getElementById('submitReportBtn').addEventListener('click', async () => {
     const btn = document.getElementById('submitReportBtn');
@@ -317,14 +295,10 @@ document.getElementById('submitReportBtn').addEventListener('click', async () =>
     const pages = parseInt(document.getElementById('reportPages').value);
     const text = document.getElementById('reportText').value.trim();
     if (!pages || pages <= 0) { showAlert('لطفاً تعداد صفحات معتبر وارد کنید', 'warning'); btn.disabled = false; btn.innerText = 'ثبت گزارش'; return; }
-    
     const project = projectsCache.find(p => p.id === projectId);
     const status = calculateProjectStatus(project);
-    const isLate = status.isLate || false;
-    const delayDays = status.delayDays || 0;
-    
     try {
-        await insertReportToSupabase(projectId, period, pages, text, isLate, delayDays);
+        await insertReportToSupabase(projectId, period, pages, text, status.isLate || false, status.delayDays || 0);
         closeReportModal(); showAlert('گزارش با موفقیت ثبت شد', 'success');
     } catch (err) {
         showAlert('خطا در ثبت گزارش (ممکن است تکراری باشد)', 'error');
@@ -333,42 +307,33 @@ document.getElementById('submitReportBtn').addEventListener('click', async () =>
     }
 });
 
-window.completeProject = async function(projectId) {
+async function completeProject(projectId) {
     if (!confirm('آیا از تکمیل نهایی پروژه اطمینان دارید؟')) return;
     try { await completeProjectInSupabase(projectId); showAlert('پروژه تکمیل شد', 'success'); } 
     catch (err) { showAlert('خطا در ثبت', 'error'); }
-};
+}
 
-window.showMenu = function(e, projectId) {
-    e.stopPropagation();
-    document.getElementById('deleteProjectId').value = projectId;
-    document.getElementById('deleteModal').classList.remove('hidden');
-};
-
-document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+async function confirmDelete() {
     const id = document.getElementById('deleteProjectId').value;
     const btn = document.getElementById('confirmDeleteBtn');
     btn.disabled = true; btn.innerText = 'در حال حذف...';
     try { await softDeleteProject(id); document.getElementById('deleteModal').classList.add('hidden'); showAlert('پروژه حذف شد', 'success'); } 
     catch (err) { showAlert('خطا در حذف', 'error'); } 
     finally { btn.disabled = false; btn.innerText = 'حذف'; }
-});
+}
 
 document.getElementById('typistForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('submitBtn');
     btn.disabled = true; document.getElementById('submitBtnText').innerText = 'در حال ذخیره...';
-    
     const id = document.getElementById('editId').value;
     const name = document.getElementById('name').value.trim();
     const phone = document.getElementById('phone').value.trim();
     const title = document.getElementById('title').value.trim();
     const deliveryDate = document.getElementById('deliveryDate').value.trim();
-    
     if (!Jalaali.parseJalali(deliveryDate)) { showAlert('تاریخ تحویل نامعتبر است', 'warning'); btn.disabled = false; document.getElementById('submitBtnText').innerText = 'ذخیره پروژه'; return; }
-    
     try {
-        await saveProjectToSupabase({ id, name, phone, title, deliveryDate: deliveryDate });
+        await saveProjectToSupabase({ id, name, phone, title, deliveryDate });
         closeProjectModal(); showAlert(id ? 'پروژه ویرایش شد' : 'پروژه جدید ثبت شد', 'success');
     } catch (err) {
         showAlert('خطا در ذخیره‌سازی', 'error');
@@ -377,10 +342,8 @@ document.getElementById('typistForm').addEventListener('submit', async (e) => {
     }
 });
 
-// ============================================
-// 📤 خروجی CSV (امن و بدون XSS)
-// ============================================
-window.exportToCSV = function() {
+// 📤 خروجی CSV
+function exportToCSV() {
     if (!projectsCache || projectsCache.length === 0) { showAlert('پروژه‌ای برای خروجی وجود ندارد', 'warning'); return; }
     const headers = ['نام', 'شماره', 'عنوان', 'تحویل', 'وضعیت', 'مجموع صفحات', 'گزارش‌ها'];
     let csv = "\uFEFF" + headers.map(h => `"${h}"`).join(',') + '\n';
@@ -397,21 +360,16 @@ window.exportToCSV = function() {
     link.setAttribute('href', url);
     link.setAttribute('download', `گزارش-${Jalaali.formatJalali(today.year, today.month, today.day)}.csv`);
     link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-};
+    document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+}
 
-// ============================================
-// 💬 نمایش پیام، فیلترها، تقویم و Event Listeners
-// ============================================
+// 💬 آلرت‌ها و فیلترها
 function showAlert(message, type = 'success') {
     const container = document.getElementById('alertContainer');
     const colors = { success: 'bg-emerald-50 text-emerald-700 border-emerald-200', warning: 'bg-amber-50 text-amber-700 border-amber-200', error: 'bg-red-50 text-red-700 border-red-200' };
     const alert = document.createElement('div');
     alert.className = `animate-fade-in flex items-center gap-3 border px-4 py-3 rounded-xl text-sm ${colors[type]}`;
-    alert.textContent = message; // جلوگیری از XSS در آلرت
+    alert.textContent = message;
     container.appendChild(alert);
     setTimeout(() => { alert.style.opacity = '0'; setTimeout(() => alert.remove(), 300); }, 3000);
 }
@@ -426,46 +384,84 @@ document.querySelectorAll('.filter-btn').forEach(btn => btn.addEventListener('cl
 }));
 document.querySelector('[data-filter="all"]').classList.add('bg-white', 'dark:bg-slate-700', 'text-slate-900', 'dark:text-white', 'shadow-sm');
 
-// تقویم
+// 📅 تقویم شمسی (بدون onclick و با Event Delegation)
 let calendarState = { viewYear: null, viewMonth: null, selected: null, inputEl: null };
+
 function openCalendar(inputEl, initialValue = null) {
     const today = Jalaali.today(); calendarState.inputEl = inputEl;
     if (initialValue && Jalaali.parseJalali(initialValue)) { const p = Jalaali.parseJalali(initialValue); calendarState.viewYear = p.year; calendarState.viewMonth = p.month; calendarState.selected = p; }
     else { calendarState.viewYear = today.year; calendarState.viewMonth = today.month; calendarState.selected = null; }
     renderCalendar(); document.getElementById('calendarDropdown').classList.add('open');
 }
+
 function closeCalendar() { document.getElementById('calendarDropdown').classList.remove('open'); }
+
 function renderCalendar() {
-    const dropdown = document.getElementById('calendarDropdown'); const today = Jalaali.today(); const { viewYear, viewMonth, selected } = calendarState;
+    const dropdown = document.getElementById('calendarDropdown'); 
+    const today = Jalaali.today(); 
+    const { viewYear, viewMonth, selected } = calendarState;
     const firstDayGreg = Jalaali.toGregorian(viewYear, viewMonth, 1);
-    const startOffset = (new Date(firstDayGreg.year, firstDayGreg.month - 1, firstDayGreg.day).getDay() + 1) % 7;
+    // محاسبه دقیق روز هفته (0=شنبه)
+    const jsDay = new Date(firstDayGreg.year, firstDayGreg.month - 1, firstDayGreg.day).getDay();
+    const startOffset = (jsDay + 1) % 7; 
     const daysInMonth = Jalaali.jMonthLength(viewYear, viewMonth);
-    let html = `<div class="flex items-center justify-between mb-3"><button type="button" onclick="calendarPrev()" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-600"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button><div class="text-sm font-bold text-slate-900 dark:text-white">${Jalaali.jMonthName[viewMonth - 1]} ${Jalaali.toPersianDigits(viewYear)}</div><button type="button" onclick="calendarNext()" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-600"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button></div><div class="grid grid-cols-7 gap-1 mb-2">${['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'].map(d => `<div class="text-[11px] font-semibold text-slate-400 text-center">${d}</div>`).join('')}</div><div class="grid grid-cols-7 gap-1">`;
+    
+    let html = `<div class="flex items-center justify-between mb-3">
+        <button type="button" class="cal-prev w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
+        <div class="text-sm font-bold text-slate-900 dark:text-white">${Jalaali.jMonthName[viewMonth - 1]} ${Jalaali.toPersianDigits(viewYear)}</div>
+        <button type="button" class="cal-next w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
+    </div>
+    <div class="grid grid-cols-7 gap-1 mb-2">${['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'].map(d => `<div class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 text-center">${d}</div>`).join('')}</div>
+    <div class="grid grid-cols-7 gap-1">`;
+    
     for (let i = 0; i < startOffset; i++) html += `<div></div>`;
     for (let d = 1; d <= daysInMonth; d++) {
         const isToday = viewYear === today.year && viewMonth === today.month && d === today.day;
         const isSelected = selected && selected.year === viewYear && selected.month === viewMonth && selected.day === d;
-        html += `<div class="cal-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" onclick="selectDate(${viewYear}, ${viewMonth}, ${d})">${Jalaali.toPersianDigits(d)}</div>`;
+        html += `<div class="cal-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" data-day="${d}">${Jalaali.toPersianDigits(d)}</div>`;
     }
-    html += `</div><div class="mt-3 pt-3 border-t border-slate-100 flex justify-between"><button type="button" onclick="selectToday()" class="text-xs text-primary-600 font-medium">امروز</button><button type="button" onclick="closeCalendar()" class="text-xs text-slate-500">بستن</button></div>`;
+    html += `</div><div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+        <button type="button" class="cal-today text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 font-medium">امروز</button>
+        <button type="button" class="cal-close text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">بستن</button>
+    </div>`;
     dropdown.innerHTML = html;
 }
-window.calendarPrev = function() { calendarState.viewMonth--; if (calendarState.viewMonth < 1) { calendarState.viewMonth = 12; calendarState.viewYear--; } renderCalendar(); };
-window.calendarNext = function() { calendarState.viewMonth++; if (calendarState.viewMonth > 12) { calendarState.viewMonth = 1; calendarState.viewYear++; } renderCalendar(); };
-window.selectDate = function(y, m, d) { calendarState.selected = { year: y, month: m, day: d }; calendarState.inputEl.value = Jalaali.formatJalali(y, m, d); closeCalendar(); };
-window.selectToday = function() { const t = Jalaali.today(); window.selectDate(t.year, t.month, t.day); };
 
-document.getElementById('deliveryDate').addEventListener('click', function(e) { e.stopPropagation(); openCalendar(this, this.value); });
-document.addEventListener('click', function(e) { const dd = document.getElementById('calendarDropdown'); const inp = document.getElementById('deliveryDate'); if (dd && !dd.contains(e.target) && e.target !== inp) closeCalendar(); });
+document.getElementById('deliveryDate').addEventListener('click', function(e) {
+    e.stopPropagation(); openCalendar(this, this.value);
+});
 
-// Theme
+document.getElementById('calendarDropdown').addEventListener('click', function(e) {
+    if (e.target.closest('.cal-prev')) {
+        calendarState.viewMonth--; if (calendarState.viewMonth < 1) { calendarState.viewMonth = 12; calendarState.viewYear--; } renderCalendar();
+    } else if (e.target.closest('.cal-next')) {
+        calendarState.viewMonth++; if (calendarState.viewMonth > 12) { calendarState.viewMonth = 1; calendarState.viewYear++; } renderCalendar();
+    } else if (e.target.closest('.cal-today')) {
+        const t = Jalaali.today(); calendarState.selected = { year: t.year, month: t.month, day: t.day }; calendarState.inputEl.value = Jalaali.formatJalali(t.year, t.month, t.day); closeCalendar();
+    } else if (e.target.closest('.cal-close')) {
+        closeCalendar();
+    } else if (e.target.closest('.cal-day')) {
+        const dayEl = e.target.closest('.cal-day');
+        if (!dayEl.dataset.day) return;
+        const d = parseInt(dayEl.dataset.day);
+        calendarState.selected = { year: calendarState.viewYear, month: calendarState.viewMonth, day: d };
+        calendarState.inputEl.value = Jalaali.formatJalali(calendarState.viewYear, calendarState.viewMonth, d);
+        closeCalendar();
+    }
+});
+
+document.addEventListener('click', function(e) {
+    const dd = document.getElementById('calendarDropdown'); const inp = document.getElementById('deliveryDate');
+    if (dd && !dd.contains(e.target) && e.target !== inp) closeCalendar();
+});
+
+// 🌓 Theme Toggle
 const themeToggleBtn = document.getElementById('themeToggle'); const htmlElement = document.documentElement;
 if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) htmlElement.classList.add('dark'); else htmlElement.classList.remove('dark');
 themeToggleBtn.addEventListener('click', () => { if (htmlElement.classList.contains('dark')) { htmlElement.classList.remove('dark'); localStorage.theme = 'light'; } else { htmlElement.classList.add('dark'); localStorage.theme = 'dark'; } });
 
-document.getElementById('modalBackdrop').addEventListener('click', closeProjectModal);
-document.getElementById('reportBackdrop').addEventListener('click', closeReportModal);
-
-// Realtime (آپدیت خودکار)
+// 🔄 Realtime
 supabase.channel('public:typists').on('postgres_changes', { event: '*', schema: 'public', table: 'typists' }, renderProjects).subscribe();
 supabase.channel('public:typist_reports').on('postgres_changes', { event: '*', schema: 'public', table: 'typist_reports' }, renderProjects).subscribe();
+
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeProjectModal(); closeReportModal(); closeCalendar(); document.getElementById('deleteModal').classList.add('hidden'); } });
