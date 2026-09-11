@@ -8,7 +8,7 @@ const PASSWORD = '7853421'; // رمز ورود (میتوانید تغییر ده
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ============================================
-// 🗓️ کتابخانه تقویم شمسی (دقیقا مثل کد شما)
+// 🗓️ کتابخانه تقویم شمسی
 // ============================================
 const Jalaali = {
     g_days_in_month: [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
@@ -383,7 +383,7 @@ window.selectDate = function(y, m, d) { calendarState.selected = { year: y, mont
 window.selectToday = function() { const today = Jalaali.today(); window.selectDate(today.year, today.month, today.day); };
 
 // ============================================
-// 🚪 مدیریت مودال‌ها و اکشن‌ها (اتصال به سوپابیس)
+// 🚪 مدیریت مودال‌ها و اکشن‌ها
 // ============================================
 window.openProjectModal = function(projectId = null) {
     const modal = document.getElementById('formModal');
@@ -473,20 +473,82 @@ window.completeProject = async function(projectId) {
     await saveProjectToSupabase(project);
     showAlert('پروژه با موفقیت تکمیل شد', 'success');
 };
-
-// تابع باز کردن پنجره حذف اختصاصی شما
 window.showMenu = function(e, projectId) {
     e.stopPropagation();
     document.getElementById('deleteProjectId').value = projectId;
     document.getElementById('deleteModal').classList.remove('hidden');
 };
-
-// تابع تایید حذف و اتصال به سوپابیس
 window.confirmDelete = async function() {
     const id = document.getElementById('deleteProjectId').value;
     await deleteProjectFromSupabase(id);
     document.getElementById('deleteModal').classList.add('hidden');
     showAlert('پروژه حذف شد', 'success');
+};
+
+// ============================================
+// 📤 خروجی اکسل (CSV)
+// ============================================
+window.exportToCSV = function() {
+    if (!projectsCache || projectsCache.length === 0) {
+        showAlert('هیچ پروژه‌ای برای خروجی وجود ندارد', 'warning');
+        return;
+    }
+
+    const headers = ['نام تایپیست', 'شماره تماس', 'عنوان پروژه', 'تاریخ تحویل', 'وضعیت', 'مجموع صفحات', 'تعداد گزارش‌ها', 'جزئیات گزارش‌ها'];
+    let csvContent = "\uFEFF"; 
+    csvContent += headers.map(h => `"${h}"`).join(',') + '\n';
+
+    projectsCache.forEach(p => {
+        const status = calculateProjectStatus(p);
+        let statusText = '';
+        switch(status.status) {
+            case 'active': statusText = 'به‌موقع'; break;
+            case 'pending': statusText = 'در انتظار گزارش'; break;
+            case 'delayed': statusText = status.delayText || 'تاخیر دارد'; break;
+            case 'delivered': statusText = 'تکمیل شده'; break;
+        }
+
+        const totalPages = (p.reports || []).reduce((sum, r) => sum + (r.pages || 0), 0);
+        const reportsCount = (p.reports || []).length;
+        
+        let reportsDetails = (p.reports || []).map(r => {
+            const dateStr = Jalaali.formatJalali(r.date.year, r.date.month, r.date.day);
+            const lateStr = r.isLate ? ` (تاخیر ${r.delayDays} روز)` : '';
+            return `دوره ${Jalaali.toPersianDigits(r.period)}: ${Jalaali.toPersianDigits(r.pages)} صفحه - تاریخ: ${dateStr}${lateStr}`;
+        }).join(' | ');
+
+        if (!reportsDetails) reportsDetails = 'بدون گزارش';
+
+        const row = [
+            p.name || '',
+            p.phone || '',
+            p.title || '',
+            p.deliveryDate || '',
+            statusText,
+            Jalaali.toPersianDigits(totalPages),
+            Jalaali.toPersianDigits(reportsCount),
+            reportsDetails
+        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+
+        csvContent += row + '\n';
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const today = Jalaali.today();
+    const fileName = `گزارش-تایپیست‌ها-${Jalaali.formatJalali(today.year, today.month, today.day)}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showAlert('فایل اکسل با موفقیت دانلود شد', 'success');
 };
 
 // ============================================
@@ -545,7 +607,6 @@ document.addEventListener('click', function(e) {
     if (dropdown && !dropdown.contains(e.target) && e.target !== input) closeCalendar();
 });
 
-// Theme Toggle
 const themeToggleBtn = document.getElementById('themeToggle');
 const htmlElement = document.documentElement;
 if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) htmlElement.classList.add('dark');
@@ -558,7 +619,6 @@ themeToggleBtn.addEventListener('click', () => {
 document.getElementById('modalBackdrop').addEventListener('click', closeProjectModal);
 document.getElementById('reportBackdrop').addEventListener('click', closeReportModal);
 
-// Login
 if (localStorage.getItem('isLoggedIn') === 'true') {
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('appWrapper').classList.remove('hidden');
@@ -579,7 +639,6 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { closeProjectModal(); closeReportModal(); closeCalendar(); }
 });
 
-// همگام‌سازی لحظه‌ای (Realtime) سوپابیس
 supabase.channel('public:typists').on('postgres_changes', { event: '*', schema: 'public', table: 'typists' }, renderProjects).subscribe();
 
 setInterval(renderProjects, 60 * 60 * 1000);
