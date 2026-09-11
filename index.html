@@ -64,7 +64,6 @@
         .dark .input-icon { color: #64748b; } 
         .input-field { padding-right: 42px; }
         
-        /* استایل‌های تقویم پاپ‌آپ */
         .cal-day { 
             width: 100%; aspect-ratio: 1; border-radius: 12px; display: flex; align-items: center; justify-content: center; 
             font-size: 14px; cursor: pointer; transition: all 0.15s;
@@ -77,7 +76,6 @@
 </head>
 <body class="text-slate-800 dark:text-slate-200 min-h-screen antialiased selection:bg-primary-500/30 selection:text-white">
 
-    <!-- صفحه لاگین -->
     <div id="loginScreen" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
         <div class="glass rounded-3xl p-8 w-full max-w-sm shadow-2xl shadow-primary-500/10 text-center relative overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary-500 via-accent-500 to-primary-500"></div>
@@ -108,7 +106,6 @@
     </div>
 
     <div id="appWrapper" class="hidden">
-        <!-- هدر شیشه‌ای -->
         <header class="sticky top-0 z-40 glass border-b border-slate-200/50 dark:border-slate-800/50">
             <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
                 <div class="flex items-center gap-4">
@@ -136,46 +133,36 @@
         <main class="max-w-7xl mx-auto px-4 py-8">
             <div id="alertContainer" class="mb-6 space-y-3"></div>
             
-            <!-- کارت‌های آمار -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div class="glass rounded-2xl p-5 border border-slate-200/50 dark:border-slate-800/50 hover:shadow-lg hover:shadow-primary-500/5 transition-all group">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center group-hover:scale-110 transition-transform"><svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg></div>
-                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center group-hover:scale-110 transition-transform mb-3"><svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg></div>
                     <div id="stat-active" class="text-3xl font-black text-slate-900 dark:text-white mb-1">۰</div>
                     <div class="text-xs font-medium text-slate-500 dark:text-slate-400">پروژه فعال</div>
                 </div>
                 <div class="glass rounded-2xl p-5 border border-slate-200/50 dark:border-slate-800/50 hover:shadow-lg hover:shadow-amber-500/5 transition-all group">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center group-hover:scale-110 transition-transform"><svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
-                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center group-hover:scale-110 transition-transform mb-3"><svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
                     <div id="stat-pending" class="text-3xl font-black text-amber-600 dark:text-amber-400 mb-1">۰</div>
                     <div class="text-xs font-medium text-slate-500 dark:text-slate-400">در انتظار گزارش</div>
                 </div>
                 <div class="glass rounded-2xl p-5 border border-slate-200/50 dark:border-slate-800/50 hover:shadow-lg hover:shadow-accent-500/5 transition-all group">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 rounded-xl bg-accent-50 dark:bg-accent-500/10 flex items-center justify-center group-hover:scale-110 transition-transform"><svg class="w-5 h-5 text-accent-600 dark:text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>
-                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-accent-50 dark:bg-accent-500/10 flex items-center justify-center group-hover:scale-110 transition-transform mb-3"><svg class="w-5 h-5 text-accent-600 dark:text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>
                     <div id="stat-delayed" class="text-3xl font-black text-accent-600 dark:text-accent-400 mb-1">۰</div>
                     <div class="text-xs font-medium text-slate-500 dark:text-slate-400">دارای تاخیر</div>
                 </div>
                 <div class="glass rounded-2xl p-5 border border-slate-200/50 dark:border-slate-800/50 hover:shadow-lg hover:shadow-emerald-500/5 transition-all group">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center group-hover:scale-110 transition-transform"><svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
-                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center group-hover:scale-110 transition-transform mb-3"><svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
                     <div id="stat-delivered" class="text-3xl font-black text-emerald-600 dark:text-emerald-400 mb-1">۰</div>
                     <div class="text-xs font-medium text-slate-500 dark:text-slate-400">تکمیل شده</div>
                 </div>
             </div>
 
-            <!-- هدر لیست -->
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
                 <h2 class="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
                     <svg class="w-6 h-6 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                     لیست پروژه‌ها
                 </h2>
                 <div class="flex items-center gap-3 w-full sm:w-auto">
-                    <button id="exportBtn" class="flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold transition border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <button id="exportBtn" class="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold transition border border-slate-200 dark:border-slate-700 shadow-sm">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                         خروجی CSV
                     </button>
@@ -188,7 +175,6 @@
                 </div>
             </div>
 
-            <!-- حالت خالی -->
             <div id="emptyState" class="hidden text-center py-20">
                 <div class="w-20 h-20 rounded-3xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-6 border border-slate-200 dark:border-slate-700">
                     <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
@@ -198,18 +184,13 @@
                 <button id="emptyAddBtn" class="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-500 hover:to-primary-600 text-white text-sm font-bold px-6 py-3 rounded-xl shadow-lg shadow-primary-500/30 transition-all transform hover:-translate-y-1">ثبت اولین پروژه</button>
             </div>
 
-            <!-- لیست پروژه‌ها -->
-            <div id="typistList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+            <div id="typistList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
         </main>
 
-        <!-- دکمه شناور افزودن -->
         <button id="openProjectBtn" class="fixed bottom-8 right-8 w-16 h-16 bg-gradient-to-br from-primary-500 to-accent-500 hover:from-primary-400 hover:to-accent-400 text-white rounded-2xl flex items-center justify-center shadow-2xl shadow-primary-500/40 hover:scale-110 hover:-translate-y-1 transition-all duration-300 z-40 group">
             <svg class="w-8 h-8 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
         </button>
 
-        <!-- ================= مودال‌ها ================= -->
-        
-        <!-- مودال ثبت/ویرایش پروژه -->
         <div id="formModal" class="fixed inset-0 z-50 hidden">
             <div class="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm transition-opacity opacity-0" id="modalBackdrop"></div>
             <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
@@ -270,7 +251,6 @@
             </div>
         </div>
 
-        <!-- مودال تقویم (پاپ آپ مستقل) -->
         <div id="calendarModal" class="fixed inset-0 z-[60] hidden flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm cal-backdrop"></div>
             <div class="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 relative z-10 pointer-events-auto">
@@ -278,7 +258,6 @@
             </div>
         </div>
 
-        <!-- مودال گزارش -->
         <div id="reportModal" class="fixed inset-0 z-50 hidden">
             <div class="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm" id="reportBackdrop"></div>
             <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
@@ -315,7 +294,6 @@
             </div>
         </div>
 
-        <!-- مودال تایید حذف -->
         <div id="deleteModal" class="fixed inset-0 z-50 hidden">
             <div class="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm"></div>
             <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
