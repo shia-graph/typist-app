@@ -49,21 +49,16 @@ async function loadProjects() {
         const cd = p.created_at ? new Date(p.created_at) : new Date();
         const jc = Jalaali.toJalaali(cd.getFullYear(), cd.getMonth()+1, cd.getDate());
         return { 
-            id: p.id, 
-            name: p.name || 'بدون نام', 
-            phone: p.phone || '-', 
-            title: p.title || 'بدون عنوان', 
-            startDate: p.delivery_date, 
-            createdAt: Jalaali.formatJalali(jc.year, jc.month, jc.day), 
-            reports: p.typist_reports || [], 
-            completed: p.completed || false 
+            id: p.id, name: p.name || 'بدون نام', phone: p.phone || '-', title: p.title || 'بدون عنوان', 
+            deliveryDate: p.delivery_date, createdAt: Jalaali.formatJalali(jc.year, jc.month, jc.day), 
+            reports: p.typist_reports || [], completed: p.completed || false 
         };
     });
     return projectsCache;
 }
 
 async function saveProjectToSupabase(p) {
-    const payload = { name: p.name, phone: p.phone, title: p.title, delivery_date: p.startDate, completed: p.completed || false };
+    const payload = { name: p.name, phone: p.phone, title: p.title, delivery_date: p.deliveryDate, completed: p.completed || false };
     if (p.id) { const { error } = await supabase.from('typists').update(payload).eq('id', p.id); if (error) throw error; }
     else { const { error } = await supabase.from('typists').insert([payload]); if (error) throw error; }
 }
@@ -73,7 +68,7 @@ async function insertReportToSupabase(pid, per, pg, txt, isLate, delay) { const 
 
 function calculateProjectStatus(p) {
     const today = Jalaali.today();
-    const startDate = Jalaali.parseJalali(p.startDate);
+    const startDate = Jalaali.parseJalali(p.deliveryDate);
     
     if (!startDate) return { status: 'active', daysLeft: 10, currentPeriod: 1, daysSinceStart: 0, daysUntilReport: 10, isReported: false, isLate: false };
 
@@ -143,7 +138,7 @@ function renderProjectCard(project) {
             </div>
             <div class="flex items-center gap-3 flex-shrink-0">
                 <span class="px-2.5 py-1 rounded-lg text-[11px] font-bold border ${timeBadgeClass} whitespace-nowrap">${timeText}</span>
-                <svg class="card-chevron w-5 h-5 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                <svg class="card-chevron w-5 h-5 text-slate-400 transition-transform duration-300" fill="none, stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
         </div>
         <div class="card-details-wrapper">
@@ -239,13 +234,23 @@ document.getElementById('calendarModal').addEventListener('click', e => {
     else if (e.target.closest('.cal-day')) { const de = e.target.closest('.cal-day'); if (!de.dataset.day) return; const d = parseInt(de.dataset.day); calendarState.selected = { year: calendarState.viewYear, month: calendarState.viewMonth, day: d }; if (calendarTargetInput) calendarTargetInput.value = Jalaali.formatJalali(calendarState.viewYear, calendarState.viewMonth, d); closeCalendar(); }
 });
 
-// ✅ اتصال رویداد کلیک به کادر دور فیلد (به جای خود فیلد readonly) برای حل مشکل موبایل
+// ✅ ترفند ضدگلوله برای باز شدن تقویم در موبایل و PC (کلیک روی کادر دور فیلد)
 const dateWrapper = document.getElementById('deliveryDateWrapper');
 if (dateWrapper) {
-    dateWrapper.addEventListener('click', function() {
+    dateWrapper.addEventListener('click', function(e) {
+        e.preventDefault();
         const input = document.getElementById('deliveryDate');
         openCalendar(input, input.value);
     });
+} else {
+    // فالب برای پشتیبانی از کدهای قدیمی
+    const dateInput = document.getElementById('deliveryDate');
+    if (dateInput) {
+        dateInput.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            openCalendar(this, this.value);
+        });
+    }
 }
 
 document.getElementById('openProjectBtn').addEventListener('click', () => openProjectModal());
@@ -267,10 +272,10 @@ document.getElementById('typistList').addEventListener('click', (e) => {
     else if (action === 'report') { openReportModal(id); }
     else if (action === 'complete') { completeProject(id); }
     else if (action === 'edit') { openProjectModal(id); }
-    else if (action === 'delete') { document.getElementById('deleteProjectId').value = id; document.getElementById('deleteModal').classList.add('hidden'); document.getElementById('deleteModal').classList.remove('hidden'); }
+    else if (action === 'delete') { document.getElementById('deleteProjectId').value = id; document.getElementById('deleteModal').classList.remove('hidden'); }
 });
 
-function openProjectModal(id = null) { const m = document.getElementById('formModal'); const b = document.getElementById('modalBackdrop'); const c = document.getElementById('modalContent'); document.getElementById('typistForm').reset(); document.getElementById('editId').value = ''; if (id) { const p = projectsCache.find(x => x.id === id); if (p) { document.getElementById('editId').value = p.id; document.getElementById('name').value = p.name; document.getElementById('phone').value = p.phone; document.getElementById('title').value = p.title; document.getElementById('deliveryDate').value = p.startDate; document.getElementById('formTitle').textContent = 'ویرایش پروژه'; document.getElementById('submitBtnText').textContent = 'ذخیره تغییرات'; } } else { document.getElementById('formTitle').textContent = 'ثبت پروژه جدید'; document.getElementById('submitBtnText').textContent = 'ذخیره پروژه'; } m.classList.remove('hidden'); requestAnimationFrame(() => { b.classList.remove('opacity-0'); c.classList.remove('scale-95', 'opacity-0'); }); }
+function openProjectModal(id = null) { const m = document.getElementById('formModal'); const b = document.getElementById('modalBackdrop'); const c = document.getElementById('modalContent'); document.getElementById('typistForm').reset(); document.getElementById('editId').value = ''; if (id) { const p = projectsCache.find(x => x.id === id); if (p) { document.getElementById('editId').value = p.id; document.getElementById('name').value = p.name; document.getElementById('phone').value = p.phone; document.getElementById('title').value = p.title; document.getElementById('deliveryDate').value = p.deliveryDate; document.getElementById('formTitle').textContent = 'ویرایش پروژه'; document.getElementById('submitBtnText').textContent = 'ذخیره تغییرات'; } } else { document.getElementById('formTitle').textContent = 'ثبت پروژه جدید'; document.getElementById('submitBtnText').textContent = 'ذخیره پروژه'; } m.classList.remove('hidden'); requestAnimationFrame(() => { b.classList.remove('opacity-0'); c.classList.remove('scale-95', 'opacity-0'); }); }
 function closeProjectModal() { const m = document.getElementById('formModal'); const b = document.getElementById('modalBackdrop'); const c = document.getElementById('modalContent'); b.classList.add('opacity-0'); c.classList.add('scale-95', 'opacity-0'); setTimeout(() => m.classList.add('hidden'), 300); }
 
 function openReportModal(id) { const p = projectsCache.find(x => x.id === id); if (!p) return; const s = calculateProjectStatus(p); if (s.status === 'delivered') return; if (p.reports && p.reports.some(r => r.period === s.currentPeriod)) { showAlert('برای این دوره قبلاً گزارش ثبت شده است.', 'warning'); return; } document.getElementById('reportProjectId').value = id; document.getElementById('reportPeriod').value = s.currentPeriod; document.getElementById('reportProjectTitle').textContent = `${p.name} - دوره ${Jalaali.toPersianDigits(s.currentPeriod)}`; document.getElementById('reportPages').value = ''; document.getElementById('reportText').value = ''; const sb = document.getElementById('reportStatusBox'); if (s.status === 'delayed' && s.isLate) { sb.className = 'p-4 rounded-xl text-xs font-medium bg-red-50 border border-red-200 text-red-700 flex items-center gap-2'; sb.innerHTML = `<span>این گزارش <strong>${Jalaali.toPersianDigits(s.delayDays || 0)} روز</strong> تاخیر دارد</span>`; sb.classList.remove('hidden'); } else { sb.classList.add('hidden'); } const m = document.getElementById('reportModal'); const c = document.getElementById('reportContent'); m.classList.remove('hidden'); requestAnimationFrame(() => c.classList.remove('scale-95', 'opacity-0')); }
@@ -308,7 +313,7 @@ document.getElementById('typistForm').addEventListener('submit', async (e) => {
     } 
     
     try { 
-        await saveProjectToSupabase({ id, name: n, phone: ph, title: t, startDate: dd }); 
+        await saveProjectToSupabase({ id, name: n, phone: ph, title: t, deliveryDate: dd }); 
         closeProjectModal(); 
         showAlert(id ? 'ویرایش شد' : 'ثبت شد', 'success'); 
         await renderProjects(); 
@@ -320,7 +325,7 @@ document.getElementById('typistForm').addEventListener('submit', async (e) => {
     } 
 });
 
-function exportToCSV() { if (!projectsCache || projectsCache.length === 0) { showAlert('پروژه‌ای نیست', 'warning'); return; } const h = ['نام', 'شماره', 'عنوان', 'تاریخ دریافت کار', 'وضعیت', 'صفحات', 'گزارش‌ها']; let c = "\uFEFF" + h.map(x => `"${x}"`).join(',') + '\n'; projectsCache.forEach(p => { const s = calculateProjectStatus(p); const stTxt = s.status === 'active' ? 'به‌موقع' : s.status === 'pending' ? (s.isNotStarted ? 'در انتظار شروع' : 'در انتظار گزارش') : s.status === 'delayed' ? (s.delayText || 'تاخیر') : 'تکمیل'; const tp = (p.reports || []).reduce((a, r) => a + r.pages, 0); const rt = (p.reports || []).map(r => `دوره ${r.period}:${r.pages}ص`).join(' | '); c += [esc(p.name), esc(p.phone), esc(p.title), esc(p.startDate), esc(stTxt), tp, esc(rt)].map(v => `"${v}"`).join(',') + '\n'; }); const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement('a'); l.href = URL.createObjectURL(b); l.download = `گزارش.csv`; l.click(); }
+function exportToCSV() { if (!projectsCache || projectsCache.length === 0) { showAlert('پروژه‌ای نیست', 'warning'); return; } const h = ['نام', 'شماره', 'عنوان', 'تاریخ دریافت کار', 'وضعیت', 'صفحات', 'گزارش‌ها']; let c = "\uFEFF" + h.map(x => `"${x}"`).join(',') + '\n'; projectsCache.forEach(p => { const s = calculateProjectStatus(p); const stTxt = s.status === 'active' ? 'به‌موقع' : s.status === 'pending' ? (s.isNotStarted ? 'در انتظار شروع' : 'در انتظار گزارش') : s.status === 'delayed' ? (s.delayText || 'تاخیر') : 'تکمیل'; const tp = (p.reports || []).reduce((a, r) => a + r.pages, 0); const rt = (p.reports || []).map(r => `دوره ${r.period}:${r.pages}ص`).join(' | '); c += [esc(p.name), esc(p.phone), esc(p.title), esc(p.deliveryDate), esc(stTxt), tp, esc(rt)].map(v => `"${v}"`).join(',') + '\n'; }); const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement('a'); l.href = URL.createObjectURL(b); l.download = `گزارش.csv`; l.click(); }
 
 function showAlert(m, t = 'success') { const c = document.getElementById('alertContainer'); const cl = { success: 'bg-emerald-50 text-emerald-700 border-emerald-200', warning: 'bg-amber-50 text-amber-700 border-amber-200', error: 'bg-red-50 text-red-700 border-red-200' }; const a = document.createElement('div'); a.className = `animate-fade-in flex items-center gap-3 border px-4 py-3 rounded-xl text-sm font-medium ${cl[t]}`; a.textContent = m; c.appendChild(a); setTimeout(() => { a.style.opacity = '0'; setTimeout(() => a.remove(), 300); }, 3000); }
 
