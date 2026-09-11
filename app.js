@@ -122,16 +122,15 @@ function calculateProjectStatus(project) {
 }
 
 // ============================================
-// 🎨 رندر کارت پروژه
+// 🎨 رندر کارت پروژه (طراحی آکاردئون - بسیار فشرده)
 // ============================================
 function renderProjectCard(project) {
     const status = calculateProjectStatus(project);
-    // تطبیق رنگ‌ها با UI جدید (سبز نفتی و قرمز)
     const colors = {
-        active: { badge: 'bg-blue-50 text-blue-700 border-blue-100', bar: 'bg-blue-500', text: 'text-blue-600' },
-        pending: { badge: 'bg-amber-50 text-amber-700 border-amber-100', bar: 'bg-amber-500', text: 'text-amber-600' },
-        delayed: { badge: 'bg-red-50 text-red-700 border-red-100', bar: 'bg-red-500', text: 'text-red-600' },
-        delivered: { badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', bar: 'bg-emerald-500', text: 'text-emerald-600' }
+        active: { badge: 'bg-blue-50 text-blue-700 border-blue-100', bar: 'bg-blue-500' },
+        pending: { badge: 'bg-amber-50 text-amber-700 border-amber-100', bar: 'bg-amber-500' },
+        delayed: { badge: 'bg-red-50 text-red-700 border-red-100', bar: 'bg-red-500' },
+        delivered: { badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', bar: 'bg-emerald-500' }
     }[status.status];
     
     const statusText = { active: 'به‌موقع', pending: `${status.daysLeft} روز مانده`, delayed: status.delayText || 'تاخیر', delivered: 'تکمیل شده' }[status.status];
@@ -141,56 +140,61 @@ function renderProjectCard(project) {
     const initials = esc(project.name.split(' ').map(n => n[0]).join('').slice(0, 2));
     
     const reportsHtml = (project.reports || []).sort((a,b) => b.period - a.period).map(r => `
-        <div class="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg bg-slate-50 dark:bg-slate-800 text-[11px] border border-slate-100 dark:border-slate-700/50">
-            <div class="flex items-center gap-2 flex-1 min-w-0">
-                <span class="w-1.5 h-1.5 rounded-full ${r.is_late ? 'bg-red-500' : 'bg-emerald-500'} flex-shrink-0"></span>
-                <span class="text-slate-700 dark:text-slate-300 truncate">دوره ${Jalaali.toPersianDigits(r.period)} • ${Jalaali.toPersianDigits(r.pages)} صفحه</span>
-            </div>
+        <div class="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg bg-slate-50 text-[11px] border border-slate-100">
+            <span class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full ${r.is_late ? 'bg-red-500' : 'bg-emerald-500'}"></span>دوره ${Jalaali.toPersianDigits(r.period)} • ${Jalaali.toPersianDigits(r.pages)} صفحه</span>
         </div>`).join('');
-    
-    return `<div class="project-card group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 hover:shadow-lg hover:border-primary-300 dark:hover:border-primary-700 transition-all animate-slide-up" data-id="${project.id}" data-status="${status.status}">
-        <div class="flex justify-between items-start mb-3">
-            <div class="flex items-center gap-2.5 min-w-0">
-                <div class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 flex-shrink-0">${initials}</div>
-                <div class="min-w-0">
-                    <h3 class="font-bold text-slate-900 dark:text-white text-sm truncate">${esc(project.name)}</h3>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate" dir="ltr" style="text-align: right;">${esc(Jalaali.toPersianDigits(project.phone))}</p>
+
+    return `<div class="project-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl transition-all animate-slide-up" data-id="${project.id}" data-status="${status.status}">
+        <!-- بخش بالایی (همیشه-visible) -->
+        <div class="flex items-center justify-between p-3 cursor-pointer toggle-card-details">
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+                <div class="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 flex-shrink-0">${initials}</div>
+                <div class="min-w-0 flex-1">
+                    <h3 class="font-bold text-slate-900 text-sm truncate">${esc(project.name)}</h3>
+                    <span class="text-[10px] px-2 py-0.5 rounded-md font-bold border inline-block mt-0.5 ${colors.badge}">${statusText}</span>
                 </div>
             </div>
-            <button class="menu-btn w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition flex-shrink-0" data-id="${project.id}"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg></button>
+            <button class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 flex-shrink-0">
+                <svg class="w-5 h-5 transition-transform card-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
         </div>
         
-        <div class="mb-3">
-            <p class="text-xs text-slate-700 dark:text-slate-200 font-medium line-clamp-1 mb-1.5">${esc(project.title)}</p>
-            <div class="flex items-center justify-between text-[10px]">
-                <span class="px-2 py-0.5 rounded-md font-bold border ${colors.badge}">${statusText}</span>
-                <span class="text-slate-400 font-medium">تحویل: ${esc(project.deliveryDate)}</span>
+        <!-- بخش جزئیات (باز و بسته شونده) -->
+        <div class="card-details hidden px-3 pb-3 border-t border-slate-100 dark:border-slate-800 pt-3 space-y-3">
+            <div>
+                <p class="text-[10px] text-slate-400 font-bold uppercase mb-1">عنوان پروژه</p>
+                <p class="text-xs text-slate-700 font-medium">${esc(project.title)}</p>
             </div>
-        </div>
-
-        ${status.status !== 'delivered' ? `
-        <div class="mb-3">
-            <div class="flex items-center justify-between mb-1">
-                <span class="text-[10px] text-slate-400 font-medium">دوره ${Jalaali.toPersianDigits(status.currentPeriod)} • ${status.daysLeft > 0 ? `${Jalaali.toPersianDigits(status.daysLeft)} روز مانده` : 'پایان یافته'}</span>
+            <div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-500">تحویل: ${esc(project.deliveryDate)}</span>
+                <span class="text-slate-500" dir="ltr">${esc(Jalaali.toPersianDigits(project.phone))}</span>
             </div>
-            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                <div class="${colors.bar} h-1.5 rounded-full transition-all duration-700" style="width: ${Math.min(100, ((10 - status.daysLeft) / 10) * 100)}%"></div>
-            </div>
-        </div>` : ''}
 
-        <div class="mb-3 flex items-center justify-between text-[11px] bg-slate-50 dark:bg-slate-800/30 p-2 rounded-lg border border-slate-100 dark:border-slate-700/50">
-            <span class="text-slate-500 dark:text-slate-400 font-medium">گزارش‌ها: ${Jalaali.toPersianDigits(reportsCount)} • ${Jalaali.toPersianDigits(totalPages)} صفحه</span>
-            ${reportsCount > 0 ? `<button type="button" class="toggle-reports text-primary-600 dark:text-primary-400 font-bold hover:underline">جزئیات</button>` : ''}
-        </div>
-        
-        <div class="report-list hidden mb-3 space-y-1.5 max-h-28 overflow-y-auto pr-1">
-            ${reportsHtml}
-        </div>
-
-        <div class="flex gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             ${status.status !== 'delivered' ? `
-            <button class="report-btn flex-1 py-2 rounded-lg ${status.status === 'delayed' ? 'bg-red-600 hover:bg-red-500' : 'bg-primary-600 hover:bg-primary-500'} text-white text-[11px] font-bold transition" data-id="${project.id}">ثبت گزارش</button>
-            <button class="complete-btn py-2 px-3 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 text-[11px] font-medium border border-emerald-100" data-id="${project.id}">تکمیل</button>` : `<div class="flex-1 py-2 rounded-lg bg-emerald-50 text-emerald-600 text-[11px] font-bold text-center">پروژه تکمیل شده است</div>`}
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] text-slate-400">دوره ${Jalaali.toPersianDigits(status.currentPeriod)} • ${status.daysLeft > 0 ? `${Jalaali.toPersianDigits(status.daysLeft)} روز مانده` : 'پایان یافته'}</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                    <div class="${colors.bar} h-1.5 rounded-full" style="width: ${Math.min(100, ((10 - status.daysLeft) / 10) * 100)}%"></div>
+                </div>
+            </div>` : ''}
+
+            <div class="flex items-center justify-between text-[11px] bg-slate-50 p-2 rounded-lg border border-slate-100">
+                <span class="text-slate-500">گزارش‌ها: ${Jalaali.toPersianDigits(reportsCount)} • ${Jalaali.toPersianDigits(totalPages)} صفحه</span>
+                ${reportsCount > 0 ? `<button type="button" class="toggle-reports text-primary-600 font-bold">جزئیات گزارش‌ها</button>` : ''}
+            </div>
+            
+            <div class="report-list hidden space-y-1.5 max-h-28 overflow-y-auto pr-1">
+                ${reportsHtml}
+            </div>
+
+            <div class="flex gap-2 pt-1">
+                ${status.status !== 'delivered' ? `
+                <button class="report-btn flex-1 py-2 rounded-lg ${status.status === 'delayed' ? 'bg-red-600' : 'bg-primary-600'} text-white text-[11px] font-bold" data-id="${project.id}">ثبت گزارش</button>
+                <button class="complete-btn py-2 px-3 rounded-lg bg-emerald-50 text-emerald-600 text-[11px] font-medium border border-emerald-100" data-id="${project.id}">تکمیل</button>` : `<div class="flex-1 py-2 rounded-lg bg-emerald-50 text-emerald-600 text-[11px] font-bold text-center">پروژه تکمیل شده است</div>`}
+                <button class="delete-btn p-2 rounded-lg bg-red-50 text-red-500 border border-red-100" data-id="${project.id}"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+            </div>
         </div>
     </div>`;
 }
@@ -232,9 +236,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     }
 });
 
-document.getElementById('logoutBtn').addEventListener('click', async () => {
-    await supabase.auth.signOut();
-});
+document.getElementById('logoutBtn').addEventListener('click', async () => await supabase.auth.signOut());
 
 supabase.auth.onAuthStateChange((event, session) => {
     if (session) {
@@ -264,16 +266,33 @@ document.getElementById('typistList').addEventListener('click', (e) => {
     const card = e.target.closest('.project-card');
     if (!card) return;
     const id = card.dataset.id;
-    if (e.target.closest('.menu-btn')) {
-        document.getElementById('deleteProjectId').value = id;
-        document.getElementById('deleteModal').classList.remove('hidden');
-    } else if (e.target.closest('.report-btn')) {
-        openReportModal(id);
-    } else if (e.target.closest('.complete-btn')) {
-        completeProject(id);
-    } else if (e.target.closest('.toggle-reports')) {
+
+    // باز و بسته کردن کارت اصلی (آکاردئون)
+    if (e.target.closest('.toggle-card-details')) {
+        const details = card.querySelector('.card-details');
+        const chevron = card.querySelector('.card-chevron');
+        if (details) {
+            details.classList.toggle('hidden');
+            if (chevron) chevron.classList.toggle('rotate-180');
+        }
+    } 
+    // باز و بسته کردن لیست گزارش‌ها
+    else if (e.target.closest('.toggle-reports')) {
         const list = card.querySelector('.report-list');
         if (list) list.classList.toggle('hidden');
+    } 
+    // دکمه ثبت گزارش
+    else if (e.target.closest('.report-btn')) {
+        openReportModal(id);
+    } 
+    // دکمه تکمیل
+    else if (e.target.closest('.complete-btn')) {
+        completeProject(id);
+    } 
+    // دکمه حذف
+    else if (e.target.closest('.delete-btn')) {
+        document.getElementById('deleteProjectId').value = id;
+        document.getElementById('deleteModal').classList.remove('hidden');
     }
 });
 
@@ -313,8 +332,8 @@ function openReportModal(projectId) {
     document.getElementById('reportPages').value = ''; document.getElementById('reportText').value = '';
     const statusBox = document.getElementById('reportStatusBox');
     if (status.status === 'delayed' && status.isLate) {
-        statusBox.className = 'p-4 rounded-xl text-xs font-medium bg-red-50 dark:bg-red-500/10 border border-red-200 text-red-700 flex items-center gap-2';
-        statusBox.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span>این گزارش <strong>${Jalaali.toPersianDigits(status.delayDays)} روز</strong> تاخیر دارد</span>`;
+        statusBox.className = 'p-4 rounded-xl text-xs font-medium bg-red-50 border border-red-200 text-red-700 flex items-center gap-2';
+        statusBox.innerHTML = `<span>این گزارش <strong>${Jalaali.toPersianDigits(status.delayDays)} روز</strong> تاخیر دارد</span>`;
         statusBox.classList.remove('hidden');
     } else { statusBox.classList.add('hidden'); }
     const modal = document.getElementById('reportModal'); const content = document.getElementById('reportContent');
@@ -397,9 +416,8 @@ function exportToCSV() {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    const today = Jalaali.today();
     link.setAttribute('href', url);
-    link.setAttribute('download', `گزارش-${Jalaali.formatJalali(today.year, today.month, today.day)}.csv`);
+    link.setAttribute('download', `گزارش.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
 }
@@ -421,11 +439,11 @@ let currentFilter = 'all';
 function applyFilter() { document.querySelectorAll('.project-card').forEach(c => c.style.display = (currentFilter === 'all' || c.dataset.status === currentFilter) ? '' : 'none'); }
 document.querySelectorAll('.filter-btn').forEach(btn => btn.addEventListener('click', () => {
     currentFilter = btn.dataset.filter;
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('bg-white', 'dark:bg-slate-700', 'text-slate-900', 'dark:text-white', 'shadow-sm'));
-    btn.classList.add('bg-white', 'dark:bg-slate-700', 'text-slate-900', 'dark:text-white', 'shadow-sm');
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('bg-white', 'text-slate-900', 'shadow-sm'));
+    btn.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
     applyFilter();
 }));
-document.querySelector('[data-filter="all"]').classList.add('bg-white', 'dark:bg-slate-700', 'text-slate-900', 'dark:text-white', 'shadow-sm');
+document.querySelector('[data-filter="all"]').classList.add('bg-white', 'text-slate-900', 'shadow-sm');
 
 // ============================================
 // 📅 تقویم شمسی (پاپ آپ مودال)
@@ -451,58 +469,40 @@ function renderCalendar() {
     const daysInMonth = Jalaali.jMonthLength(viewYear, viewMonth);
     
     let html = `<div class="flex items-center justify-between mb-4">
-        <button type="button" class="cal-prev w-9 h-9 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 flex items-center justify-center transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
-        <div class="text-base font-black text-slate-900 dark:text-white">${Jalaali.jMonthName[viewMonth - 1]} ${Jalaali.toPersianDigits(viewYear)}</div>
-        <button type="button" class="cal-next w-9 h-9 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 flex items-center justify-center transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
+        <button type="button" class="cal-prev w-9 h-9 rounded-lg hover:bg-slate-100 text-slate-600 flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>
+        <div class="text-base font-black text-slate-900">${Jalaali.jMonthName[viewMonth - 1]} ${Jalaali.toPersianDigits(viewYear)}</div>
+        <button type="button" class="cal-next w-9 h-9 rounded-lg hover:bg-slate-100 text-slate-600 flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
     </div>
-    <div class="grid grid-cols-7 gap-1 mb-2">${['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'].map(d => `<div class="text-xs font-bold text-slate-400 text-center pb-2">${d}</div>`).join('')}</div>
+    <div class="grid grid-cols-7 gap-1 mb-2">${['ش','ی','د','س','چ','پ','ج'].map(d => `<div class="text-xs font-bold text-slate-400 text-center pb-2">${d}</div>`).join('')}</div>
     <div class="grid grid-cols-7 gap-1">`;
     
-    for (let i = 0; i < startOffset; i++) html += `<div></div>`;
-    for (let d = 1; d <= daysInMonth; d++) {
-        const isToday = viewYear === today.year && viewMonth === today.month && d === today.day;
-        const isSelected = selected && selected.year === viewYear && selected.month === viewMonth && selected.day === d;
-        html += `<div class="cal-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" data-day="${d}">${Jalaali.toPersianDigits(d)}</div>`;
+    for (let i=0; i<startOffset; i++) html += `<div></div>`;
+    for (let d=1; d<=daysInMonth; d++) {
+        const isT = viewYear === today.year && viewMonth === today.month && d === today.day;
+        const isS = selected && selected.year === viewYear && selected.month === viewMonth && selected.day === d;
+        html += `<div class="cal-day ${isT ? 'today' : ''} ${isS ? 'selected' : ''}" data-day="${d}">${Jalaali.toPersianDigits(d)}</div>`;
     }
-    html += `</div>
-    <div class="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-        <button type="button" class="cal-today text-xs text-primary-600 font-medium bg-primary-50 px-3 py-1.5 rounded-lg">انتخاب امروز</button>
-        <button type="button" class="cal-close text-xs text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">بستن</button>
-    </div>`;
+    html += `</div><div class="mt-5 pt-4 border-t flex justify-between"><button class="cal-today text-xs text-primary-600 font-medium bg-primary-50 px-3 py-1.5 rounded-lg">امروز</button><button class="cal-close text-xs text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">بستن</button></div>`;
     container.innerHTML = html;
 }
 
-document.getElementById('calendarModal').addEventListener('click', function(e) {
-    if (e.target.classList.contains('cal-backdrop')) { closeCalendar(); return; }
-    if (e.target.closest('.cal-prev')) {
-        calendarState.viewMonth--; if (calendarState.viewMonth < 1) { calendarState.viewMonth = 12; calendarState.viewYear--; } renderCalendar();
-    } else if (e.target.closest('.cal-next')) {
-        calendarState.viewMonth++; if (calendarState.viewMonth > 12) { calendarState.viewMonth = 1; calendarState.viewYear++; } renderCalendar();
-    } else if (e.target.closest('.cal-today')) {
-        const t = Jalaali.today(); calendarState.selected = { year: t.year, month: t.month, day: t.day }; calendarState.inputEl.value = Jalaali.formatJalali(t.year, t.month, t.day); closeCalendar();
-    } else if (e.target.closest('.cal-close')) {
-        closeCalendar();
-    } else if (e.target.closest('.cal-day')) {
-        const dayEl = e.target.closest('.cal-day');
-        if (!dayEl.dataset.day) return;
-        const d = parseInt(dayEl.dataset.day);
-        calendarState.selected = { year: calendarState.viewYear, month: calendarState.viewMonth, day: d };
-        calendarState.inputEl.value = Jalaali.formatJalali(calendarState.viewYear, calendarState.viewMonth, d);
-        closeCalendar();
-    }
+document.getElementById('calendarModal').addEventListener('click', e => {
+    if (e.target.classList.contains('cal-backdrop')) return closeCalendar();
+    if (e.target.closest('.cal-prev')) { calendarState.viewMonth--; if (calendarState.viewMonth < 1) { calendarState.viewMonth = 12; calendarState.viewYear--; } renderCalendar(); }
+    else if (e.target.closest('.cal-next')) { calendarState.viewMonth++; if (calendarState.viewMonth > 12) { calendarState.viewMonth = 1; calendarState.viewYear++; } renderCalendar(); }
+    else if (e.target.closest('.cal-today')) { const t = Jalaali.today(); calendarState.sel = { year: t.year, month: t.month, day: t.day }; calendarState.inputEl.value = Jalaali.formatJalali(t.year, t.month, t.day); closeCalendar(); }
+    else if (e.target.closest('.cal-close')) { closeCalendar(); }
+    else if (e.target.closest('.cal-day')) { const de = e.target.closest('.cal-day'); if (!de.dataset.day) return; const d = parseInt(de.dataset.day); calendarState.sel = { year: calendarState.viewYear, month: calendarState.viewMonth, day: d }; calendarState.inputEl.value = Jalaali.formatJalali(calendarState.viewYear, calendarState.viewMonth, d); closeCalendar(); }
 });
 
-document.getElementById('deliveryDate').addEventListener('click', function() {
-    openCalendar(this, this.value);
-});
+document.getElementById('deliveryDate').addEventListener('click', function() { openCalendar(this, this.value); });
 
 // 🌓 Theme Toggle
-const themeToggleBtn = document.getElementById('themeToggle'); const htmlElement = document.documentElement;
-if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) htmlElement.classList.add('dark'); else htmlElement.classList.remove('dark');
-themeToggleBtn.addEventListener('click', () => { if (htmlElement.classList.contains('dark')) { htmlElement.classList.remove('dark'); localStorage.theme = 'light'; } else { htmlElement.classList.add('dark'); localStorage.theme = 'dark'; } });
+const tt = document.getElementById('themeToggle'); const he = document.documentElement;
+if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) he.classList.add('dark'); else he.classList.remove('dark');
+tt.addEventListener('click', () => { if (he.classList.contains('dark')) { he.classList.remove('dark'); localStorage.theme = 'light'; } else { he.classList.add('dark'); localStorage.theme = 'dark'; } });
 
 // 🔄 Realtime
 supabase.channel('public:typists').on('postgres_changes', { event: '*', schema: 'public', table: 'typists' }, renderProjects).subscribe();
 supabase.channel('public:typist_reports').on('postgres_changes', { event: '*', schema: 'public', table: 'typist_reports' }, renderProjects).subscribe();
-
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeProjectModal(); closeReportModal(); closeCalendar(); document.getElementById('deleteModal').classList.add('hidden'); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeProjectModal(); closeReportModal(); closeCalendar(); document.getElementById('deleteModal').classList.add('hidden'); } });
