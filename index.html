@@ -7,9 +7,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
     
-    <!-- تقویم شمسی -->
-    <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalali-datepicker/dist/jalali-datepicker.css">
-    <script src="https://unpkg.com/@majidh1/jalali-datepicker/dist/jalali-datepicker.js"></script>
+    <!-- کتابخانه‌های تقویم شمسی -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/css/persian-datepicker.min.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/js/persian-datepicker.min.js"></script>
 
     <script>
         tailwind.config = {
@@ -101,6 +102,7 @@
             <svg class="w-6 h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
         </button>
 
+        <!-- مودال ثبت و ویرایش -->
         <div id="formModal" class="fixed inset-0 z-50 hidden">
             <div class="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm transition-opacity opacity-0" id="modalBackdrop"></div>
             <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
@@ -110,7 +112,7 @@
                             <div class="w-8 h-8 rounded-lg bg-primary-50 dark:bg-primary-500/10 flex items-center justify-center">
                                 <svg class="w-4 h-4 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
                             </div>
-                            <h2 class="text-base font-bold text-slate-900 dark:text-white">ثبت پروژه جدید</h2>
+                            <h2 class="text-base font-bold text-slate-900 dark:text-white" id="formTitle">ثبت پروژه جدید</h2>
                         </div>
                         <button id="closeFormBtn" class="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center transition">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -118,6 +120,7 @@
                     </div>
                     <div class="p-5 overflow-y-auto">
                         <form id="typistForm" class="space-y-5">
+                            <input type="hidden" id="editId" value="">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div class="relative">
                                     <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 mr-1">نام تایپیست</label>
@@ -145,11 +148,11 @@
                                 <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 mr-1">تاریخ تحویل (شمسی)</label>
                                 <div class="relative">
                                     <svg class="input-icon w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                    <input type="text" id="deliveryDate" data-jdp placeholder="انتخاب از تقویم" required class="input-field w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all" dir="ltr" style="text-align: right;">
+                                    <input type="text" id="deliveryDate" placeholder="انتخاب از تقویم" required class="input-field w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all" dir="ltr" style="text-align: right;">
                                 </div>
                             </div>
                             <div class="pt-2">
-                                <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 dark:bg-primary-600 dark:hover:bg-primary-500 text-white font-semibold py-3 rounded-xl shadow-md shadow-primary-500/20 hover:shadow-lg hover:shadow-primary-500/30 transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2">
+                                <button type="submit" id="submitBtn" class="w-full bg-primary-600 hover:bg-primary-700 dark:bg-primary-600 dark:hover:bg-primary-500 text-white font-semibold py-3 rounded-xl shadow-md shadow-primary-500/20 hover:shadow-lg hover:shadow-primary-500/30 transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
                                     ذخیره اطلاعات پروژه
                                 </button>
@@ -159,14 +162,32 @@
                 </div>
             </div>
         </div>
+        
+        <!-- مودال گزارش ۱۰ روزه -->
+        <div id="reportModal" class="fixed inset-0 z-50 hidden">
+            <div class="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm" id="reportBackdrop"></div>
+            <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
+                <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 pointer-events-auto">
+                    <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-4">ثبت گزارش ۱۰ روزه</h2>
+                    <input type="number" id="reportPages" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 mb-3 px-3" placeholder="تعداد صفحات تایپ شده">
+                    <textarea id="reportText" rows="2" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 mb-4 px-3" placeholder="توضیحات (اختیاری)"></textarea>
+                    <div class="flex gap-2">
+                        <button id="closeReportBtn" class="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-medium transition">انصراف</button>
+                        <button id="submitReportBtn" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition">ثبت گزارش</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
+        // تنظیمات اولیه
         const themeToggleBtn = document.getElementById('themeToggle');
         const htmlElement = document.documentElement;
         if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) { htmlElement.classList.add('dark'); } else { htmlElement.classList.remove('dark'); }
         themeToggleBtn.addEventListener('click', () => { if (htmlElement.classList.contains('dark')) { htmlElement.classList.remove('dark'); localStorage.theme = 'light'; } else { htmlElement.classList.add('dark'); localStorage.theme = 'dark'; } });
 
+        // مدیریت مودال‌ها
         const openFormBtn = document.getElementById('openFormBtn');
         const closeFormBtn = document.getElementById('closeFormBtn');
         const formModal = document.getElementById('formModal');
@@ -175,10 +196,25 @@
 
         function openModal() { formModal.classList.remove('hidden'); void formModal.offsetWidth; modalBackdrop.classList.remove('opacity-0'); modalContent.classList.remove('opacity-0', 'scale-95'); modalContent.classList.add('scale-100'); }
         function closeModal() { modalBackdrop.classList.add('opacity-0'); modalContent.classList.remove('scale-100'); modalContent.classList.add('opacity-0', 'scale-95'); setTimeout(() => { formModal.classList.add('hidden'); }, 300); }
-        openFormBtn.addEventListener('click', openModal);
+        openFormBtn.addEventListener('click', () => { document.getElementById('formTitle').innerText = 'ثبت پروژه جدید'; document.getElementById('typistForm').reset(); document.getElementById('editId').value = ''; openModal(); });
         closeFormBtn.addEventListener('click', closeModal);
         modalBackdrop.addEventListener('click', closeModal);
-        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !formModal.classList.contains('hidden')) { closeModal(); } });
+
+        const reportModal = document.getElementById('reportModal');
+        const reportBackdrop = document.getElementById('reportBackdrop');
+        const closeReportBtn = document.getElementById('closeReportBtn');
+        closeReportBtn.addEventListener('click', () => reportModal.classList.add('hidden'));
+        reportBackdrop.addEventListener('click', () => reportModal.classList.add('hidden'));
+
+        // فعال‌سازی تقویم شمسی
+        $(document).ready(function() {
+            $("#deliveryDate").persianDatepicker({
+                format: 'YYYY/MM/DD',
+                autoClose: true,
+                initialValue: false,
+                calendar: { persian: { locale: 'fa' } }
+            });
+        });
     </script>
     
     <script type="module" src="app.js"></script>
