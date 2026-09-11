@@ -43,94 +43,151 @@ async function completeProjectInSupabase(id) { const { error } = await supabase.
 async function insertReportToSupabase(pid, per, pg, txt, isLate, delay) { const { error } = await supabase.from('typist_reports').insert([{ typist_id: pid, period: per, pages: pg, description: txt, is_late: isLate, delay_days: delay }]); if (error) throw error; }
 
 function calculateProjectStatus(p) {
-    const t = Jalaali.today(); const c = Jalaali.parseJalali(p.createdAt); if (!c) return { status: 'active', daysLeft: 0, daysUntilDelivery: 0 };
+    const t = Jalaali.today(); const c = Jalaali.parseJalali(p.createdAt); if (!c) return { status: 'active', daysLeft: 0, daysUntilDelivery: 0, daysSinceCreation: 0 };
     const d = Jalaali.parseJalali(p.deliveryDate); const ds = Jalaali.daysBetween(c, t); const dd = d ? Jalaali.daysBetween(t, d) : 0;
-    if (p.completed) return { status: 'delivered', daysLeft: 0, currentPeriod: 0, daysUntilDelivery: dd };
+    if (p.completed) return { status: 'delivered', daysLeft: 0, currentPeriod: 0, daysUntilDelivery: dd, daysSinceCreation: ds };
     const cp = Math.floor(ds / 10) + 1; const dl = cp * 10 - 1;
     const reps = p.reports || []; const rp = reps.map(r => r.period); const lp = rp.length > 0 ? Math.max(...rp) : 0;
-    if (rp.includes(cp)) return { status: 'active', daysLeft: 0, currentPeriod: cp, daysUntilDelivery: dd };
-    if (lp < cp - 1) return { status: 'delayed', daysLeft: 0, currentPeriod: cp, daysUntilDelivery: dd, delayText: `${cp - lp - 1} دوره جا افتاده` };
+    if (rp.includes(cp)) return { status: 'active', daysLeft: 0, currentPeriod: cp, daysUntilDelivery: dd, daysSinceCreation: ds };
+    if (lp < cp - 1) return { status: 'delayed', daysLeft: 0, currentPeriod: cp, daysUntilDelivery: dd, delayText: `${cp - lp - 1} دوره جا افتاده`, daysSinceCreation: ds };
     const dlip = dl - ds + 1;
-    if (dlip < 0) return { status: 'delayed', daysLeft: 0, currentPeriod: cp, daysUntilDelivery: dd, delayText: `${Math.abs(dlip)} روز تاخیر`, isLate: true, delayDays: Math.abs(dlip) };
-    return { status: dlip <= 3 ? 'pending' : 'active', daysLeft: dlip, currentPeriod: cp, daysUntilDelivery: dd };
+    if (dlip < 0) return { status: 'delayed', daysLeft: 0, currentPeriod: cp, daysUntilDelivery: dd, delayText: `${Math.abs(dlip)} روز تاخیر`, isLate: true, delayDays: Math.abs(dlip), daysSinceCreation: ds };
+    return { status: dlip <= 3 ? 'pending' : 'active', daysLeft: dlip, currentPeriod: cp, daysUntilDelivery: dd, daysSinceCreation: ds };
 }
 
-function renderProjectCard(p) {
-    const s = calculateProjectStatus(p);
-    const isDelayed = s.status === 'delayed';
-    const badgeClass = isDelayed ? 'bg-red-50 dark:bg-red-500/10 text-red-600 border-red-100' : 'bg-primary-50 dark:bg-primary-500/10 text-primary-600 border-primary-100';
+// ============================================
+// 🎨 رندر کارت پروژه (کد زیبای شما)
+// ============================================
+function renderProjectCard(project) {
+    const status = calculateProjectStatus(project);
+    
     let timeText = '';
-    if (s.status === 'delivered') timeText = 'تکمیل شده';
-    else if (s.daysUntilDelivery < 0) timeText = `${Jalaali.toPersianDigits(Math.abs(s.daysUntilDelivery))} روز گذشته`;
-    else if (s.daysUntilDelivery === 0) timeText = 'امروز';
-    else timeText = `${Jalaali.toPersianDigits(s.daysUntilDelivery)} روز مانده`;
+    let timeBadgeClass = '';
+    
+    if (status.status === 'delivered') {
+        timeText = 'تکمیل شده';
+        timeBadgeClass = 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20';
+    } else if (status.daysUntilDelivery < 0) {
+        timeText = `${Jalaali.toPersianDigits(Math.abs(status.daysUntilDelivery))} روز تاخیر`;
+        timeBadgeClass = 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-100 dark:border-red-500/20';
+    } else if (status.daysUntilDelivery === 0) {
+        timeText = 'تحویل امروز';
+        timeBadgeClass = 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-500/20';
+    } else {
+        timeText = `${Jalaali.toPersianDigits(status.daysUntilDelivery)} روز تا تحویل`;
+        timeBadgeClass = status.daysUntilDelivery <= 7 
+            ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-500/20'
+            : 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-500/20';
+    }
 
-    const initials = esc(p.name.split(' ').map(n => n[0]).join('').slice(0, 2));
-    const reportsHtml = (p.reports || []).sort((a,b) => b.period - a.period).map(r => `
+    const isDelayed = status.status === 'delayed';
+    
+    const reportsHtml = (project.reports || []).slice().reverse().map(r => `
         <div class="flex items-center justify-between gap-2 py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs border border-slate-100 dark:border-slate-700/50">
             <div class="flex items-center gap-2 flex-1 min-w-0">
-                <span class="w-2 h-2 rounded-full ${r.is_late ? 'bg-red-500' : 'bg-emerald-500'} flex-shrink-0"></span>
+                <span class="w-2 h-2 rounded-full ${r.isLate || r.is_late ? 'bg-red-500' : 'bg-emerald-500'} flex-shrink-0"></span>
                 <span class="text-slate-700 dark:text-slate-300 font-medium truncate">دوره ${Jalaali.toPersianDigits(r.period)} • ${Jalaali.toPersianDigits(r.pages)} صفحه</span>
             </div>
-        </div>`).join('');
+            <span class="text-slate-400 dark:text-slate-500 text-[10px] flex-shrink-0 font-medium">
+                ${(r.isLate || r.is_late) ? `<span class="text-red-500">${Jalaali.toPersianDigits(r.delayDays || r.delay_days)} روز تاخیر</span>` : Jalaali.formatJalali(r.date.year, r.date.month, r.date.day)}
+            </span>
+        </div>
+    `).join('');
 
-    return `<div class="project-card glass rounded-2xl border border-slate-200/50 dark:border-slate-800/50 hover:shadow-lg transition-all duration-300 animate-slide-up" data-id="${p.id}" data-status="${s.status}">
-        <div class="p-5 flex items-center justify-between cursor-pointer select-none toggle-card-details" data-id="${p.id}">
+    return `
+    <div class="project-card group glass rounded-2xl border border-slate-200/50 dark:border-slate-800/50 hover:shadow-lg transition-all duration-300 animate-slide-up" data-id="${project.id}" data-status="${status.status}">
+        <div class="p-5 flex items-center justify-between cursor-pointer select-none" data-action="toggle" data-id="${project.id}">
             <div class="flex items-center gap-3 min-w-0">
-                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-sm font-black text-white shadow-md flex-shrink-0">${initials}</div>
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-sm font-black text-white shadow-md flex-shrink-0">
+                    ${(project.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                </div>
                 <div class="min-w-0">
-                    <h3 class="font-black text-slate-900 dark:text-white text-sm truncate">${esc(p.name)}</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono" dir="ltr" style="text-align:right;">${esc(Jalaali.toPersianDigits(p.phone))}</p>
+                    <h3 class="font-black text-slate-900 dark:text-white text-sm truncate">${esc(project.name)}</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">${esc(Jalaali.toPersianDigits(project.phone))}</p>
                 </div>
             </div>
             <div class="flex items-center gap-3 flex-shrink-0">
-                <span class="px-2.5 py-1 rounded-lg text-[11px] font-black border ${badgeClass} whitespace-nowrap">${timeText}</span>
-                <svg class="card-chevron w-5 h-5 text-slate-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                <span class="px-2.5 py-1 rounded-lg text-[11px] font-bold border ${timeBadgeClass} whitespace-nowrap">
+                    ${timeText}
+                </span>
+                <svg class="card-chevron w-5 h-5 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </div>
         </div>
+
         <div class="card-details-wrapper">
             <div class="p-5 pt-0 space-y-4">
                 <div class="border-t border-slate-100 dark:border-slate-800 my-2"></div>
+                
                 <div>
-                    <p class="text-[10px] font-black text-slate-400 mb-1 uppercase tracking-wider">عنوان پروژه</p>
-                    <p class="text-sm text-slate-800 dark:text-slate-100 font-bold leading-relaxed">${esc(p.title)}</p>
+                    <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 mb-1 uppercase tracking-wider">عنوان پروژه</p>
+                    <p class="text-sm text-slate-800 dark:text-slate-100 font-bold leading-relaxed">${esc(project.title)}</p>
                 </div>
-                ${s.status !== 'delivered' ? `
-                <div>
-                    <div class="flex items-center justify-between mb-1.5">
-                        <span class="text-[11px] text-slate-500 font-bold">دوره ${Jalaali.toPersianDigits(s.currentPeriod)} از ۱۰ روز</span>
-                        <span class="text-[11px] font-black ${isDelayed ? 'text-red-500' : 'text-primary-600'}">${s.daysLeft > 0 ? `${Jalaali.toPersianDigits(s.daysLeft)} روز مانده` : 'پایان یافته'}</span>
+
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 dark:border-slate-700">
+                        <p class="text-slate-400 dark:text-slate-500 mb-1">از شروع پروژه</p>
+                        <p class="font-black text-slate-900 dark:text-white text-lg">${Jalaali.toPersianDigits(status.daysSinceCreation)} روز</p>
                     </div>
-                    <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-                        <div class="h-2 rounded-full transition-all duration-700 ease-out ${isDelayed ? 'bg-red-500' : 'bg-primary-500'}" style="width: ${Math.min(100, ((10 - s.daysLeft) / 10) * 100)}%"></div>
+                    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 dark:border-slate-700">
+                        <p class="text-slate-400 dark:text-slate-500 mb-1">تا تحویل</p>
+                        <p class="font-black ${status.daysUntilDelivery < 0 ? 'text-red-600' : status.daysUntilDelivery <= 7 ? 'text-amber-600' : 'text-emerald-600'} text-lg">
+                            ${status.daysUntilDelivery < 0 ? Jalaali.toPersianDigits(Math.abs(status.daysUntilDelivery)) + ' روز تاخیر' : Jalaali.toPersianDigits(status.daysUntilDelivery) + ' روز'}
+                        </p>
+                    </div>
+                </div>
+
+                ${status.status !== 'delivered' ? `
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400">دوره ${Jalaali.toPersianDigits(status.currentPeriod)} از ۱۰ روز</span>
+                        <span class="text-[11px] font-black ${isDelayed ? 'text-red-500' : 'text-primary-600'}">
+                            ${status.daysLeft > 0 ? `${Jalaali.toPersianDigits(status.daysLeft)} روز مانده` : 'پایان یافته'}
+                        </span>
+                    </div>
+                    <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                        <div class="h-2.5 rounded-full transition-all duration-700 ease-out ${isDelayed ? 'bg-gradient-to-r from-red-500 to-red-400' : 'bg-gradient-to-r from-primary-500 to-primary-400'}" style="width: ${Math.min(100, ((10 - status.daysLeft) / 10) * 100)}%"></div>
                     </div>
                 </div>` : ''}
-                ${(p.reports || []).length > 0 ? `
+
+                ${(project.reports || []).length > 0 ? `
                 <div>
-                    <p class="text-[10px] font-black text-slate-400 mb-2 uppercase tracking-wider">سوابق گزارش</p>
-                    <div class="space-y-2 max-h-32 overflow-y-auto pr-1">${reportsHtml}</div>
-                </div>` : `<div class="py-4 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-dashed border-slate-200 dark:border-slate-700 text-center"><p class="text-xs text-slate-400 font-medium">هنوز گزارشی ثبت نشده است</p></div>`}
-                <div class="flex gap-3 pt-2">
-                    ${s.status !== 'delivered' ? `
-                    <button class="report-btn flex-1 py-2.5 rounded-xl ${isDelayed ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-600 hover:bg-primary-700'} text-white text-xs font-black transition flex items-center justify-center gap-2 shadow-lg" data-id="${p.id}">
+                    <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">سوابق گزارش (${Jalaali.toPersianDigits(project.reports.length)})</p>
+                    <div class="space-y-2 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+                        ${reportsHtml}
+                    </div>
+                </div>` : `
+                <div class="py-6 px-3 rounded-2xl bg-slate-50 dark:bg-slate-800/30 border border-dashed border-slate-200 dark:border-slate-700 text-center">
+                    <p class="text-sm text-slate-400 dark:text-slate-500 font-medium mb-1">هنوز گزارشی ثبت نشده است</p>
+                    <p class="text-xs text-slate-400">اولین گزارش دوره را ثبت کنید</p>
+                </div>`}
+
+                <div class="flex gap-2 pt-2">
+                    ${status.status !== 'delivered' ? `
+                    <button data-action="report" data-id="${project.id}" class="flex-1 py-3 rounded-xl ${isDelayed ? 'bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400' : 'bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400'} text-white text-sm font-black transition flex items-center justify-center gap-2 shadow-lg shadow-primary-500/25 transform hover:-translate-y-0.5">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
                         ثبت گزارش
                     </button>
-                    <button class="complete-btn py-2.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 text-emerald-700 text-xs font-black transition flex items-center justify-center gap-2 border border-emerald-100" data-id="${p.id}">
+                    <button data-action="complete" data-id="${project.id}" class="px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-sm font-black transition flex items-center justify-center gap-2 border border-emerald-200 dark:border-emerald-500/20">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
                         تکمیل
                     </button>` : `
-                    <div class="flex-1 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 text-xs font-black transition flex items-center justify-center gap-2 border border-emerald-100">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        تکمیل شده
+                    <div class="flex-1 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-sm font-black transition flex items-center justify-center gap-2 border border-emerald-200 dark:border-emerald-500/20">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        پروژه تکمیل شده است
                     </div>`}
-                    <button class="delete-btn w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-red-50 text-slate-500 hover:text-red-600 flex items-center justify-center transition border border-slate-200 dark:border-slate-700" data-id="${p.id}">
+                    
+                    <button data-action="edit" data-id="${project.id}" class="px-3 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition border border-slate-200 dark:border-slate-700" title="ویرایش پروژه">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    </button>
+                    
+                    <button data-action="delete" data-id="${project.id}" class="px-3 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 transition border border-slate-200 dark:border-slate-700" title="حذف پروژه">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                     </button>
                 </div>
             </div>
         </div>
-    </div>`;
+    </div>
+    `;
 }
 
 async function renderProjects() {
@@ -182,12 +239,28 @@ document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDel
 document.getElementById('exportBtn').addEventListener('click', exportToCSV);
 document.getElementById('submitReportBtn').addEventListener('click', submitReport);
 
+// مدیریت کلیک‌ها با Event Delegation (مطابق با data-action ها)
 document.getElementById('typistList').addEventListener('click', (e) => {
-    const card = e.target.closest('.project-card'); if (!card) return; const id = card.dataset.id;
-    if (e.target.closest('.toggle-card-details')) { document.querySelectorAll('.project-card.is-expanded').forEach(c => { if (c.dataset.id !== id) c.classList.remove('is-expanded'); }); card.classList.toggle('is-expanded'); }
-    else if (e.target.closest('.report-btn')) { openReportModal(id); } 
-    else if (e.target.closest('.complete-btn')) { completeProject(id); } 
-    else if (e.target.closest('.delete-btn')) { document.getElementById('deleteProjectId').value = id; document.getElementById('deleteModal').classList.remove('hidden'); }
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+    const card = target.closest('.project-card');
+    if (!card) return;
+    const id = card.dataset.id;
+    const action = target.dataset.action;
+
+    if (action === 'toggle') {
+        document.querySelectorAll('.project-card.is-expanded').forEach(c => { if (c !== card) c.classList.remove('is-expanded'); });
+        card.classList.toggle('is-expanded');
+    } else if (action === 'report') {
+        openReportModal(id);
+    } else if (action === 'complete') {
+        completeProject(id);
+    } else if (action === 'edit') {
+        openProjectModal(id);
+    } else if (action === 'delete') {
+        document.getElementById('deleteProjectId').value = id;
+        document.getElementById('deleteModal').classList.remove('hidden');
+    }
 });
 
 function openProjectModal(id = null) { const m = document.getElementById('formModal'); const b = document.getElementById('modalBackdrop'); const c = document.getElementById('modalContent'); document.getElementById('typistForm').reset(); document.getElementById('editId').value = ''; if (id) { const p = projectsCache.find(x => x.id === id); if (p) { document.getElementById('editId').value = p.id; document.getElementById('name').value = p.name; document.getElementById('phone').value = p.phone; document.getElementById('title').value = p.title; document.getElementById('deliveryDate').value = p.deliveryDate; document.getElementById('formTitle').textContent = 'ویرایش پروژه'; document.getElementById('submitBtnText').textContent = 'ذخیره تغییرات'; } } else { document.getElementById('formTitle').textContent = 'ثبت پروژه جدید'; document.getElementById('submitBtnText').textContent = 'ذخیره پروژه'; } m.classList.remove('hidden'); requestAnimationFrame(() => { b.classList.remove('opacity-0'); c.classList.remove('scale-95', 'opacity-0'); }); }
