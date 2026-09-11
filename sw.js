@@ -1,9 +1,5 @@
-const CACHE_NAME = 'typist-app-v1';
-const urlsToCache = [
-  './',
-  './index.html',
-  './manifest.json'
-];
+const CACHE_NAME = 'typist-app-v2'; // نام کش تغییر کرد تا فایل‌های قدیمی پاک شوند
+const urlsToCache = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -13,8 +9,12 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // استراتژی جدید: اول از اینترنت بگیر، اگر اینترنت نبود از کش بخوان
   event.respondWith(
-    caches.match(event.request)
-      .then(response => response || fetch(event.request))
+    fetch(event.request)
+      .then(response => {
+        return response || caches.match(event.request);
+      })
+      .catch(() => caches.match(event.request))
   );
 });
