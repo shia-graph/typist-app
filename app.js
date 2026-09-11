@@ -141,91 +141,99 @@ async function insertReportToSupabase(pid, per, pg, txt, isLate, delay) {
 }
 
 function calculateProjectStatus(p) {
-    const t = Jalaali.today(); 
-    const c = Jalaali.parseJalali(p.createdAt); 
-    
-    if (!c) {
-        console.warn('Invalid createdAt:', p.createdAt);
-        return { 
-            status: 'active', 
-            daysLeft: 10, 
-            daysUntilDelivery: 0, 
-            daysSinceCreation: 0,
-            currentPeriod: 1 
+    const today = Jalaali.today();
+
+    // deliveryDate = تاریخ دریافت کار توسط تایپیست (شروع دوره)
+    const startDate = Jalaali.parseJalali(p.deliveryDate);
+
+    if (!startDate) {
+        console.warn('Invalid deliveryDate:', p.deliveryDate);
+        return {
+            status: 'active',
+            daysLeft: 10,
+            currentPeriod: 1,
+            daysSinceStart: 0,
+            daysUntilReport: 10,
+            isReported: false,
+            isLate: false
         };
     }
-    
-    const d = Jalaali.parseJalali(p.deliveryDate); 
-    
-    // ✅ اصلاح: ds همیشه مثبت است (روزهای سپری‌شده)
-    const ds = Jalaali.daysBetween(c, t); 
-    
-    // ✅ اصلاح: dd می‌تواند منفی باشد (اگر از موعد گذشته)
-    const dd = d ? Jalaali.daysBetween(t, d) : 0;
-    
+
+    // تعداد روزهای گذشته از دریافت کار
+    const daysSinceStart = Math.max(0, Jalaali.daysBetween(startDate, today));
+
+    // اگر پروژه تکمیل شده باشد
     if (p.completed) {
-        return { 
-            status: 'delivered', 
-            daysLeft: 0, 
-            currentPeriod: 0, 
-            daysUntilDelivery: dd, 
-            daysSinceCreation: ds 
+        return {
+            status: 'delivered',
+            daysLeft: 0,
+            currentPeriod: 0,
+            daysSinceStart,
+            daysUntilReport: 0,
+            isReported: true,
+            isLate: false
         };
     }
-    
-    const cp = Math.floor(ds / 10) + 1;
-    const periodStart = (cp - 1) * 10;
-    const daysInCurrentPeriod = ds - periodStart;
-    const daysLeftInPeriod = 10 - daysInCurrentPeriod;
-    
-    const reps = p.reports || []; 
-    const rp = reps.map(r => r.period); 
-    const lp = rp.length > 0 ? Math.max(...rp) : 0;
-    
-    if (rp.includes(cp)) {
-        return { 
-            status: 'active', 
-            daysLeft: daysLeftInPeriod, 
-            currentPeriod: cp, 
-            daysUntilDelivery: dd, 
-            daysSinceCreation: ds,
-            isReported: true
+
+    // محاسبه دوره فعلی
+    // روزهای 0 تا 9 → دوره اول
+    // روزهای 10 تا 19 → دوره دوم
+    const currentPeriod = Math.floor(daysSinceStart / 10) + 1;
+
+    // روز داخل دوره
+    const dayInPeriod = daysSinceStart % 10;
+
+    // چند روز تا پایان دوره / گزارش
+    // روز 0 → 10 روز مانده
+    // روز 1 → 9 روز مانده
+    // روز 2 → 8 روز مانده
+    const daysUntilReport = 10 - dayInPeriod;
+
+    // گزارش‌های ثبت شده
+    const reports = Array.isArray(p.reports) ? p.reports : [];
+    const reportedPeriods = reports.map(r => Number(r.period)).filter(Number.isFinite);
+
+    // آیا گزارش دوره جاری ثبت شده؟
+    const isReported = reportedPeriods.includes(currentPeriod);
+
+    if (isReported) {
+        return {
+            status: 'active',
+            daysLeft: daysUntilReport,
+            currentPeriod,
+            daysSinceStart,
+            daysUntilReport,
+            isReported: true,
+            isLate: false
         };
     }
-    
-    if (lp < cp - 1) {
-        const missedPeriods = cp - 1 - lp;
-        return { 
-            status: 'delayed', 
-            daysLeft: daysLeftInPeriod, 
-            currentPeriod: cp, 
-            daysUntilDelivery: dd, 
-            delayText: `${Jalaali.toPersianDigits(missedPeriods)} دوره جا افتاده`, 
-            daysSinceCreation: ds,
+
+    // بررسی گزارش‌های عقب‌افتاده
+    const lastReportedPeriod = reportedPeriods.length > 0 ? Math.max(...reportedPeriods) : 0;
+
+    if (lastReportedPeriod < currentPeriod - 1) {
+        const missedPeriods = currentPeriod - 1 - lastReportedPeriod;
+        return {
+            status: 'delayed',
+            daysLeft: daysUntilReport,
+            currentPeriod,
+            daysSinceStart,
+            daysUntilReport,
+            delayText: `${Jalaali.toPersianDigits(missedPeriods)} دوره جا افتاده`,
+            missedPeriods,
+            isReported: false,
             isLate: true
         };
     }
-    
-    if (daysLeftInPeriod <= 0) {
-        const delayDays = Math.abs(daysLeftInPeriod);
-        return { 
-            status: 'delayed', 
-            daysLeft: 0, 
-            currentPeriod: cp, 
-            daysUntilDelivery: dd, 
-            delayText: `${Jalaali.toPersianDigits(delayDays)} روز تاخیر در گزارش`, 
-            isLate: true, 
-            delayDays: delayDays,
-            daysSinceCreation: ds 
-        };
-    }
-    
-    return { 
-        status: daysLeftInPeriod <= 3 ? 'pending' : 'active', 
-        daysLeft: daysLeftInPeriod, 
-        currentPeriod: cp, 
-        daysUntilDelivery: dd, 
-        daysSinceCreation: ds,
+
+    // هنوز دوره تمام نشده
+    return {
+        status: daysUntilReport <= 3 ? 'pending' : 'active',
+        daysLeft: daysUntilReport,
+        currentPeriod,
+        daysSinceStart,
+        daysUntilReport,
+        isReported: false,
         isLate: false
     };
 }
@@ -233,26 +241,25 @@ function calculateProjectStatus(p) {
 function renderProjectCard(project) {
     const status = calculateProjectStatus(project);
     
+    // ✅ اصلاح: نمایش بر اساس daysUntilReport (نه daysUntilDelivery)
     let timeText = '';
     let timeBadgeClass = '';
     
     if (status.status === 'delivered') {
         timeText = 'تکمیل شده';
         timeBadgeClass = 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20';
-    } else if (status.daysUntilDelivery < 0) {
-        timeText = `${Jalaali.toPersianDigits(Math.abs(status.daysUntilDelivery))} روز تاخیر در تحویل`;
+    } else if (status.isLate) {
+        timeText = `${status.delayText || 'تاخیر در گزارش'}`;
         timeBadgeClass = 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-100 dark:border-red-500/20';
-    } else if (status.daysUntilDelivery === 0) {
-        timeText = 'تحویل امروز';
+    } else if (status.daysUntilReport <= 3) {
+        timeText = `${Jalaali.toPersianDigits(status.daysUntilReport)} روز مانده (فوری)`;
         timeBadgeClass = 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-500/20';
     } else {
-        timeText = `${Jalaali.toPersianDigits(status.daysUntilDelivery)} روز تا تحویل`;
-        timeBadgeClass = status.daysUntilDelivery <= 7 
-            ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-500/20'
-            : 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-500/20';
+        timeText = `${Jalaali.toPersianDigits(status.daysUntilReport)} روز مانده از دوره`;
+        timeBadgeClass = 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-500/20';
     }
 
-    const isDelayed = status.status === 'delayed';
+    const isDelayed = status.isLate;
     
     const reportsHtml = (project.reports || []).slice().reverse().map(r => `
         <div class="flex items-center justify-between gap-2 py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs border border-slate-100 dark:border-slate-700/50">
@@ -295,21 +302,22 @@ function renderProjectCard(project) {
                     <p class="text-sm text-slate-800 dark:text-slate-100 font-bold leading-relaxed">${esc(project.title)}</p>
                 </div>
 
+                <!-- ✅ اصلاح: نمایش daysSinceStart و daysUntilReport -->
                 <div class="grid grid-cols-2 gap-3 text-xs">
                     <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 dark:border-slate-700">
                         <p class="text-slate-400 dark:text-slate-500 mb-1 text-[10px]">روزهای سپری‌شده</p>
                         <p class="font-black text-slate-900 dark:text-white text-lg">
-                            ${Jalaali.toPersianDigits(status.daysSinceCreation)} روز
+                            ${Jalaali.toPersianDigits(status.daysSinceStart || 0)} روز
                         </p>
                     </div>
                     <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 dark:border-slate-700">
                         <p class="text-slate-400 dark:text-slate-500 mb-1 text-[10px]">
-                            ${status.daysUntilDelivery < 0 ? 'تاخیر از تحویل' : 'روزهای باقی‌مانده'}
+                            ${status.isLate ? 'تاخیر در گزارش' : 'روزهای مانده تا گزارش'}
                         </p>
-                        <p class="font-black ${status.daysUntilDelivery < 0 ? 'text-red-600' : status.daysUntilDelivery <= 7 ? 'text-amber-600' : 'text-emerald-600'} text-lg">
-                            ${status.daysUntilDelivery < 0 
-                                ? Jalaali.toPersianDigits(Math.abs(status.daysUntilDelivery)) + ' روز' 
-                                : Jalaali.toPersianDigits(status.daysUntilDelivery) + ' روز'
+                        <p class="font-black ${status.isLate ? 'text-red-600' : status.daysUntilReport <= 3 ? 'text-amber-600' : 'text-emerald-600'} text-lg">
+                            ${status.isLate 
+                                ? 'نیاز به اقدام' 
+                                : Jalaali.toPersianDigits(status.daysUntilReport || 0) + ' روز'
                             }
                         </p>
                     </div>
@@ -320,7 +328,7 @@ function renderProjectCard(project) {
                     <div class="flex items-center justify-between mb-2">
                         <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400">دوره ${Jalaali.toPersianDigits(status.currentPeriod)} از ۱۰ روز</span>
                         <span class="text-[11px] font-black ${isDelayed ? 'text-red-500' : 'text-primary-600'}">
-                            ${status.daysLeft > 0 ? `${Jalaali.toPersianDigits(status.daysLeft)} روز مانده از دوره` : 'پایان دوره'}
+                            ${status.daysLeft > 0 ? `${Jalaali.toPersianDigits(status.daysLeft)} روز مانده` : 'پایان دوره'}
                         </span>
                     </div>
                     <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
@@ -368,7 +376,6 @@ function renderProjectCard(project) {
     </div>
     `;
 }
-
 async function renderProjects() {
     const ps = await loadProjects(); 
     const l = document.getElementById('typistList'); 
