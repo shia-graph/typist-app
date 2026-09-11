@@ -6,46 +6,33 @@
     <title>پنل مدیریت تایپیست‌ها</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
+    
+    <!-- تقویم شمسی -->
+    <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalali-datepicker/dist/jalali-datepicker.css">
+    <script src="https://unpkg.com/@majidh1/jalali-datepicker/dist/jalali-datepicker.js"></script>
+
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
                     fontFamily: { sans: ['Vazirmatn', 'sans-serif'] },
-                    colors: {
-                        primary: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' }
-                    },
-                    animation: {
-                        'fade-in': 'fadeIn 0.3s ease-out',
-                        'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                    },
-                    keyframes: {
-                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-                        slideUp: { '0%': { transform: 'translateY(16px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } }
-                    }
+                    colors: { primary: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' } },
+                    animation: { 'fade-in': 'fadeIn 0.3s ease-out', 'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)' },
+                    keyframes: { fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } }, slideUp: { '0%': { transform: 'translateY(16px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } } }
                 }
             }
         }
     </script>
     <style>
-        body, div, nav, header, button, input, label, span {
-            transition-property: background-color, border-color, color, fill, stroke;
-            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-            transition-duration: 300ms;
-        }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        .dark ::-webkit-scrollbar-thumb { background: #334155; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        .input-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none; }
-        .dark .input-icon { color: #64748b; }
-        .input-field { padding-right: 42px; }
+        body, div, nav, header, button, input, label, span { transition-property: background-color, border-color, color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 300ms; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; } .dark ::-webkit-scrollbar-thumb { background: #334155; }
+        .input-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none; } .dark .input-icon { color: #64748b; } .input-field { padding-right: 42px; }
     </style>
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen antialiased selection:bg-primary-500/20 selection:text-primary-700 dark:selection:text-primary-300">
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen antialiased selection:bg-primary-500/20">
 
-    <!-- صفحه لاگین (رمز عبور) -->
+    <!-- صفحه لاگین -->
     <div id="loginScreen" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 w-full max-w-sm shadow-xl text-center">
             <div class="w-12 h-12 rounded-xl bg-primary-50 dark:bg-primary-500/10 flex items-center justify-center border border-primary-100 dark:border-primary-500/20 mx-auto mb-4">
@@ -61,10 +48,7 @@
         </div>
     </div>
 
-    <!-- محتوای اصلی اپ (تا زمان لاگین موفق مخفی است) -->
     <div id="appWrapper" class="hidden">
-
-        <!-- Header -->
         <header class="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800">
             <div class="max-w-5xl mx-auto px-4 py-3.5 flex items-center justify-between">
                 <div class="flex items-center gap-3">
@@ -73,36 +57,34 @@
                     </div>
                     <div>
                         <h1 class="text-base font-bold text-slate-900 dark:text-white tracking-tight">مدیریت پروژه‌ها</h1>
-                        <p class="text-[11px] text-slate-500 dark:text-slate-400">پنل کنترل تایپیست‌ها</p>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">پیگیری مرحله‌ای تایپیست‌ها</p>
                     </div>
                 </div>
-                <button id="themeToggle" class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 transition-all active:scale-95" aria-label="تغییر تم">
+                <button id="themeToggle" class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 transition-all active:scale-95">
                     <svg id="sunIcon" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                     <svg id="moonIcon" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
                 </button>
             </div>
         </header>
 
-        <!-- Main Content -->
         <main class="max-w-5xl mx-auto px-4 py-8">
             <div id="alertContainer" class="mb-6 space-y-3"></div>
-
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
                 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
                     <div id="stat-active" class="text-2xl font-bold text-slate-900 dark:text-white mb-1">۰</div>
                     <div class="text-xs text-slate-500 dark:text-slate-400">پروژه فعال</div>
                 </div>
                 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+                    <div id="stat-pending" class="text-2xl font-bold text-amber-600 dark:text-amber-400 mb-1">۰</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">نیاز به گزارش</div>
+                </div>
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+                    <div id="stat-delayed" class="text-2xl font-bold text-red-600 dark:text-red-400 mb-1">۰</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">تاخیر در گزارش</div>
+                </div>
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
                     <div id="stat-delivered" class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-1">۰</div>
                     <div class="text-xs text-slate-500 dark:text-slate-400">تکمیل شده</div>
-                </div>
-                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-                    <div id="stat-pending" class="text-2xl font-bold text-primary-600 dark:text-primary-400 mb-1">۰</div>
-                    <div class="text-xs text-slate-500 dark:text-slate-400">در انتظار بررسی</div>
-                </div>
-                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-                    <div id="stat-delayed" class="text-2xl font-bold text-amber-600 dark:text-amber-400 mb-1">۰</div>
-                    <div class="text-xs text-slate-500 dark:text-slate-400">دارای تاخیر</div>
                 </div>
             </div>
 
@@ -112,7 +94,6 @@
                     لیست پروژه‌ها
                 </h2>
             </div>
-
             <div id="typistList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </main>
 
@@ -164,7 +145,7 @@
                                 <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 mr-1">تاریخ تحویل (شمسی)</label>
                                 <div class="relative">
                                     <svg class="input-icon w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                    <input type="text" id="deliveryDate" placeholder="۱۴۰۳/۰۸/۱۵" required class="input-field w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all" dir="ltr" style="text-align: right;">
+                                    <input type="text" id="deliveryDate" data-jdp placeholder="انتخاب از تقویم" required class="input-field w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all" dir="ltr" style="text-align: right;">
                                 </div>
                             </div>
                             <div class="pt-2">
@@ -180,50 +161,24 @@
         </div>
     </div>
 
-    <!-- Scripts -->
     <script>
-        // Theme Toggle
         const themeToggleBtn = document.getElementById('themeToggle');
         const htmlElement = document.documentElement;
-        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            htmlElement.classList.add('dark');
-        } else {
-            htmlElement.classList.remove('dark');
-        }
-        themeToggleBtn.addEventListener('click', () => {
-            if (htmlElement.classList.contains('dark')) {
-                htmlElement.classList.remove('dark'); localStorage.theme = 'light';
-            } else {
-                htmlElement.classList.add('dark'); localStorage.theme = 'dark';
-            }
-        });
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) { htmlElement.classList.add('dark'); } else { htmlElement.classList.remove('dark'); }
+        themeToggleBtn.addEventListener('click', () => { if (htmlElement.classList.contains('dark')) { htmlElement.classList.remove('dark'); localStorage.theme = 'light'; } else { htmlElement.classList.add('dark'); localStorage.theme = 'dark'; } });
 
-        // Modal Logic
         const openFormBtn = document.getElementById('openFormBtn');
         const closeFormBtn = document.getElementById('closeFormBtn');
         const formModal = document.getElementById('formModal');
         const modalBackdrop = document.getElementById('modalBackdrop');
         const modalContent = document.getElementById('modalContent');
 
-        function openModal() {
-            formModal.classList.remove('hidden');
-            void formModal.offsetWidth;
-            modalBackdrop.classList.remove('opacity-0');
-            modalContent.classList.remove('opacity-0', 'scale-95');
-            modalContent.classList.add('scale-100');
-        }
-        function closeModal() {
-            modalBackdrop.classList.add('opacity-0');
-            modalContent.classList.remove('scale-100');
-            modalContent.classList.add('opacity-0', 'scale-95');
-            setTimeout(() => { formModal.classList.add('hidden'); }, 300);
-        }
+        function openModal() { formModal.classList.remove('hidden'); void formModal.offsetWidth; modalBackdrop.classList.remove('opacity-0'); modalContent.classList.remove('opacity-0', 'scale-95'); modalContent.classList.add('scale-100'); }
+        function closeModal() { modalBackdrop.classList.add('opacity-0'); modalContent.classList.remove('scale-100'); modalContent.classList.add('opacity-0', 'scale-95'); setTimeout(() => { formModal.classList.add('hidden'); }, 300); }
         openFormBtn.addEventListener('click', openModal);
         closeFormBtn.addEventListener('click', closeModal);
         modalBackdrop.addEventListener('click', closeModal);
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && !formModal.classList.contains('hidden')) { closeModal(); }
-        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !formModal.classList.contains('hidden')) { closeModal(); } });
     </script>
     
     <script type="module" src="app.js"></script>
