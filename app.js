@@ -122,48 +122,74 @@ function calculateProjectStatus(project) {
 }
 
 // ============================================
-// 🎨 رندر کارت پروژه
+// 🎨 رندر کارت پروژه (کامپکت و مینیمال)
 // ============================================
 function renderProjectCard(project) {
     const status = calculateProjectStatus(project);
     const colors = {
-        active: { badge: 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-100 dark:border-blue-500/20', bar: 'bg-blue-500' },
-        pending: { badge: 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-100 dark:border-amber-500/20', bar: 'bg-amber-500' },
-        delayed: { badge: 'bg-accent-50 dark:bg-accent-500/10 text-accent-700 dark:text-accent-400 border-accent-100 dark:border-accent-500/20', bar: 'bg-accent-500' },
-        delivered: { badge: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20', bar: 'bg-emerald-500' }
+        active: { badge: 'bg-blue-50 text-blue-700 border-blue-100', bar: 'bg-blue-500', text: 'text-blue-600' },
+        pending: { badge: 'bg-amber-50 text-amber-700 border-amber-100', bar: 'bg-amber-500', text: 'text-amber-600' },
+        delayed: { badge: 'bg-accent-50 text-accent-700 border-accent-100', bar: 'bg-accent-500', text: 'text-accent-600' },
+        delivered: { badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', bar: 'bg-emerald-500', text: 'text-emerald-600' }
     }[status.status];
-    const statusText = { active: 'به‌موقع', pending: `⚠️ ${status.daysLeft} روز تا پایان مهلت`, delayed: status.delayText || 'تاخیر دارد', delivered: '✓ تکمیل شده' }[status.status];
+    
+    const statusText = { active: 'به‌موقع', pending: `${status.daysLeft} روز مانده`, delayed: status.delayText || 'تاخیر', delivered: 'تکمیل شده' }[status.status];
+    
+    const totalPages = (project.reports || []).reduce((s, r) => s + (r.pages || 0), 0);
+    const reportsCount = (project.reports || []).length;
+    const initials = esc(project.name.split(' ').map(n => n[0]).join('').slice(0, 2));
+    
     const reportsHtml = (project.reports || []).sort((a,b) => b.period - a.period).map(r => `
-        <div class="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-xs">
+        <div class="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg bg-slate-50 dark:bg-slate-800 text-[11px] border border-slate-100 dark:border-slate-700/50">
             <div class="flex items-center gap-2 flex-1 min-w-0">
                 <span class="w-1.5 h-1.5 rounded-full ${r.is_late ? 'bg-accent-500' : 'bg-emerald-500'} flex-shrink-0"></span>
                 <span class="text-slate-700 dark:text-slate-300 truncate">دوره ${Jalaali.toPersianDigits(r.period)} • ${Jalaali.toPersianDigits(r.pages)} صفحه</span>
             </div>
         </div>`).join('');
-    const initials = esc(project.name.split(' ').map(n => n[0]).join('').slice(0, 2));
     
-    return `<div class="project-card group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 hover:shadow-xl hover:shadow-primary-500/5 transition-all duration-300 animate-slide-up" data-id="${project.id}" data-status="${status.status}">
-        <div class="flex justify-between items-start mb-5">
-            <div class="flex items-center gap-3 min-w-0">
-                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center text-sm font-black text-slate-600 dark:text-slate-300 flex-shrink-0 shadow-sm">${initials}</div>
+    return `<div class="project-card group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 hover:shadow-lg hover:border-primary-300 dark:hover:border-primary-700 transition-all animate-slide-up" data-id="${project.id}" data-status="${status.status}">
+        <div class="flex justify-between items-start mb-3">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <div class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 flex-shrink-0">${initials}</div>
                 <div class="min-w-0">
-                    <h3 class="font-black text-slate-900 dark:text-white text-sm truncate">${esc(project.name)}</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400" dir="ltr" style="text-align: right;">${esc(Jalaali.toPersianDigits(project.phone))}</p>
+                    <h3 class="font-bold text-slate-900 dark:text-white text-sm truncate">${esc(project.name)}</h3>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate" dir="ltr" style="text-align: right;">${esc(Jalaali.toPersianDigits(project.phone))}</p>
                 </div>
             </div>
-            <button class="menu-btn w-8 h-8 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-accent-600 transition" data-id="${project.id}"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg></button>
+            <button class="menu-btn w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition flex-shrink-0" data-id="${project.id}"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg></button>
         </div>
-        <div class="space-y-4 mb-5">
-            <div class="bg-slate-50 dark:bg-slate-800/30 rounded-2xl p-3 border border-slate-100 dark:border-slate-800"><p class="text-[10px] font-black text-slate-400 mb-1 uppercase tracking-wider">عنوان پروژه</p><p class="text-sm text-slate-800 dark:text-slate-100 font-bold leading-relaxed">${esc(project.title)}</p></div>
-            <div class="flex items-center justify-between text-xs px-1">
-                <span class="text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-medium">تحویل: ${esc(project.deliveryDate)}</span>
-                <span class="font-black ${status.daysUntilDelivery < 0 ? 'text-accent-600' : status.daysUntilDelivery <= 7 ? 'text-amber-600' : 'text-slate-600'}">${status.daysUntilDelivery < 0 ? `${Jalaali.toPersianDigits(Math.abs(status.daysUntilDelivery))} روز گذشته` : status.daysUntilDelivery === 0 ? 'امروز' : `${Jalaali.toPersianDigits(status.daysUntilDelivery)} روز مانده`}</span>
+        
+        <div class="mb-3">
+            <p class="text-xs text-slate-700 dark:text-slate-200 font-medium line-clamp-1 mb-1.5">${esc(project.title)}</p>
+            <div class="flex items-center justify-between text-[10px]">
+                <span class="px-2 py-0.5 rounded-md font-bold border ${colors.badge}">${statusText}</span>
+                <span class="text-slate-400 font-medium">تحویل: ${esc(project.deliveryDate)}</span>
             </div>
         </div>
-        <div class="mb-5"><div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black border ${colors.badge}">${statusText}</div></div>
-        ${project.reports && project.reports.length > 0 ? `<div class="mb-5"><div class="flex items-center justify-between mb-3"><p class="text-[10px] font-black text-slate-400 uppercase">سوابق گزارش (${Jalaali.toPersianDigits(project.reports.length)})</p></div><div class="space-y-2 max-h-32 overflow-y-auto">${reportsHtml}</div></div>` : `<div class="mb-5 py-6 px-4 rounded-2xl bg-slate-50 dark:bg-slate-800/30 border border-dashed text-center"><p class="text-xs text-slate-400 font-medium">هنوز گزارشی ثبت نشده است</p></div>`}
-        <div class="flex gap-3 pt-5 border-t border-slate-100 dark:border-slate-800">
-            ${status.status !== 'delivered' ? `<button class="report-btn flex-1 py-3 rounded-xl ${status.status === 'delayed' ? 'bg-accent-600 hover:bg-accent-500 shadow-accent-500/30' : 'bg-primary-600 hover:bg-primary-500 shadow-primary-500/30'} text-white text-xs font-black transition flex items-center justify-center gap-2 shadow-lg transform hover:-translate-y-0.5" data-id="${project.id}">ثبت گزارش دوره ${Jalaali.toPersianDigits(status.currentPeriod || 1)}</button><button class="complete-btn py-3 px-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 text-xs font-black border border-emerald-100" data-id="${project.id}">تکمیل نهایی</button>` : `<div class="flex-1 py-3 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-black">پروژه تکمیل شده است</div>`}
+
+        ${status.status !== 'delivered' ? `
+        <div class="mb-3">
+            <div class="flex items-center justify-between mb-1">
+                <span class="text-[10px] text-slate-400 font-medium">دوره ${Jalaali.toPersianDigits(status.currentPeriod)} • ${status.daysLeft > 0 ? `${Jalaali.toPersianDigits(status.daysLeft)} روز مانده` : 'پایان یافته'}</span>
+            </div>
+            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div class="${colors.bar} h-1.5 rounded-full transition-all duration-700" style="width: ${Math.min(100, ((10 - status.daysLeft) / 10) * 100)}%"></div>
+            </div>
+        </div>` : ''}
+
+        <div class="mb-3 flex items-center justify-between text-[11px] bg-slate-50 dark:bg-slate-800/30 p-2 rounded-lg border border-slate-100 dark:border-slate-700/50">
+            <span class="text-slate-500 dark:text-slate-400 font-medium">گزارش‌ها: ${Jalaali.toPersianDigits(reportsCount)} • ${Jalaali.toPersianDigits(totalPages)} صفحه</span>
+            ${reportsCount > 0 ? `<button type="button" class="toggle-reports text-primary-600 dark:text-primary-400 font-bold hover:underline">جزئیات</button>` : ''}
+        </div>
+        
+        <div class="report-list hidden mb-3 space-y-1.5 max-h-28 overflow-y-auto pr-1">
+            ${reportsHtml}
+        </div>
+
+        <div class="flex gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+            ${status.status !== 'delivered' ? `
+            <button class="report-btn flex-1 py-2 rounded-lg ${status.status === 'delayed' ? 'bg-accent-600 hover:bg-accent-500' : 'bg-primary-600 hover:bg-primary-500'} text-white text-[11px] font-bold transition" data-id="${project.id}">ثبت گزارش</button>
+            <button class="complete-btn py-2 px-3 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 text-[11px] font-medium border border-emerald-100" data-id="${project.id}">تکمیل</button>` : `<div class="flex-1 py-2 rounded-lg bg-emerald-50 text-emerald-600 text-[11px] font-bold text-center">پروژه تکمیل شده است</div>`}
         </div>
     </div>`;
 }
@@ -244,6 +270,9 @@ document.getElementById('typistList').addEventListener('click', (e) => {
         openReportModal(id);
     } else if (e.target.closest('.complete-btn')) {
         completeProject(id);
+    } else if (e.target.closest('.toggle-reports')) {
+        const list = card.querySelector('.report-list');
+        if (list) list.classList.toggle('hidden');
     }
 });
 
