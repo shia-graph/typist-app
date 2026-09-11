@@ -27,16 +27,39 @@
         .dark body { background-color: #0f172a; }
         body, div, nav, header, button, input, label, span, textarea { transition: all 0.3s ease; }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; } .dark ::-webkit-scrollbar-thumb { background: #334155; }
-        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(226, 232, 240, 0.8); }
-        .dark .glass { background: rgba(15, 23, 42, 0.8); border-color: rgba(51, 65, 85, 0.5); }
+        .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(226, 232, 240, 0.8); }
+        .dark .glass { background: rgba(15, 23, 42, 0.85); border-color: rgba(51, 65, 85, 0.5); }
         .input-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none; } .dark .input-icon { color: #64748b; } .input-field { padding-right: 42px; }
+        
+        /* استایل‌های تقویم */
         .cal-day { width: 100%; aspect-ratio: 1; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; transition: all 0.15s; }
         .cal-day:hover { background: #ccfbf1; color: #0f766e; } .dark .cal-day:hover { background: #134e4a; color: #5eead4; }
         .cal-day.selected { background: #0d9488 !important; color: white !important; font-weight: 700; }
         .cal-day.today { border: 2px solid #14b8a6; }
-        /* چرخش فلش آکاردئون */
-        .card-chevron { transition: transform 0.3s ease; }
-        .card-chevron.rotate-180 { transform: rotate(180deg); }
+
+        /* ✨ انیمیشن آکاردئونی کارت‌ها (بهترین روش برای ارتفاع خودکار) */
+        .card-details-wrapper {
+            display: grid;
+            grid-template-rows: 0fr;
+            transition: grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card-details-wrapper > div {
+            overflow: hidden;
+        }
+        .project-card.is-expanded .card-details-wrapper {
+            grid-template-rows: 1fr;
+        }
+        .project-card.is-expanded .card-chevron {
+            transform: rotate(180deg);
+        }
+        .project-card.is-expanded {
+            border-color: #14b8a6;
+            box-shadow: 0 10px 25px -5px rgba(20, 184, 166, 0.15);
+        }
+        .dark .project-card.is-expanded {
+            border-color: #0d9488;
+            box-shadow: 0 10px 25px -5px rgba(13, 148, 136, 0.2);
+        }
     </style>
 </head>
 <body class="text-slate-800 dark:text-slate-200 min-h-screen antialiased">
@@ -153,7 +176,7 @@
             <svg class="w-8 h-8 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
         </button>
 
-        <!-- مودال‌ها -->
+        <!-- مودال فرم -->
         <div id="formModal" class="fixed inset-0 z-50 hidden">
             <div class="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm opacity-0" id="modalBackdrop"></div>
             <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
@@ -181,11 +204,15 @@
             </div>
         </div>
 
+        <!-- مودال تقویم جداگانه (برای UX بهتر در موبایل) -->
         <div id="calendarModal" class="fixed inset-0 z-[60] hidden flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm cal-backdrop"></div>
-            <div class="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 relative z-10 pointer-events-auto"><div id="calendarContainer"></div></div>
+            <div class="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 relative z-10 pointer-events-auto">
+                <div id="calendarContainer"></div>
+            </div>
         </div>
 
+        <!-- مودال گزارش -->
         <div id="reportModal" class="fixed inset-0 z-50 hidden">
             <div class="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm" id="reportBackdrop"></div>
             <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
@@ -202,6 +229,7 @@
             </div>
         </div>
 
+        <!-- مودال حذف -->
         <div id="deleteModal" class="fixed inset-0 z-50 hidden">
             <div class="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm"></div>
             <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
