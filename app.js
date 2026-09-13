@@ -175,7 +175,7 @@ function renderProjectCard(project) {
                     <p class="text-[10px] font-black text-slate-400 mb-2 uppercase tracking-wider">سوابق گزارش (${Jalaali.toPersianDigits(project.reports.length)})</p>
                     <div class="space-y-2 max-h-32 overflow-y-auto pr-1">${reportsHtml}</div>
                 </div>` : `<div class="py-6 px-3 rounded-2xl bg-slate-50 dark:bg-slate-800/30 border border-dashed border-slate-200 dark:border-slate-700 text-center"><p class="text-sm text-slate-400 font-medium mb-1">هنوز گزارشی ثبت نشده است</p><p class="text-xs text-slate-400">اولین گزارش دوره را ثبت کنید</p></div>`}
-                <div class="flex gap-2 pt-2">
+                               <div class="flex gap-2 pt-2">
                     ${status.status !== 'delivered' && !status.isNotStarted ? `
                     <button data-action="report" data-id="${project.id}" class="flex-1 py-3 rounded-xl ${isDelayed ? 'bg-gradient-to-r from-red-600 to-red-500' : 'bg-gradient-to-r from-primary-600 to-primary-500'} text-white text-sm font-black transition flex items-center justify-center gap-2 shadow-lg">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>ثبت گزارش
@@ -186,10 +186,16 @@ function renderProjectCard(project) {
                     <div class="flex-1 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 text-sm font-black transition flex items-center justify-center gap-2 border border-emerald-200">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>پروژه تکمیل شده است
                     </div>` : ''}
-                    <button data-action="edit" data-id="${project.id}" class="px-3 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition border border-slate-200 dark:border-slate-700" title="ویرایش پروژه">
+                    
+                    <!-- ✅ دکمه تماس تلفنی -->
+                    <a href="tel:${(project.phone || '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))}" class="px-3 py-3 rounded-xl bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 transition flex items-center justify-center border border-blue-200 dark:border-blue-500/20" title="تماس با تایپیست">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+                    </a>
+
+                    <button data-action="edit" data-id="${project.id}" class="px-3 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-slate-600 hover:text-amber-600 dark:text-slate-400 dark:hover:text-amber-400 transition flex items-center justify-center border border-slate-200 dark:border-slate-700" title="ویرایش پروژه">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                     </button>
-                    <button data-action="delete" data-id="${project.id}" class="px-3 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-red-50 text-slate-600 hover:text-red-600 transition border border-slate-200 dark:border-slate-700" title="حذف پروژه">
+                    <button data-action="delete" data-id="${project.id}" class="px-3 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 transition flex items-center justify-center border border-slate-200 dark:border-slate-700" title="حذف پروژه">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                     </button>
                 </div>
