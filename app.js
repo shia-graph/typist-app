@@ -126,14 +126,10 @@ function renderProjectCard(project) {
             </div>
             <div class="flex items-center gap-1 flex-shrink-0">
                 <span class="text-slate-400 text-[10px] font-medium ml-1">${r.is_late ? `<span class="text-red-500">${Jalaali.toPersianDigits(r.delay_days)} روز تاخیر</span>` : 'به‌موقع'}</span>
-                
-                <!-- دکمه ویرایش گزارش -->
-                <button data-action="edit-report" data-id="${project.id}" data-report-id="${r.id}" class="text-slate-400 hover:text-blue-500 transition p-1 rounded-md" title="ویرایش این گزارش">
+                <button data-action="edit-report" data-id="${project.id}" data-report-id="${r.id}" class="text-slate-400 hover:text-blue-500 transition p-1 rounded-md" title="ویرایش گزارش">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                 </button>
-                
-                <!-- دکمه حذف گزارش -->
-                <button data-action="delete-report" data-report-id="${r.id}" class="text-slate-400 hover:text-red-500 transition p-1 rounded-md" title="حذف این گزارش">
+                <button data-action="delete-report" data-report-id="${r.id}" class="text-slate-400 hover:text-red-500 transition p-1 rounded-md" title="حذف گزارش">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                 </button>
             </div>
@@ -201,7 +197,6 @@ function renderProjectCard(project) {
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>پروژه تکمیل شده است
                     </div>` : ''}
                     
-                    <!-- دکمه تماس تلفنی -->
                     <a href="tel:${(project.phone || '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))}" class="px-3 py-3 rounded-xl bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 transition flex items-center justify-center border border-blue-200 dark:border-blue-500/20" title="تماس با تایپیست">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
                     </a>
@@ -254,7 +249,6 @@ document.getElementById('calendarModal').addEventListener('click', e => {
     else if (e.target.closest('.cal-day')) { const de = e.target.closest('.cal-day'); if (!de.dataset.day) return; const d = parseInt(de.dataset.day); calendarState.selected = { year: calendarState.viewYear, month: calendarState.viewMonth, day: d }; if (calendarTargetInput) calendarTargetInput.value = Jalaali.formatJalali(calendarState.viewYear, calendarState.viewMonth, d); closeCalendar(); }
 });
 
-// ترفند ضدگلوله برای باز شدن تقویم در موبایل و PC
 const dateWrapper = document.getElementById('deliveryDateWrapper');
 if (dateWrapper) {
     dateWrapper.addEventListener('click', function(e) {
@@ -339,26 +333,25 @@ function openProjectModal(id = null) {
     requestAnimationFrame(() => { b.classList.remove('opacity-0'); c.classList.remove('scale-95', 'opacity-0'); }); 
 }
 function closeProjectModal() { const m = document.getElementById('formModal'); const b = document.getElementById('modalBackdrop'); const c = document.getElementById('modalContent'); b.classList.add('opacity-0'); c.classList.add('scale-95', 'opacity-0'); setTimeout(() => m.classList.add('hidden'), 300); }
+
 function openReportModal(id, reportId = null) { 
     const p = projectsCache.find(x => x.id === id); 
     if (!p) return; 
     const s = calculateProjectStatus(p); 
     if (s.status === 'delivered') return; 
     
-    let periodToReport = 1; // همیشه از دوره ۱ شروع به بررسی می‌کند
+    let periodToReport = 1; 
     let editingReport = null;
     
     if (reportId) {
-        // حالت ویرایش: پیدا کردن گزارشی که قراره ادیت بشه
         editingReport = p.reports.find(r => r.id == reportId);
         if (editingReport) {
             periodToReport = editingReport.period;
         }
     } else {
-        // حالت ثبت جدید: پیدا کردن اولین دوره‌ای که گزارش داده نشده
         const reportedPeriods = (p.reports || []).map(r => Number(r.period)).filter(Number.isFinite);
         while (reportedPeriods.includes(periodToReport)) {
-            periodToReport++; // تا زمانی که دوره قبلاً ثبت شده، یکی اضافه کن
+            periodToReport++; 
         }
     }
     
@@ -397,40 +390,6 @@ function openReportModal(id, reportId = null) {
     requestAnimationFrame(() => c.classList.remove('scale-95', 'opacity-0')); 
 }
 
-
-document.getElementById('reportProjectId').value = id; 
-    document.getElementById('reportPeriod').value = periodToReport; 
-    document.getElementById('reportEditId').value = reportId || ''; 
-    
-    document.getElementById('reportProjectTitle').textContent = `${p.name} - دوره ${Jalaali.toPersianDigits(periodToReport)}`; 
-    
-    if (editingReport) {
-        document.getElementById('reportPages').value = editingReport.pages; 
-        document.getElementById('reportText').value = editingReport.description || '';
-        document.getElementById('submitReportBtn').innerText = 'بروزرسانی گزارش';
-    } else {
-        document.getElementById('reportPages').value = ''; 
-        document.getElementById('reportText').value = '';
-        document.getElementById('submitReportBtn').innerText = 'ثبت گزارش';
-    }
-    
-    const sb = document.getElementById('reportStatusBox'); 
-    if (periodToReport < s.currentPeriod) { 
-        sb.className = 'p-4 rounded-xl text-xs font-medium bg-red-50 border border-red-200 text-red-700 flex items-center gap-2'; 
-        sb.innerHTML = `<span>این گزارش با <strong>${Jalaali.toPersianDigits((s.currentPeriod - periodToReport) * 10)} روز</strong> تاخیر ثبت می‌شود</span>`; 
-        sb.classList.remove('hidden'); 
-    } else if (periodToReport > s.currentPeriod) {
-        sb.className = 'p-4 rounded-xl text-xs font-medium bg-blue-50 border border-blue-200 text-blue-700 flex items-center gap-2'; 
-        sb.innerHTML = `<span>در حال ثبت زودهنگام <strong>دوره ${Jalaali.toPersianDigits(periodToReport)}</strong> هستید</span>`; 
-        sb.classList.remove('hidden'); 
-    } else { 
-        sb.classList.add('hidden'); 
-    } 
-    
-    const m = document.getElementById('reportModal'); const c = document.getElementById('reportContent'); 
-    m.classList.remove('hidden'); 
-    requestAnimationFrame(() => c.classList.remove('scale-95', 'opacity-0')); 
-}
 function closeReportModal() { const m = document.getElementById('reportModal'); const c = document.getElementById('reportContent'); c.classList.add('scale-95', 'opacity-0'); setTimeout(() => m.classList.add('hidden'), 300); }
 
 async function submitReport() { 
