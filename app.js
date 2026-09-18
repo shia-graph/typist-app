@@ -48,10 +48,19 @@ async function loadProjects() {
     projectsCache = (data || []).map(p => {
         const cd = p.created_at ? new Date(p.created_at) : new Date();
         const jc = Jalaali.toJalaali(cd.getFullYear(), cd.getMonth()+1, cd.getDate());
+        
+        // ✅ اطمینان از اینکه گزارش‌ها یک آرایه هستند و period آنها عدد است
+        const rawReports = Array.isArray(p.typist_reports) ? p.typist_reports : [];
+        const reports = rawReports.map(r => ({
+            ...r,
+            period: parseInt(r.period, 10) || 0 // تبدیل به عدد
+        }));
+        
         return { 
             id: p.id, name: p.name || 'بدون نام', phone: p.phone || '-', title: p.title || 'بدون عنوان', 
             deliveryDate: p.delivery_date, createdAt: Jalaali.formatJalali(jc.year, jc.month, jc.day), 
-            reports: p.typist_reports || [], completed: p.completed || false 
+            reports: reports, 
+            completed: p.completed || false 
         };
     });
     return projectsCache;
@@ -333,7 +342,6 @@ function openProjectModal(id = null) {
     requestAnimationFrame(() => { b.classList.remove('opacity-0'); c.classList.remove('scale-95', 'opacity-0'); }); 
 }
 function closeProjectModal() { const m = document.getElementById('formModal'); const b = document.getElementById('modalBackdrop'); const c = document.getElementById('modalContent'); b.classList.add('opacity-0'); c.classList.add('scale-95', 'opacity-0'); setTimeout(() => m.classList.add('hidden'), 300); }
-
 function openReportModal(id, reportId = null) { 
     const p = projectsCache.find(x => x.id === id); 
     if (!p) return; 
@@ -349,7 +357,11 @@ function openReportModal(id, reportId = null) {
             periodToReport = editingReport.period;
         }
     } else {
-        const reportedPeriods = (p.reports || []).map(r => Number(r.period)).filter(Number.isFinite);
+        // ✅ بررسی بسیار دقیق برای پیدا کردن اولین دوره گزارش داده نشده
+        const reportedPeriods = (p.reports || [])
+            .map(r => Number(r.period))
+            .filter(n => !isNaN(n) && n > 0); // فقط اعداد معتبر
+        
         while (reportedPeriods.includes(periodToReport)) {
             periodToReport++; 
         }
