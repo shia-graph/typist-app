@@ -339,31 +339,66 @@ function openProjectModal(id = null) {
     requestAnimationFrame(() => { b.classList.remove('opacity-0'); c.classList.remove('scale-95', 'opacity-0'); }); 
 }
 function closeProjectModal() { const m = document.getElementById('formModal'); const b = document.getElementById('modalBackdrop'); const c = document.getElementById('modalContent'); b.classList.add('opacity-0'); c.classList.add('scale-95', 'opacity-0'); setTimeout(() => m.classList.add('hidden'), 300); }
-
 function openReportModal(id, reportId = null) { 
     const p = projectsCache.find(x => x.id === id); 
     if (!p) return; 
     const s = calculateProjectStatus(p); 
     if (s.status === 'delivered') return; 
     
-    let periodToReport = s.currentPeriod;
+    let periodToReport = 1; // همیشه از دوره ۱ شروع به بررسی می‌کند
     let editingReport = null;
     
     if (reportId) {
+        // حالت ویرایش: پیدا کردن گزارشی که قراره ادیت بشه
         editingReport = p.reports.find(r => r.id == reportId);
         if (editingReport) {
             periodToReport = editingReport.period;
         }
     } else {
-        if (p.reports && p.reports.length > 0) {
-            const reportedPeriods = p.reports.map(r => Number(r.period));
-            while (reportedPeriods.includes(periodToReport)) {
-                periodToReport++;
-            }
+        // حالت ثبت جدید: پیدا کردن اولین دوره‌ای که گزارش داده نشده
+        const reportedPeriods = (p.reports || []).map(r => Number(r.period)).filter(Number.isFinite);
+        while (reportedPeriods.includes(periodToReport)) {
+            periodToReport++; // تا زمانی که دوره قبلاً ثبت شده، یکی اضافه کن
         }
     }
     
     document.getElementById('reportProjectId').value = id; 
+    document.getElementById('reportPeriod').value = periodToReport; 
+    document.getElementById('reportEditId').value = reportId || ''; 
+    
+    document.getElementById('reportProjectTitle').textContent = `${p.name} - دوره ${Jalaali.toPersianDigits(periodToReport)}`; 
+    
+    if (editingReport) {
+        document.getElementById('reportPages').value = editingReport.pages; 
+        document.getElementById('reportText').value = editingReport.description || '';
+        document.getElementById('submitReportBtn').innerText = 'بروزرسانی گزارش';
+    } else {
+        document.getElementById('reportPages').value = ''; 
+        document.getElementById('reportText').value = '';
+        document.getElementById('submitReportBtn').innerText = 'ثبت گزارش';
+    }
+    
+    const sb = document.getElementById('reportStatusBox'); 
+    if (periodToReport < s.currentPeriod) { 
+        sb.className = 'p-4 rounded-xl text-xs font-medium bg-red-50 border border-red-200 text-red-700 flex items-center gap-2'; 
+        sb.innerHTML = `<span>این گزارش با <strong>${Jalaali.toPersianDigits((s.currentPeriod - periodToReport) * 10)} روز</strong> تاخیر ثبت می‌شود</span>`; 
+        sb.classList.remove('hidden'); 
+    } else if (periodToReport > s.currentPeriod) {
+        sb.className = 'p-4 rounded-xl text-xs font-medium bg-blue-50 border border-blue-200 text-blue-700 flex items-center gap-2'; 
+        sb.innerHTML = `<span>در حال ثبت زودهنگام <strong>دوره ${Jalaali.toPersianDigits(periodToReport)}</strong> هستید</span>`; 
+        sb.classList.remove('hidden'); 
+    } else { 
+        sb.classList.add('hidden'); 
+    } 
+    
+    const m = document.getElementById('reportModal'); 
+    const c = document.getElementById('reportContent'); 
+    m.classList.remove('hidden'); 
+    requestAnimationFrame(() => c.classList.remove('scale-95', 'opacity-0')); 
+}
+
+
+document.getElementById('reportProjectId').value = id; 
     document.getElementById('reportPeriod').value = periodToReport; 
     document.getElementById('reportEditId').value = reportId || ''; 
     
