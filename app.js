@@ -48,13 +48,11 @@ async function loadProjects() {
     projectsCache = (data || []).map(p => {
         const cd = p.created_at ? new Date(p.created_at) : new Date();
         const jc = Jalaali.toJalaali(cd.getFullYear(), cd.getMonth()+1, cd.getDate());
-        
         const rawReports = Array.isArray(p.typist_reports) ? p.typist_reports : [];
         const reports = rawReports.map(r => ({
             ...r,
             period: parseInt(r.period, 10) || 0
         }));
-        
         return { 
             id: p.id, name: p.name || 'بدون نام', phone: p.phone || '-', title: p.title || 'بدون عنوان', 
             deliveryDate: p.delivery_date, createdAt: Jalaali.formatJalali(jc.year, jc.month, jc.day), 
@@ -77,55 +75,42 @@ async function deleteReportFromSupabase(reportId) { const { error } = await supa
 function calculateProjectStatus(p) {
     const today = Jalaali.today();
     const startDate = Jalaali.parseJalali(p.deliveryDate);
-    
     if (!startDate) return { status: 'active', daysLeft: 10, currentPeriod: 1, daysSinceStart: 0, daysUntilReport: 10, isReported: false, isLate: false };
-
     const daysSinceStart = Math.max(0, Jalaali.daysBetween(startDate, today));
-
     if (p.completed) return { status: 'delivered', daysLeft: 0, currentPeriod: 0, daysSinceStart, daysUntilReport: 0, isReported: true, isLate: false };
-
     if (Jalaali.daysBetween(today, startDate) > 0) {
         return { status: 'pending', daysLeft: 10, currentPeriod: 0, daysSinceStart: 0, daysUntilReport: 10, isReported: false, isLate: false, isNotStarted: true };
     }
-
     const currentPeriod = Math.floor(daysSinceStart / 10) + 1;
     const dayInPeriod = daysSinceStart % 10;
     const daysUntilReport = 10 - dayInPeriod;
-
     const reports = Array.isArray(p.reports) ? p.reports : [];
     const reportedPeriods = reports.map(r => Number(r.period)).filter(Number.isFinite);
     const isReported = reportedPeriods.includes(currentPeriod);
-
     if (isReported) {
         return { status: 'active', daysLeft: daysUntilReport, currentPeriod, daysSinceStart, daysUntilReport, isReported: true, isLate: false };
     }
-
     const lastReportedPeriod = reportedPeriods.length > 0 ? Math.max(...reportedPeriods) : 0;
     if (lastReportedPeriod < currentPeriod - 1) {
         const missedPeriods = currentPeriod - 1 - lastReportedPeriod;
         return { status: 'delayed', daysLeft: daysUntilReport, currentPeriod, daysSinceStart, daysUntilReport, delayText: `${Jalaali.toPersianDigits(missedPeriods)} دوره جا افتاده`, missedPeriods, isReported: false, isLate: true };
     }
-
     if (daysUntilReport <= 0) {
         const delayDays = Math.abs(daysUntilReport);
         return { status: 'delayed', daysLeft: 0, currentPeriod, daysSinceStart, daysUntilReport, delayText: `${Jalaali.toPersianDigits(delayDays)} روز تاخیر در گزارش`, isLate: true, delayDays, isReported: false };
     }
-
     return { status: daysUntilReport <= 3 ? 'pending' : 'active', daysLeft: daysUntilReport, currentPeriod, daysSinceStart, daysUntilReport, isReported: false, isLate: false };
 }
 
 function renderProjectCard(project) {
     const status = calculateProjectStatus(project);
     let timeText = '', timeBadgeClass = '';
-    
     if (status.status === 'delivered') { timeText = 'تکمیل شده'; timeBadgeClass = 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 border-emerald-100'; }
     else if (status.isNotStarted) { timeText = 'در انتظار شروع'; timeBadgeClass = 'bg-slate-100 dark:bg-slate-700 text-slate-600 border-slate-200'; }
     else if (status.isLate) { timeText = status.delayText || 'تاخیر در گزارش'; timeBadgeClass = 'bg-red-50 dark:bg-red-500/10 text-red-600 border-red-100'; }
     else { timeText = `${Jalaali.toPersianDigits(status.daysUntilReport)} روز تا گزارش`; timeBadgeClass = status.daysUntilReport <= 3 ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 border-amber-100' : 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 border-blue-100'; }
-
     const isDelayed = status.status === 'delayed';
     const initials = esc((project.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2));
-    
     const reportsHtml = (project.reports || []).slice().reverse().map(r => `
         <div class="flex items-center justify-between gap-2 py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs border border-slate-100 dark:border-slate-700/50">
             <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -143,7 +128,6 @@ function renderProjectCard(project) {
             </div>
         </div>
     `).join('');
-
     return `
     <div class="project-card glass rounded-2xl border border-slate-200/50 dark:border-slate-800/50 hover:shadow-lg transition-all duration-300 animate-slide-up" data-id="${project.id}" data-status="${status.status}">
         <div class="p-5 flex items-center justify-between cursor-pointer select-none" data-action="toggle" data-id="${project.id}">
@@ -289,7 +273,6 @@ document.getElementById('typistList').addEventListener('click', async (e) => {
     const target = e.target.closest('[data-action]'); if (!target) return;
     const card = target.closest('.project-card'); if (!card) return;
     const id = card.dataset.id; const action = target.dataset.action;
-    
     if (action === 'toggle') { 
         document.querySelectorAll('.project-card.is-expanded').forEach(c => { if (c !== card) c.classList.remove('is-expanded'); }); 
         card.classList.toggle('is-expanded'); 
@@ -347,10 +330,8 @@ function openReportModal(id, reportId = null) {
     if (!p) return; 
     const s = calculateProjectStatus(p); 
     if (s.status === 'delivered') return; 
-    
     let periodToReport = 1; 
     let editingReport = null;
-    
     if (reportId) {
         editingReport = p.reports.find(r => r.id == reportId);
         if (editingReport) {
@@ -362,13 +343,10 @@ function openReportModal(id, reportId = null) {
             periodToReport++; 
         }
     }
-    
     document.getElementById('reportProjectId').value = id; 
     document.getElementById('reportPeriod').value = periodToReport; 
     document.getElementById('reportEditId').value = reportId || ''; 
-    
     document.getElementById('reportProjectTitle').textContent = `${p.name} - دوره ${Jalaali.toPersianDigits(periodToReport)}`; 
-    
     if (editingReport) {
         document.getElementById('reportPages').value = editingReport.pages; 
         document.getElementById('reportText').value = editingReport.description || '';
@@ -378,7 +356,6 @@ function openReportModal(id, reportId = null) {
         document.getElementById('reportText').value = '';
         document.getElementById('submitReportBtn').innerText = 'ثبت گزارش';
     }
-    
     const sb = document.getElementById('reportStatusBox'); 
     if (periodToReport < s.currentPeriod) { 
         sb.className = 'p-4 rounded-xl text-xs font-medium bg-red-50 border border-red-200 text-red-700 flex items-center gap-2'; 
@@ -391,13 +368,11 @@ function openReportModal(id, reportId = null) {
     } else { 
         sb.classList.add('hidden'); 
     } 
-    
     const m = document.getElementById('reportModal'); 
     const c = document.getElementById('reportContent'); 
     m.classList.remove('hidden'); 
     requestAnimationFrame(() => c.classList.remove('scale-95', 'opacity-0')); 
 }
-
 function closeReportModal() { const m = document.getElementById('reportModal'); const c = document.getElementById('reportContent'); c.classList.add('scale-95', 'opacity-0'); setTimeout(() => m.classList.add('hidden'), 300); }
 
 async function submitReport() { 
@@ -405,26 +380,21 @@ async function submitReport() {
     btn.disabled = true; 
     const isEditing = document.getElementById('reportEditId').value;
     btn.innerText = isEditing ? 'در حال بروزرسانی...' : 'در حال ثبت...'; 
-    
     const pid = document.getElementById('reportProjectId').value; 
     const editId = document.getElementById('reportEditId').value; 
     const per = parseInt(document.getElementById('reportPeriod').value); 
     const pg = parseInt(document.getElementById('reportPages').value); 
     const txt = document.getElementById('reportText').value.trim(); 
-    
     if (!pg || pg <= 0) { 
         showAlert('لطفاً تعداد صفحات معتبر وارد کنید', 'warning'); 
         btn.disabled = false; 
         btn.innerText = isEditing ? 'بروزرسانی گزارش' : 'ثبت گزارش'; 
         return; 
     } 
-    
     const p = projectsCache.find(x => x.id === pid); 
     const s = calculateProjectStatus(p); 
-    
     const isLate = (per < s.currentPeriod);
     const delayDays = isLate ? ((s.currentPeriod - per) * 10) : 0;
-    
     try { 
         if (isEditing) {
             const { error } = await supabase.from('typist_reports').update({
@@ -437,7 +407,6 @@ async function submitReport() {
             }]); 
             if (error) throw error;
         }
-        
         closeReportModal(); 
         showAlert(isEditing ? 'گزارش بروزرسانی شد' : 'گزارش ثبت شد', 'success'); 
         await renderProjects();
@@ -457,13 +426,11 @@ document.getElementById('typistForm').addEventListener('submit', async (e) => {
     const btn = document.getElementById('submitBtn'); 
     btn.disabled = true; 
     document.getElementById('submitBtnText').innerText = 'ذخیره...'; 
-    
     const id = document.getElementById('editId').value; 
     const n = document.getElementById('name').value.trim(); 
     const ph = document.getElementById('phone').value.trim(); 
     const t = document.getElementById('title').value.trim(); 
     const dd = document.getElementById('deliveryDate').value.trim(); 
-    
     if (!dd) { 
         showAlert('لطفاً تاریخ دریافت کار را از تقویم انتخاب کنید', 'warning'); 
         btn.disabled = false; 
@@ -476,7 +443,6 @@ document.getElementById('typistForm').addEventListener('submit', async (e) => {
         document.getElementById('submitBtnText').innerText = id ? 'ذخیره تغییرات' : 'ذخیره پروژه'; 
         return; 
     } 
-    
     try { 
         await saveProjectToSupabase({ id, name: n, phone: ph, title: t, deliveryDate: dd }); 
         closeProjectModal(); 
@@ -495,10 +461,8 @@ function exportToCSV() {
         showAlert('پروژه‌ای برای خروجی وجود ندارد', 'warning'); 
         return; 
     } 
-    
     const headers = ['نام تایپیست', 'شماره تماس', 'عنوان پروژه', 'تاریخ دریافت کار', 'وضعیت فعلی', 'تعداد کل صفحات', 'تعداد گزارش‌ها', 'جزئیات گزارش‌ها']; 
     let csvContent = "\uFEFF" + headers.map(h => `"${h}"`).join(',') + '\n'; 
-    
     projectsCache.forEach(p => { 
         const s = calculateProjectStatus(p); 
         let statusText = 'نامشخص';
@@ -506,39 +470,25 @@ function exportToCSV() {
         else if (s.status === 'pending') statusText = s.isNotStarted ? 'در انتظار شروع' : 'در انتظار گزارش';
         else if (s.status === 'delayed') statusText = s.delayText || 'تاخیر در گزارش';
         else if (s.status === 'delivered') statusText = 'تکمیل شده';
-        
         const totalPages = (p.reports || []).reduce((sum, r) => sum + (r.pages || 0), 0); 
         const reportsCount = (p.reports || []).length; 
         const reportsDetails = (p.reports || []).map(r => `دوره ${r.period}: ${r.pages} صفحه`).join(' | '); 
-        
         const row = [
-            p.name || '',
-            p.phone || '',
-            p.title || '',
-            p.deliveryDate || '',
-            statusText,
-            totalPages,
-            reportsCount,
-            reportsDetails
+            p.name || '', p.phone || '', p.title || '', p.deliveryDate || '', statusText, totalPages, reportsCount, reportsDetails
         ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','); 
-        
         csvContent += row + '\n'; 
     }); 
-    
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); 
     const link = document.createElement('a'); 
     const url = URL.createObjectURL(blob); 
     link.setAttribute('href', url); 
-    
     const today = Jalaali.today(); 
     link.setAttribute('download', `گزارش-تایپیست‌ها-${Jalaali.formatJalali(today.year, today.month, today.day)}.csv`); 
-    
     link.style.visibility = 'hidden'; 
     document.body.appendChild(link); 
     link.click(); 
     document.body.removeChild(link); 
     URL.revokeObjectURL(url); 
-    
     showAlert('فایل اکسل با موفقیت دانلود شد', 'success');
 }
 
@@ -550,12 +500,10 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     btn.disabled = true; 
     document.getElementById('loginSpinner').classList.remove('hidden'); 
     document.getElementById('loginError').classList.add('hidden'); 
-    
     const { error } = await supabase.auth.signInWithPassword({ 
         email: document.getElementById('emailInput').value, 
         password: document.getElementById('passwordInput').value 
     }); 
-    
     if (error) { 
         document.getElementById('loginError').classList.remove('hidden'); 
         btn.disabled = false; 
