@@ -49,11 +49,10 @@ async function loadProjects() {
         const cd = p.created_at ? new Date(p.created_at) : new Date();
         const jc = Jalaali.toJalaali(cd.getFullYear(), cd.getMonth()+1, cd.getDate());
         
-        // ✅ اطمینان از اینکه گزارش‌ها یک آرایه هستند و period آنها عدد است
         const rawReports = Array.isArray(p.typist_reports) ? p.typist_reports : [];
         const reports = rawReports.map(r => ({
             ...r,
-            period: parseInt(r.period, 10) || 0 // تبدیل به عدد
+            period: parseInt(r.period, 10) || 0
         }));
         
         return { 
@@ -342,6 +341,7 @@ function openProjectModal(id = null) {
     requestAnimationFrame(() => { b.classList.remove('opacity-0'); c.classList.remove('scale-95', 'opacity-0'); }); 
 }
 function closeProjectModal() { const m = document.getElementById('formModal'); const b = document.getElementById('modalBackdrop'); const c = document.getElementById('modalContent'); b.classList.add('opacity-0'); c.classList.add('scale-95', 'opacity-0'); setTimeout(() => m.classList.add('hidden'), 300); }
+
 function openReportModal(id, reportId = null) { 
     const p = projectsCache.find(x => x.id === id); 
     if (!p) return; 
@@ -357,11 +357,7 @@ function openReportModal(id, reportId = null) {
             periodToReport = editingReport.period;
         }
     } else {
-        // ✅ بررسی بسیار دقیق برای پیدا کردن اولین دوره گزارش داده نشده
-        const reportedPeriods = (p.reports || [])
-            .map(r => Number(r.period))
-            .filter(n => !isNaN(n) && n > 0); // فقط اعداد معتبر
-        
+        const reportedPeriods = (p.reports || []).map(r => Number(r.period)).filter(Number.isFinite);
         while (reportedPeriods.includes(periodToReport)) {
             periodToReport++; 
         }
@@ -451,6 +447,8 @@ async function submitReport() {
         btn.disabled = false; 
         btn.innerText = isEditing ? 'بروزرسانی گزارش' : 'ثبت گزارش'; 
     } 
+}
+
 async function completeProject(id) { if (!confirm('تکمیل نهایی؟')) return; try { await completeProjectInSupabase(id); showAlert('تکمیل شد', 'success'); await renderProjects(); } catch (e) { showAlert('خطا', 'error'); } }
 async function confirmDelete() { const id = document.getElementById('deleteProjectId').value; const btn = document.getElementById('confirmDeleteBtn'); btn.disabled = true; btn.innerText = 'حذف...'; try { await softDeleteProject(id); document.getElementById('deleteModal').classList.add('hidden'); showAlert('حذف شد', 'success'); await renderProjects(); } catch (e) { showAlert('خطا', 'error'); } finally { btn.disabled = false; btn.innerText = 'حذف'; } }
 
