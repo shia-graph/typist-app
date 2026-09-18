@@ -439,8 +439,6 @@ async function submitReport() {
         btn.disabled = false; 
         btn.innerText = isEditing ? 'بروزرسانی گزارش' : 'ثبت گزارش'; 
     } 
-}
-
 async function completeProject(id) { if (!confirm('تکمیل نهایی؟')) return; try { await completeProjectInSupabase(id); showAlert('تکمیل شد', 'success'); await renderProjects(); } catch (e) { showAlert('خطا', 'error'); } }
 async function confirmDelete() { const id = document.getElementById('deleteProjectId').value; const btn = document.getElementById('confirmDeleteBtn'); btn.disabled = true; btn.innerText = 'حذف...'; try { await softDeleteProject(id); document.getElementById('deleteModal').classList.add('hidden'); showAlert('حذف شد', 'success'); await renderProjects(); } catch (e) { showAlert('خطا', 'error'); } finally { btn.disabled = false; btn.innerText = 'حذف'; } }
 
