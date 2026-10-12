@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { toJalaali as libToJalaali, toGregorian as libToGregorian, isLeapJalaaliYear as libIsLeapYear, jalaaliMonthLength as libMonthLength } from 'https://esm.sh/jalaali-js@1.1.0';
+import { toJalaali as libToJalaali, toGregorian as libToGregorian, jalaaliMonthLength as libMonthLength } from 'https://esm.sh/jalaali-js@1.1.0';
 
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_32dg2CRsZ2Nws6qA6x8JgQ_Jgs3Ta-e';
@@ -27,6 +27,8 @@ const Jalaali = {
 let personsCache = [];
 let currentUser = null;
 let currentSettleId = null;
+let calendarTargetInput = null;
+let calendarState = { viewYear: null, viewMonth: null, selected: null };
 
 // ============================================
 // احراز هویت
@@ -61,7 +63,6 @@ async function loadAdminData() {
     const { data, error } = await supabase.from('typists').select('*, typist_reports(*), payments(*)');
     if (error) { alert("خطا در دریافت لیست: " + error.message); return; }
     
-    // فیلتر کردن ادمین‌ها در سمت کلاینت
     personsCache = (data || []).filter(p => !p.is_admin);
     
     const list = document.getElementById('adminList');
@@ -99,41 +100,17 @@ async function loadAdminData() {
                 <p>تعداد گزارش‌ها: ${formatNum(reports.length)} مورد</p>
             </div>
             <div class="flex gap-2">
-                <button onclick="openSettleModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-200">+ تسویه حساب</button>
-                <button onclick="deletePerson('${p.id}')" class="py-2 px-3 rounded-xl bg-red-50 text-red-600 text-xs font-bold border border-red-100">حذف</button>
+                <button onclick="window.openSettleModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-200">+ تسویه حساب</button>
+                <button onclick="window.deletePerson('${p.id}')" class="py-2 px-3 rounded-xl bg-red-50 text-red-600 text-xs font-bold border border-red-100">حذف</button>
             </div>
         </div>`;
     }).join('') || '<p class="text-center text-slate-400 col-span-full">هنوز تایپیستی ثبت نشده است.</p>';
 }
 
-document.getElementById('personForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('personId').value;
-    // ✅ اضافه شدن فیلد تاریخ به اطلاعات ذخیره شونده
-    const payload = { 
-        name: document.getElementById('pName').value, 
-        phone: document.getElementById('pPhone').value,
-        delivery_date: document.getElementById('pDeliveryDate').value 
-    };
-    
-    let error;
-    if (id) { 
-        const res = await supabase.from('typists').update(payload).eq('id', id); 
-        error = res.error;
-    } else { 
-        const res = await supabase.from('typists').insert([payload]); 
-        error = res.error;
-    }
-
-    if (error) {
-        alert("خطا در ذخیره تایپیست: " + error.message);
-    } else {
-        alert("تایپیست با موفقیت ذخیره شد.");
-        closePersonModal(); 
-        loadAdminData();
-    }
-});
-
+// ============================================
+// توابع سراسری (Window)
+// ============================================
+window.closePersonModal = () => document.getElementById('personModal').classList.add('hidden');
 window.openSettleModal = (id) => {
     currentSettleId = id;
     document.getElementById('settleQty').value = 0;
@@ -143,35 +120,23 @@ window.openSettleModal = (id) => {
     document.getElementById('settleModal').classList.remove('hidden');
 };
 window.closeSettleModal = () => document.getElementById('settleModal').classList.add('hidden');
-
 window.calcSettle = () => {
     const q = parseFloat(document.getElementById('settleQty').value) || 0;
     const r = parseFloat(document.getElementById('settleRate').value) || 0;
     document.getElementById('settleAmount').value = q * r;
 };
-
-document.getElementById('settleForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const amount = parseFloat(document.getElementById('settleAmount').value) || 0;
-    if (amount <= 0) { alert("مبلغ نامعتبر است"); return; }
-
-    const { error } = await supabase.from('payments').insert([{
-        person_id: currentSettleId,
-        amount: amount,
-        description: document.getElementById('settleDesc').value,
-        status: 'valid'
-    }]);
-    
-    if (error) { alert("خطا در ثبت تسویه: " + error.message); }
-    else { alert("تسویه با موفقیت ثبت شد."); closeSettleModal(); loadAdminData(); }
-});
-
 window.deletePerson = async (id) => {
     if(confirm('حذف شود؟')) { 
         const { error } = await supabase.from('typists').delete().eq('id', id); 
         if (error) { alert("خطا در حذف: " + error.message); }
         else { loadAdminData(); }
     }
+};
+window.calPrev = () => { calendarState.viewMonth--; if (calendarState.viewMonth < 1) { calendarState.viewMonth = 12; calendarState.viewYear--; } renderCalendarModal(); };
+window.calNext = () => { calendarState.viewMonth++; if (calendarState.viewMonth > 12) { calendarState.viewMonth = 1; calendarState.viewYear++; } renderCalendarModal(); };
+window.calSelect = (d) => { 
+    calendarTargetInput.value = Jalaali.formatJalali(calendarState.viewYear, calendarState.viewMonth, d); 
+    document.getElementById('calendarModal').classList.add('hidden'); 
 };
 
 // ============================================
@@ -209,6 +174,52 @@ async function loadUserData(profile) {
     `).join('') || '<p class="text-center text-slate-400">هنوز گزارشی ثبت نشده است.</p>';
 }
 
+// ============================================
+// فرم‌ها و رویدادها
+// ============================================
+document.getElementById('personForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('personId').value;
+    const payload = { 
+        name: document.getElementById('pName').value, 
+        phone: document.getElementById('pPhone').value,
+        delivery_date: document.getElementById('pDeliveryDate').value 
+    };
+    
+    let error;
+    if (id) { 
+        const res = await supabase.from('typists').update(payload).eq('id', id); 
+        error = res.error;
+    } else { 
+        const res = await supabase.from('typists').insert([payload]); 
+        error = res.error;
+    }
+
+    if (error) {
+        alert("خطا در ذخیره تایپیست: " + error.message);
+    } else {
+        alert("تایپیست با موفقیت ذخیره شد.");
+        window.closePersonModal(); 
+        loadAdminData();
+    }
+});
+
+document.getElementById('settleForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const amount = parseFloat(document.getElementById('settleAmount').value) || 0;
+    if (amount <= 0) { alert("مبلغ نامعتبر است"); return; }
+
+    const { error } = await supabase.from('payments').insert([{
+        person_id: currentSettleId,
+        amount: amount,
+        description: document.getElementById('settleDesc').value,
+        status: 'valid'
+    }]);
+    
+    if (error) { alert("خطا در ثبت تسویه: " + error.message); }
+    else { alert("تسویه با موفقیت ثبت شد."); window.closeSettleModal(); loadAdminData(); }
+});
+
 document.getElementById('userWorkForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const pid = personsCache.find(p => p.user_id === currentUser.id)?.id || (await supabase.from('typists').select('id').eq('user_id', currentUser.id).single()).data?.id;
@@ -237,11 +248,8 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
 });
 
 // ============================================
-// کدهای تقویم شمسی (که جا افتاده بود)
+// کدهای تقویم
 // ============================================
-let calendarTargetInput = null;
-let calendarState = { viewYear: null, viewMonth: null, selected: null };
-
 function openCalendar(inp) {
     calendarTargetInput = inp;
     const t = Jalaali.today();
@@ -264,38 +272,36 @@ function renderCalendarModal() {
     const dm = libMonthLength(vy, vm);
     
     let h = `<div class="flex justify-between mb-4">
-        <button onclick="calPrev()" class="bg-slate-100 dark:bg-slate-800 rounded-lg w-8 h-8">◀</button>
+        <button onclick="window.calPrev()" class="bg-slate-100 dark:bg-slate-800 rounded-lg w-8 h-8">◀</button>
         <div class="font-bold">${Jalaali.jMonthName[vm-1]} ${Jalaali.toPersianDigits(vy)}</div>
-        <button onclick="calNext()" class="bg-slate-100 dark:bg-slate-800 rounded-lg w-8 h-8">▶</button>
+        <button onclick="window.calNext()" class="bg-slate-100 dark:bg-slate-800 rounded-lg w-8 h-8">▶</button>
     </div>
-    <div class="grid grid-cols-7 gap-1 text-center text-xs mb-2">
-        ${['ش','ی','د','س','چ','پ','ج'].map(d=>`<div>${d}</div>`).join('')}
-    </div>
+    <div class="grid grid-cols-7 gap-1 text-center text-xs mb-2">${['ش','ی','د','س','چ','پ','ج'].map(d=>`<div>${d}</div>`).join('')}</div>
     <div class="grid grid-cols-7 gap-1">`;
     
     for (let i=0; i<sd; i++) h += `<div></div>`;
     for (let d=1; d<=dm; d++) {
         const isT = vy===t.year && vm===t.month && d===t.day;
         const isS = sel && sel.year===vy && sel.month===vm && sel.day===d;
-        h += `<div class="cal-day ${isT?'today':''} ${isS?'selected':''}" onclick="calSelect(${d})">${Jalaali.toPersianDigits(d)}</div>`;
+        h += `<div class="cal-day ${isT?'today':''} ${isS?'selected':''}" onclick="window.calSelect(${d})">${Jalaali.toPersianDigits(d)}</div>`;
     }
     h += `</div>`;
     c.innerHTML = h;
 }
 
-window.calPrev = () => { calendarState.viewMonth--; if (calendarState.viewMonth < 1) { calendarState.viewMonth = 12; calendarState.viewYear--; } renderCalendarModal(); };
-window.calNext = () => { calendarState.viewMonth++; if (calendarState.viewMonth > 12) { calendarState.viewMonth = 1; calendarState.viewYear++; } renderCalendarModal(); };
-window.calSelect = (d) => { 
-    calendarTargetInput.value = Jalaali.formatJalali(calendarState.viewYear, calendarState.viewMonth, d); 
-    document.getElementById('calendarModal').classList.add('hidden'); 
-};
-
-// اتصال رویدادها
+// ============================================
+// راه‌اندازی دکمه‌ها و ورود
+// ============================================
 document.getElementById('addPersonBtn').addEventListener('click', () => {
     document.getElementById('personForm').reset();
     document.getElementById('personId').value = '';
     document.getElementById('personModal').classList.remove('hidden');
 });
+
+document.getElementById('closePersonBtn').addEventListener('click', window.closePersonModal);
+document.getElementById('closeSettleBtn').addEventListener('click', window.closeSettleModal);
+document.getElementById('personBackdrop').addEventListener('click', window.closePersonModal);
+document.getElementById('settleBackdrop').addEventListener('click', window.closeSettleModal);
 
 document.getElementById('personDateWrapper').addEventListener('click', (e) => {
     e.preventDefault();
@@ -306,9 +312,6 @@ document.getElementById('calendarModal').addEventListener('click', (e) => {
     if (e.target.classList.contains('cal-backdrop')) document.getElementById('calendarModal').classList.add('hidden');
 });
 
-// ============================================
-// راه‌اندازی
-// ============================================
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const { error } = await supabase.auth.signInWithPassword({ email: document.getElementById('emailInput').value, password: document.getElementById('passwordInput').value });
