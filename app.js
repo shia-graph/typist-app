@@ -112,7 +112,8 @@ async function loadAdminData() {
                 <p>تعداد گزارش‌ها: ${formatNum(reports.length)} مورد</p>
             </div>
             <div class="flex gap-2">
-                <button onclick="window.openSettleModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-200">+ تسویه حساب</button>
+                <button onclick="window.openAdminReportModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-blue-50 text-blue-600 text-xs font-bold border border-blue-200">+ گزارش</button>
+                <button onclick="window.openSettleModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-200">+ تسویه</button>
                 <button onclick="window.deletePerson('${p.id}')" class="py-2 px-3 rounded-xl bg-red-50 text-red-600 text-xs font-bold border border-red-100">حذف</button>
             </div>
         </div>`;
@@ -316,6 +317,99 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
 });
 
 // ============================================
+// مودال ثبت گزارش توسط مدیر (اصلاح شده)
+// ============================================
+window.openAdminReportModal = (id) => {
+    const p = personsCache.find(x => x.id === id);
+    if (!p) return;
+
+    document.getElementById('adminReportPersonId').value = id;
+    
+    // محاسبه دوره فعلی یا دوره تاخیر
+    const today = Jalaali.today();
+    const startDate = p.delivery_date ? Jalaali.parseJalali(p.delivery_date) : today;
+    const daysPassed = Math.max(0, Jalaali.daysBetween(startDate, today));
+    const currentPeriod = Math.floor(daysPassed / 10) + 1;
+    
+    const reports = p.typist_reports || [];
+    const lastReportedPeriod = reports.length > 0 ? Math.max(...reports.map(r => r.period || 0)) : 0;
+    
+    let periodToReport = 1;
+    if (lastReportedPeriod < currentPeriod) {
+        periodToReport = lastReportedPeriod + 1;
+    } else {
+        periodToReport = currentPeriod;
+    }
+
+    // تنظیم تاریخ پیش‌فرض به امروز
+    document.getElementById('adminReportDate').value = Jalaali.formatJalali(today.year, today.month, today.day);
+    document.getElementById('adminReportTitle').value = '';
+    document.getElementById('adminReportPages').value = 0;
+    document.getElementById('adminReportDesc').value = '';
+    
+    // نمایش دوره به کاربر
+    document.getElementById('adminReportModal').querySelector('h2').textContent = `ثبت گزارش (دوره ${periodToReport}) برای ${p.name}`;
+    
+    document.getElementById('adminReportModal').classList.remove('hidden');
+};
+window.closeAdminReportModal = () => document.getElementById('adminReportModal').classList.add('hidden');
+
+document.getElementById('adminReportForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const personId = document.getElementById('adminReportPersonId').value;
+    const p = personsCache.find(x => x.id === personId);
+    if (!p) return;
+
+    const title = document.getElementById('adminReportTitle').value.trim();
+    const pages = parseInt(document.getElementById('adminReportPages').value) || 0;
+    const description = document.getElementById('adminReportDesc').value.trim();
+    const reportDateStr = document.getElementById('adminReportDate').value;
+
+    if (!title) {
+        alert('عنوان کار را وارد کنید.');
+        return;
+    }
+
+    // محاسبه دوره مجدد (برای اطمینان)
+    const today = Jalaali.today();
+    const startDate = p.delivery_date ? Jalaali.parseJalali(p.delivery_date) : today;
+    const daysPassed = Math.max(0, Jalaali.daysBetween(startDate, today));
+    const currentPeriod = Math.floor(daysPassed / 10) + 1;
+    
+    const reports = p.typist_reports || [];
+    const lastReportedPeriod = reports.length > 0 ? Math.max(...reports.map(r => r.period || 0)) : 0;
+    
+    let periodToReport = 1;
+    if (lastReportedPeriod < currentPeriod) {
+        periodToReport = lastReportedPeriod + 1;
+    } else {
+        periodToReport = currentPeriod;
+    }
+
+    const reportDescription = [title, description].filter(Boolean).join(' — ');
+
+    const { error } = await supabase.from('typist_reports').insert([{
+        typist_id: personId,
+        period: periodToReport,
+        pages: pages,
+        description: reportDescription
+    }]);
+
+    if (error) {
+        if (error.message.includes('duplicate key value')) {
+            alert("این دوره قبلا برای این تایپیست ثبت شده است.");
+        } else {
+            alert("خطا در ثبت گزارش: " + error.message);
+        }
+    } else {
+        alert("گزارش با موفقیت ثبت شد.");
+        window.closeAdminReportModal();
+        loadAdminData();
+    }
+});
+
+// ============================================
 // کدهای تقویم
 // ============================================
 function openCalendar(inp) {
@@ -335,7 +429,6 @@ function renderCalendarModal() {
     const t = Jalaali.today();
     const { viewYear: vy, viewMonth: vm, selected: sel } = calendarState;
     
-    // استفاده مستقیم از libToGregorian برای جلوگیری از خطا
     const fg = libToGregorian(vy, vm, 1);
     const sd = (new Date(fg.gy, fg.gm-1, fg.gd).getDay() + 1) % 7;
     const dm = libMonthLength(vy, vm);
@@ -345,8 +438,8 @@ function renderCalendarModal() {
         <div class="font-bold">${Jalaali.jMonthName[vm-1]} ${Jalaali.toPersianDigits(vy)}</div>
         <button onclick="window.calNext()" class="bg-slate-100 dark:bg-slate-800 rounded-lg w-8 h-8">▶</button>
     </div>
-    <div class="grid grid-cols-7 gap-1 text-center text-xs mb-2">${['ش','ی','د','س','چ','پ','ج'].map(d=>`<div>${d}</div>`).join('')}</div>
-    <div class="grid grid-cols-7 gap-1">`;
+    <div class="cal-grid mb-2">${['ش','ی','د','س','چ','پ','ج'].map(d=>`<div class="cal-header">${d}</div>`).join('')}</div>
+    <div class="cal-grid">`;
     
     for (let i=0; i<sd; i++) h += `<div></div>`;
     for (let d=1; d<=dm; d++) {
@@ -369,10 +462,17 @@ document.getElementById('addPersonBtn').addEventListener('click', () => {
 
 document.getElementById('closePersonBtn').addEventListener('click', window.closePersonModal);
 document.getElementById('closeSettleBtn').addEventListener('click', window.closeSettleModal);
+document.getElementById('closeAdminReportBtn').addEventListener('click', window.closeAdminReportModal);
 document.getElementById('personBackdrop').addEventListener('click', window.closePersonModal);
 document.getElementById('settleBackdrop').addEventListener('click', window.closeSettleModal);
+document.getElementById('adminReportBackdrop').addEventListener('click', window.closeAdminReportModal);
 
+// اتصال تقویم به فیلدهای تاریخ
 document.getElementById('pDeliveryDate').addEventListener('click', (e) => {
+    e.preventDefault();
+    openCalendar(e.target);
+});
+document.getElementById('adminReportDate').addEventListener('click', (e) => {
     e.preventDefault();
     openCalendar(e.target);
 });
