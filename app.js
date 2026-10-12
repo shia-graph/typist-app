@@ -26,7 +26,7 @@ const Jalaali = {
 
 let personsCache = [];
 let currentUser = null;
-let currentUserProfile = null; // متغیر جدید برای ذخیره پروفایل کاربر لاگین شده
+let currentUserProfile = null;
 let currentSettleId = null;
 let calendarTargetInput = null;
 let calendarState = { viewYear: null, viewMonth: null, selected: null };
@@ -42,7 +42,7 @@ async function checkAuth() {
     const { data: profile, error: profileError } = await supabase.from('typists').select('*').eq('user_id', user.id).maybeSingle();
     if (profileError) console.error("Profile Error:", profileError);
     
-    currentUserProfile = profile; // ذخیره پروفایل در متغیر سراسری
+    currentUserProfile = profile;
     
     if (profile && profile.is_admin) {
         document.getElementById('userWrapper').classList.add('hidden');
@@ -178,7 +178,7 @@ async function loadUserData(profile) {
 }
 
 // ============================================
-// فرم‌ها و رویدادها (اصلاح شده)
+// فرم‌ها و رویدادها
 // ============================================
 document.getElementById('personForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -226,7 +226,6 @@ document.getElementById('settleForm').addEventListener('submit', async (e) => {
 document.getElementById('userWorkForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    // ✅ استفاده از پروفایلی که هنگام ورود ذخیره شده است
     if (!currentUserProfile) return alert('پروفایل شما یافت نشد. لطفا خارج شده و دوباره وارد شوید.');
     const pid = currentUserProfile.id;
     
@@ -243,7 +242,12 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
     }]);
     
     if (error) { 
-        alert("خطا در ثبت گزارش: " + error.message); 
+        // اگر دوره تکراری باشد، این خطا رخ می‌دهد
+        if (error.message.includes('duplicate key value')) {
+            alert("شما قبلا گزارش این دوره را ثبت کرده‌اید. باید ۱۰ روز دیگر صبر کنید.");
+        } else {
+            alert("خطا در ثبت گزارش: " + error.message);
+        }
     } else {
         alert("گزارش با موفقیت ثبت شد.");
         document.getElementById('userWorkForm').reset();
@@ -307,9 +311,10 @@ document.getElementById('closeSettleBtn').addEventListener('click', window.close
 document.getElementById('personBackdrop').addEventListener('click', window.closePersonModal);
 document.getElementById('settleBackdrop').addEventListener('click', window.closeSettleModal);
 
-document.getElementById('personDateWrapper').addEventListener('click', (e) => {
+// اتصال تقویم به فیلد تاریخ
+document.getElementById('pDeliveryDate').addEventListener('click', (e) => {
     e.preventDefault();
-    openCalendar(document.getElementById('pDeliveryDate'));
+    openCalendar(e.target);
 });
 
 document.getElementById('calendarModal').addEventListener('click', (e) => {
