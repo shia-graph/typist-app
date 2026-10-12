@@ -101,11 +101,17 @@ async function loadAdminData() {
             statusClass = 'text-amber-600 bg-amber-50 border border-amber-200'; 
         }
 
+        // تبدیل اعداد فارسی شماره تلفن به انگلیسی برای لینک تماس
+        const phoneEn = (p.phone || '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+
         return `
         <div class="glass rounded-2xl p-5 border border-slate-200/50">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="font-bold">${esc(p.name)}</h3>
-                <span class="text-xs font-bold px-2 py-1 rounded-lg ${statusClass}">${statusText}</span>
+                <div>
+                    <h3 class="font-bold">${esc(p.name)}</h3>
+                    <p class="text-xs text-slate-500">${esc(p.title || 'بدون عنوان')}</p>
+                </div>
+                <a href="tel:${phoneEn}" class="text-blue-600 text-xs font-bold border border-blue-200 rounded-lg px-2 py-1">تماس</a>
             </div>
             <div class="text-xs text-slate-500 mb-4 space-y-1">
                 <p>مجموع تسویه شده: <span class="font-bold text-emerald-600">${formatNum(totalSettled)}</span> تومان</p>
@@ -114,6 +120,7 @@ async function loadAdminData() {
             <div class="flex gap-2">
                 <button onclick="window.openAdminReportModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-blue-50 text-blue-600 text-xs font-bold border border-blue-200">+ گزارش</button>
                 <button onclick="window.openSettleModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-200">+ تسویه</button>
+                <button onclick="window.editPerson('${p.id}')" class="py-2 px-3 rounded-xl bg-slate-50 text-slate-600 text-xs font-bold border border-slate-200">ویرایش</button>
                 <button onclick="window.deletePerson('${p.id}')" class="py-2 px-3 rounded-xl bg-red-50 text-red-600 text-xs font-bold border border-red-100">حذف</button>
             </div>
         </div>`;
@@ -124,6 +131,18 @@ async function loadAdminData() {
 // توابع سراسری (Window)
 // ============================================
 window.closePersonModal = () => document.getElementById('personModal').classList.add('hidden');
+window.editPerson = (id) => {
+    const p = personsCache.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('personId').value = p.id;
+    document.getElementById('pName').value = p.name;
+    document.getElementById('pPhone').value = p.phone || '';
+    document.getElementById('pTitle').value = p.title || '';
+    document.getElementById('pDeliveryDate').value = p.delivery_date || '';
+    document.getElementById('personModalTitle').textContent = 'ویرایش تایپیست';
+    document.getElementById('personModal').classList.remove('hidden');
+};
+
 window.openSettleModal = (id) => {
     currentSettleId = id;
     document.getElementById('settleQty').value = 0;
@@ -196,6 +215,7 @@ document.getElementById('personForm').addEventListener('submit', async (e) => {
     const payload = { 
         name: document.getElementById('pName').value, 
         phone: document.getElementById('pPhone').value,
+        title: document.getElementById('pTitle').value, // اضافه شدن عنوان کار
         delivery_date: document.getElementById('pDeliveryDate').value 
     };
     
@@ -246,17 +266,11 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
 
     if (submitButton.disabled) return;
 
-    const title = document.getElementById('userWorkTitle').value.trim();
     const pages = Number.parseInt(
         document.getElementById('userWorkPages').value,
         10
     );
     const description = document.getElementById('userWorkDesc').value.trim();
-
-    if (!title) {
-        alert('عنوان کار را وارد کنید.');
-        return;
-    }
 
     if (!Number.isInteger(pages) || pages < 0) {
         alert('تعداد صفحات معتبر نیست.');
@@ -278,10 +292,6 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
     const daysPassed = Math.max(0, Jalaali.daysBetween(startDate, today));
     const currentPeriod = Math.floor(daysPassed / 10) + 1;
 
-    const reportDescription = [title, description]
-        .filter(Boolean)
-        .join(' — ');
-
     submitButton.disabled = true;
     submitButton.textContent = 'در حال ثبت...';
 
@@ -292,7 +302,7 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
                 typist_id: pid,
                 period: currentPeriod,
                 pages: pages,
-                description: reportDescription
+                description: description
             }])
             .select()
             .single();
@@ -317,7 +327,7 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
 });
 
 // ============================================
-// مودال ثبت گزارش توسط مدیر (اصلاح شده)
+// مودال ثبت گزارش توسط مدیر
 // ============================================
 window.openAdminReportModal = (id) => {
     const p = personsCache.find(x => x.id === id);
@@ -325,7 +335,6 @@ window.openAdminReportModal = (id) => {
 
     document.getElementById('adminReportPersonId').value = id;
     
-    // محاسبه دوره فعلی یا دوره تاخیر
     const today = Jalaali.today();
     const startDate = p.delivery_date ? Jalaali.parseJalali(p.delivery_date) : today;
     const daysPassed = Math.max(0, Jalaali.daysBetween(startDate, today));
@@ -341,13 +350,10 @@ window.openAdminReportModal = (id) => {
         periodToReport = currentPeriod;
     }
 
-    // تنظیم تاریخ پیش‌فرض به امروز
     document.getElementById('adminReportDate').value = Jalaali.formatJalali(today.year, today.month, today.day);
-    document.getElementById('adminReportTitle').value = '';
     document.getElementById('adminReportPages').value = 0;
     document.getElementById('adminReportDesc').value = '';
     
-    // نمایش دوره به کاربر
     document.getElementById('adminReportModal').querySelector('h2').textContent = `ثبت گزارش (دوره ${periodToReport}) برای ${p.name}`;
     
     document.getElementById('adminReportModal').classList.remove('hidden');
@@ -361,17 +367,9 @@ document.getElementById('adminReportForm').addEventListener('submit', async (e) 
     const p = personsCache.find(x => x.id === personId);
     if (!p) return;
 
-    const title = document.getElementById('adminReportTitle').value.trim();
     const pages = parseInt(document.getElementById('adminReportPages').value) || 0;
     const description = document.getElementById('adminReportDesc').value.trim();
-    const reportDateStr = document.getElementById('adminReportDate').value;
 
-    if (!title) {
-        alert('عنوان کار را وارد کنید.');
-        return;
-    }
-
-    // محاسبه دوره مجدد (برای اطمینان)
     const today = Jalaali.today();
     const startDate = p.delivery_date ? Jalaali.parseJalali(p.delivery_date) : today;
     const daysPassed = Math.max(0, Jalaali.daysBetween(startDate, today));
@@ -387,13 +385,11 @@ document.getElementById('adminReportForm').addEventListener('submit', async (e) 
         periodToReport = currentPeriod;
     }
 
-    const reportDescription = [title, description].filter(Boolean).join(' — ');
-
     const { error } = await supabase.from('typist_reports').insert([{
         typist_id: personId,
         period: periodToReport,
         pages: pages,
-        description: reportDescription
+        description: description
     }]);
 
     if (error) {
@@ -457,6 +453,7 @@ function renderCalendarModal() {
 document.getElementById('addPersonBtn').addEventListener('click', () => {
     document.getElementById('personForm').reset();
     document.getElementById('personId').value = '';
+    document.getElementById('personModalTitle').textContent = 'ثبت تایپیست';
     document.getElementById('personModal').classList.remove('hidden');
 });
 
@@ -467,7 +464,6 @@ document.getElementById('personBackdrop').addEventListener('click', window.close
 document.getElementById('settleBackdrop').addEventListener('click', window.closeSettleModal);
 document.getElementById('adminReportBackdrop').addEventListener('click', window.closeAdminReportModal);
 
-// اتصال تقویم به فیلدهای تاریخ
 document.getElementById('pDeliveryDate').addEventListener('click', (e) => {
     e.preventDefault();
     openCalendar(e.target);
