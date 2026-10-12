@@ -96,7 +96,7 @@
         </div>
     </div>
 
-    <!-- مودال تسویه حساب -->
+    <!-- مودال تسویه حساب با محاسبه خودکار -->
     <div id="settleModal" class="fixed inset-0 z-50 hidden">
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" id="settleBackdrop"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
@@ -108,8 +108,24 @@
                 <div class="p-6">
                     <form id="settleForm" class="space-y-4">
                         <input type="hidden" id="settlePersonId">
-                        <div><label class="block text-xs font-bold mb-1">مبلغ (تومان)</label><input type="number" id="settleAmount" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
-                        <div><label class="block text-xs font-bold mb-1">توضیحات</label><input type="text" id="settleDesc" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold mb-1">تعداد (کلمه/صفحه)</label>
+                                <input type="number" id="settleQty" value="0" oninput="calcSettle()" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold mb-1">نرخ هر واحد (تومان)</label>
+                                <input type="number" id="settleRate" value="0" oninput="calcSettle()" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold mb-1">مبلغ کل (تومان)</label>
+                            <input type="number" id="settleAmount" required readonly class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 rounded-xl py-2.5 px-4 text-sm font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold mb-1">توضیحات</label>
+                            <input type="text" id="settleDesc" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm">
+                        </div>
                         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow-lg">ثبت تسویه</button>
                     </form>
                 </div>
