@@ -11,6 +11,14 @@ const formatNum = (num) => new Intl.NumberFormat('fa-IR').format(Math.round(num 
 const Jalaali = {
     today() { const n = new Date(); const j = libToJalaali(n.getFullYear(), n.getMonth()+1, n.getDate()); return { year: j.jy, month: j.jm, day: j.jd }; },
     toPersianDigits(str) { if(!str) return ''; const p = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹']; return String(str).replace(/[0-9]/g, d => p[+d]); },
+    parseJalali(str) { 
+        if (!str || typeof str !== 'string') return null;
+        const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+        const normalized = String(str).replace(/[۰-۹]/g, d => persianDigits.indexOf(d));
+        const parts = normalized.split('/').map(p => parseInt(p.trim(), 10));
+        if (parts.length !== 3 || parts.some(isNaN) || parts.some(p => p <= 0)) return null;
+        return { year: parts[0], month: parts[1], day: parts[2] }; 
+    },
     daysBetween(j1, j2) { if(!j1||!j2) return 0; try { const g1 = libToGregorian(j1.year, j1.month, j1.day); const d1 = new Date(g1.gy, g1.gm - 1, g1.gd); const g2 = libToGregorian(j2.year, j2.month, j2.day); const d2 = new Date(g2.gy, g2.gm - 1, g2.gd); return Math.round((d2.getTime() - d1.getTime()) / 86400000); } catch (e) { return 0; } }
 };
 
@@ -26,25 +34,20 @@ async function checkAuth() {
     if (!user) return;
     currentUser = user;
 
-    // ادمین هست؟
-    const { data: profile } = await supabase.from('typists').select('is_admin').eq('user_id', user.id).maybeSingle();
+    const { data: profile } = await supabase.from('typists').select('*').eq('user_id', user.id).maybeSingle();
+    
     if (profile && profile.is_admin) {
         document.getElementById('userWrapper').classList.add('hidden');
         document.getElementById('adminWrapper').classList.remove('hidden');
         loadAdminData();
+    } else if (profile) {
+        document.getElementById('adminWrapper').classList.add('hidden');
+        document.getElementById('userWrapper').classList.remove('hidden');
+        document.getElementById('userName').textContent = profile.name;
+        loadUserData(profile);
     } else {
-        // تایپیست هست؟
-        const { data: typistProfile } = await supabase.from('typists').select('*').eq('user_id', user.id).maybeSingle();
-        if (typistProfile) {
-            document.getElementById('adminWrapper').classList.add('hidden');
-            document.getElementById('userWrapper').classList.remove('hidden');
-            document.getElementById('userName').textContent = typistProfile.name;
-            loadUserData(typistProfile);
-        } else {
-            // اگر هیچکدام نبود (مثلاً خود ادمین هنوز در جدول ثبت نشده)
-            document.getElementById('adminWrapper').classList.remove('hidden');
-            loadAdminData();
-        }
+        document.getElementById('adminWrapper').classList.remove('hidden');
+        loadAdminData();
     }
 }
 
@@ -52,25 +55,33 @@ async function checkAuth() {
 // منطق ادمین
 // ============================================
 async function loadAdminData() {
-    const { data } = await supabase.from('typists').select('*, typist_reports(*), settlements(*)').eq('is_active', true).neq('is_admin', true);
+    // گرفتن تمام اشخاص به جز ادمین‌ها
+    const { data } = await supabase.from('typists').select('*, typist_reports(*), payments(*)').neq('is_admin', true);
     personsCache = data || [];
     
     const list = document.getElementById('adminList');
     list.innerHTML = personsCache.map(p => {
         const reports = p.typist_reports || [];
-        const settles = p.settlements || [];
+        const settles = p.payments || [];
         const totalSettled = settles.reduce((s, r) => s + Number(r.amount || 0), 0);
         
         const today = Jalaali.today();
         const startDate = p.delivery_date ? Jalaali.parseJalali(p.delivery_date) : today;
         const daysPassed = Jalaali.daysBetween(startDate, today);
         const currentPeriod = Math.floor(daysPassed / 10) + 1;
-        const lastReportedPeriod = reports.length > 0 ? Math.max(...reports.map(r => r.period)) : 0;
+        const lastReportedPeriod = reports.length > 0 ? Math.max(...reports.map(r => r.period || 0)) : 0;
         
         let statusText = '', statusClass = '';
-        if (lastReportedPeriod >= currentPeriod) { statusText = `دوره ${currentPeriod} ثبت شد`; statusClass = 'text-emerald-600 bg-emerald-50'; }
-        else if (lastReportedPeriod < currentPeriod - 1) { statusText = `${currentPeriod - 1 - lastReportedPeriod} دوره تاخیر`; statusClass = 'text-red-600 bg-red-50'; }
-        else { statusText = `${10 - (daysPassed % 10)} روز مانده`; statusClass = 'text-amber-600 bg-amber-50'; }
+        if (lastReportedPeriod >= currentPeriod) { 
+            statusText = `دوره ${currentPeriod} ثبت شد`; 
+            statusClass = 'text-emerald-600 bg-emerald-50 border border-emerald-200'; 
+        } else if (lastReportedPeriod < currentPeriod - 1) { 
+            statusText = `${currentPeriod - 1 - lastReportedPeriod} دوره تاخیر`; 
+            statusClass = 'text-red-600 bg-red-50 border border-red-200'; 
+        } else { 
+            statusText = `${10 - (daysPassed % 10)} روز مانده`; 
+            statusClass = 'text-amber-600 bg-amber-50 border border-amber-200'; 
+        }
 
         return `
         <div class="glass rounded-2xl p-5 border border-slate-200/50">
@@ -78,16 +89,16 @@ async function loadAdminData() {
                 <h3 class="font-bold">${esc(p.name)}</h3>
                 <span class="text-xs font-bold px-2 py-1 rounded-lg ${statusClass}">${statusText}</span>
             </div>
-            <div class="text-xs text-slate-500 mb-4">
-                <p>تسویه شده: ${formatNum(totalSettled)} تومان</p>
-                <p>گزارش‌ها: ${formatNum(reports.length)} مورد</p>
+            <div class="text-xs text-slate-500 mb-4 space-y-1">
+                <p>مجموع تسویه شده: <span class="font-bold text-emerald-600">${formatNum(totalSettled)}</span> تومان</p>
+                <p>تعداد گزارش‌ها: ${formatNum(reports.length)} مورد</p>
             </div>
             <div class="flex gap-2">
-                <button onclick="openSettleModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-200">+ تسویه</button>
+                <button onclick="openSettleModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-200">+ تسویه حساب</button>
                 <button onclick="deletePerson('${p.id}')" class="py-2 px-3 rounded-xl bg-red-50 text-red-600 text-xs font-bold border border-red-100">حذف</button>
             </div>
         </div>`;
-    }).join('') || '<p class="text-center text-slate-400">هنوز تایپیستی ثبت نشده است.</p>';
+    }).join('') || '<p class="text-center text-slate-400 col-span-full">هنوز تایپیستی ثبت نشده است.</p>';
 }
 
 document.getElementById('personForm').addEventListener('submit', async (e) => {
@@ -107,10 +118,12 @@ window.closeSettleModal = () => document.getElementById('settleModal').classList
 
 document.getElementById('settleForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    await supabase.from('settlements').insert([{
+    // ثبت در جدول payments (تسویه حساب)
+    await supabase.from('payments').insert([{
         person_id: currentSettleId,
         amount: parseFloat(document.getElementById('settleAmount').value) || 0,
-        description: document.getElementById('settleDesc').value
+        description: document.getElementById('settleDesc').value,
+        status: 'valid'
     }]);
     closeSettleModal(); loadAdminData();
 });
@@ -125,7 +138,7 @@ window.deletePerson = async (id) => {
 async function loadUserData(profile) {
     const pid = profile.id;
     const { data: reports } = await supabase.from('typist_reports').select('*').eq('typist_id', pid).order('created_at', { ascending: false });
-    const { data: settles } = await supabase.from('settlements').select('*').eq('person_id', pid);
+    const { data: settles } = await supabase.from('payments').select('*').eq('person_id', pid);
     
     const totalSettled = settles?.reduce((s, r) => s + Number(r.amount || 0), 0) || 0;
     
@@ -133,11 +146,14 @@ async function loadUserData(profile) {
     const startDate = profile.delivery_date ? Jalaali.parseJalali(profile.delivery_date) : today;
     const daysPassed = Jalaali.daysBetween(startDate, today);
     const currentPeriod = Math.floor(daysPassed / 10) + 1;
-    const lastReportedPeriod = reports?.length > 0 ? Math.max(...reports.map(r => r.period)) : 0;
+    const lastReportedPeriod = reports?.length > 0 ? Math.max(...reports.map(r => r.period || 0)) : 0;
     
     let statusText = '';
-    if (lastReportedPeriod >= currentPeriod) { statusText = `گزارش دوره ${currentPeriod} ثبت شده است.`; }
-    else { statusText = `لطفا گزارش دوره ${currentPeriod} را ثبت کنید.`; }
+    if (lastReportedPeriod >= currentPeriod) { 
+        statusText = `گزارش دوره ${currentPeriod} ثبت شده است. تا دوره بعدی ${10 - (daysPassed % 10)} روز مانده.`; 
+    } else { 
+        statusText = `لطفا گزارش دوره ${currentPeriod} را ثبت کنید.`; 
+    }
     document.getElementById('userStatus').textContent = statusText;
     
     const list = document.getElementById('userWorkList');
