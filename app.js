@@ -69,6 +69,44 @@ async function checkAuth() {
 }
 
 // ============================================
+// محاسبه دقیق وضعیت دوره ۱۰ روزه
+// ============================================
+function calculatePeriodStatus(deliveryDateStr, reportsArray) {
+    const today = Jalaali.today();
+    const startDate = deliveryDateStr ? Jalaali.parseJalali(deliveryDateStr) : today;
+    if (!startDate) return { periodText: 'تاریخ نامعتبر', statusClass: 'text-red-600 bg-red-50', periodToReport: 1 };
+
+    const daysPassed = Math.max(0, Jalaali.daysBetween(startDate, today));
+    const currentPeriod = Math.floor(daysPassed / 10) + 1;
+    const daysIntoCurrentPeriod = daysPassed % 10;
+    const daysLeft = 10 - daysIntoCurrentPeriod;
+
+    const reports = reportsArray || [];
+    const reportedPeriods = reports.map(r => Number(r.period) || 0).filter(n => n > 0);
+    const lastReportedPeriod = reportedPeriods.length > 0 ? Math.max(...reportedPeriods) : 0;
+    
+    let periodText = '', statusClass = '';
+    let periodToReport = lastReportedPeriod + 1;
+
+    if (lastReportedPeriod >= currentPeriod) {
+        // دوره فعلی گزارش داده شده
+        periodText = `دوره ${currentPeriod} ثبت شد (${daysLeft} روز تا دوره بعد)`;
+        statusClass = 'text-emerald-600 bg-emerald-50 border border-emerald-200';
+    } else if (lastReportedPeriod < currentPeriod - 1) {
+        // چند دوره تاخیر دارد
+        const missedPeriods = currentPeriod - 1 - lastReportedPeriod;
+        periodText = `${missedPeriods} دوره تاخیر (دوره ${periodToReport} ثبت نشده)`;
+        statusClass = 'text-red-600 bg-red-50 border border-red-200';
+    } else {
+        // در دوره فعلی است و هنوز گزارش نداده
+        periodText = `دوره ${currentPeriod} (${daysLeft} روز مانده)`;
+        statusClass = 'text-amber-600 bg-amber-50 border border-amber-200';
+    }
+
+    return { periodText, statusClass, periodToReport, daysPassed, daysLeft };
+}
+
+// ============================================
 // منطق ادمین
 // ============================================
 async function loadAdminData() {
@@ -83,25 +121,7 @@ async function loadAdminData() {
         const settles = p.payments || [];
         const totalSettled = settles.reduce((s, r) => s + Number(r.amount || 0), 0);
         
-        const today = Jalaali.today();
-        const startDate = p.delivery_date ? Jalaali.parseJalali(p.delivery_date) : today;
-        const daysPassed = Jalaali.daysBetween(startDate, today);
-        const currentPeriod = Math.floor(daysPassed / 10) + 1;
-        const lastReportedPeriod = reports.length > 0 ? Math.max(...reports.map(r => r.period || 0)) : 0;
-        
-        let statusText = '', statusClass = '';
-        if (lastReportedPeriod >= currentPeriod) { 
-            statusText = `دوره ${currentPeriod} ثبت شد`; 
-            statusClass = 'text-emerald-600 bg-emerald-50 border border-emerald-200'; 
-        } else if (lastReportedPeriod < currentPeriod - 1) { 
-            statusText = `${currentPeriod - 1 - lastReportedPeriod} دوره تاخیر`; 
-            statusClass = 'text-red-600 bg-red-50 border border-red-200'; 
-        } else { 
-            statusText = `${10 - (daysPassed % 10)} روز مانده`; 
-            statusClass = 'text-amber-600 bg-amber-50 border border-amber-200'; 
-        }
-
-        // تبدیل اعداد فارسی شماره تلفن به انگلیسی برای لینک تماس
+        const { periodText, statusClass } = calculatePeriodStatus(p.delivery_date, reports);
         const phoneEn = (p.phone || '').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
 
         return `
@@ -113,6 +133,11 @@ async function loadAdminData() {
                 </div>
                 <a href="tel:${phoneEn}" class="text-blue-600 text-xs font-bold border border-blue-200 rounded-lg px-2 py-1">تماس</a>
             </div>
+            
+            <div class="mb-3">
+                <span class="text-xs font-bold px-2 py-1 rounded-lg ${statusClass}">${periodText}</span>
+            </div>
+
             <div class="text-xs text-slate-500 mb-4 space-y-1">
                 <p>مجموع تسویه شده: <span class="font-bold text-emerald-600">${formatNum(totalSettled)}</span> تومان</p>
                 <p>تعداد گزارش‌ها: ${formatNum(reports.length)} مورد</p>
@@ -184,19 +209,8 @@ async function loadUserData(profile) {
 
     const totalSettled = settles?.reduce((s, r) => s + Number(r.amount || 0), 0) || 0;
     
-    const today = Jalaali.today();
-    const startDate = profile.delivery_date ? Jalaali.parseJalali(profile.delivery_date) : today;
-    const daysPassed = Jalaali.daysBetween(startDate, today);
-    const currentPeriod = Math.floor(daysPassed / 10) + 1;
-    const lastReportedPeriod = reports?.length > 0 ? Math.max(...reports.map(r => r.period || 0)) : 0;
-    
-    let statusText = '';
-    if (lastReportedPeriod >= currentPeriod) { 
-        statusText = `گزارش دوره ${currentPeriod} ثبت شده است. تا دوره بعدی ${10 - (daysPassed % 10)} روز مانده.`; 
-    } else { 
-        statusText = `لطفا گزارش دوره ${currentPeriod} را ثبت کنید.`; 
-    }
-    document.getElementById('userStatus').textContent = statusText;
+    const { periodText } = calculatePeriodStatus(profile.delivery_date, reports);
+    document.getElementById('userStatus').textContent = periodText;
     
     const list = document.getElementById('userWorkList');
     list.innerHTML = reports?.map(r => `
@@ -215,7 +229,7 @@ document.getElementById('personForm').addEventListener('submit', async (e) => {
     const payload = { 
         name: document.getElementById('pName').value, 
         phone: document.getElementById('pPhone').value,
-        title: document.getElementById('pTitle').value, // اضافه شدن عنوان کار
+        title: document.getElementById('pTitle').value,
         delivery_date: document.getElementById('pDeliveryDate').value 
     };
     
@@ -279,18 +293,8 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
 
     const pid = currentUserProfile.id;
 
-    const today = Jalaali.today();
-    const startDate = currentUserProfile.delivery_date
-        ? Jalaali.parseJalali(currentUserProfile.delivery_date)
-        : today;
-
-    if (!startDate) {
-        alert('تاریخ شروع کار معتبر نیست. لطفاً با مدیر تماس بگیرید.');
-        return;
-    }
-
-    const daysPassed = Math.max(0, Jalaali.daysBetween(startDate, today));
-    const currentPeriod = Math.floor(daysPassed / 10) + 1;
+    // محاسبه دوره‌ای که تایپیست باید ثبت کند
+    const { periodToReport } = calculatePeriodStatus(currentUserProfile.delivery_date, currentUserProfile.typist_reports || []);
 
     submitButton.disabled = true;
     submitButton.textContent = 'در حال ثبت...';
@@ -300,7 +304,7 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
             .from('typist_reports')
             .insert([{
                 typist_id: pid,
-                period: currentPeriod,
+                period: periodToReport,
                 pages: pages,
                 description: description
             }])
@@ -336,19 +340,7 @@ window.openAdminReportModal = (id) => {
     document.getElementById('adminReportPersonId').value = id;
     
     const today = Jalaali.today();
-    const startDate = p.delivery_date ? Jalaali.parseJalali(p.delivery_date) : today;
-    const daysPassed = Math.max(0, Jalaali.daysBetween(startDate, today));
-    const currentPeriod = Math.floor(daysPassed / 10) + 1;
-    
-    const reports = p.typist_reports || [];
-    const lastReportedPeriod = reports.length > 0 ? Math.max(...reports.map(r => r.period || 0)) : 0;
-    
-    let periodToReport = 1;
-    if (lastReportedPeriod < currentPeriod) {
-        periodToReport = lastReportedPeriod + 1;
-    } else {
-        periodToReport = currentPeriod;
-    }
+    const { periodToReport } = calculatePeriodStatus(p.delivery_date, p.typist_reports || []);
 
     document.getElementById('adminReportDate').value = Jalaali.formatJalali(today.year, today.month, today.day);
     document.getElementById('adminReportPages').value = 0;
@@ -370,20 +362,7 @@ document.getElementById('adminReportForm').addEventListener('submit', async (e) 
     const pages = parseInt(document.getElementById('adminReportPages').value) || 0;
     const description = document.getElementById('adminReportDesc').value.trim();
 
-    const today = Jalaali.today();
-    const startDate = p.delivery_date ? Jalaali.parseJalali(p.delivery_date) : today;
-    const daysPassed = Math.max(0, Jalaali.daysBetween(startDate, today));
-    const currentPeriod = Math.floor(daysPassed / 10) + 1;
-    
-    const reports = p.typist_reports || [];
-    const lastReportedPeriod = reports.length > 0 ? Math.max(...reports.map(r => r.period || 0)) : 0;
-    
-    let periodToReport = 1;
-    if (lastReportedPeriod < currentPeriod) {
-        periodToReport = lastReportedPeriod + 1;
-    } else {
-        periodToReport = currentPeriod;
-    }
+    const { periodToReport } = calculatePeriodStatus(p.delivery_date, p.typist_reports || []);
 
     const { error } = await supabase.from('typist_reports').insert([{
         typist_id: personId,
