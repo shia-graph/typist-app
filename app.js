@@ -55,7 +55,6 @@ async function checkAuth() {
 // منطق ادمین
 // ============================================
 async function loadAdminData() {
-    // گرفتن تمام اشخاص به جز ادمین‌ها
     const { data } = await supabase.from('typists').select('*, typist_reports(*), payments(*)').neq('is_admin', true);
     personsCache = data || [];
     
@@ -112,13 +111,23 @@ document.getElementById('personForm').addEventListener('submit', async (e) => {
 
 window.openSettleModal = (id) => {
     currentSettleId = id;
+    document.getElementById('settleQty').value = 0;
+    document.getElementById('settleRate').value = 0;
+    document.getElementById('settleAmount').value = 0;
+    document.getElementById('settleDesc').value = '';
     document.getElementById('settleModal').classList.remove('hidden');
 };
 window.closeSettleModal = () => document.getElementById('settleModal').classList.add('hidden');
 
+// تابع محاسبه خودکار مبلغ تسویه
+window.calcSettle = () => {
+    const q = parseFloat(document.getElementById('settleQty').value) || 0;
+    const r = parseFloat(document.getElementById('settleRate').value) || 0;
+    document.getElementById('settleAmount').value = q * r;
+};
+
 document.getElementById('settleForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    // ثبت در جدول payments (تسویه حساب)
     await supabase.from('payments').insert([{
         person_id: currentSettleId,
         amount: parseFloat(document.getElementById('settleAmount').value) || 0,
