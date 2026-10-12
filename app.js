@@ -21,7 +21,24 @@ const Jalaali = {
         if (parts.length !== 3 || parts.some(isNaN) || parts.some(p => p <= 0)) return null;
         return { year: parts[0], month: parts[1], day: parts[2] }; 
     },
-    daysBetween(j1, j2) { if(!j1||!j2) return 0; try { const g1 = libToGregorian(j1.year, j1.month, j1.day); const d1 = new Date(g1.gy, g1.gm - 1, g1.gd); const g2 = libToGregorian(j2.year, j2.month, j2.day); const d2 = new Date(g2.gy, g2.gm - 1, g2.gd); return Math.round((d2.getTime() - d1.getTime()) / 86400000); } catch (e) { return 0; } }
+    toGregorian(jy, jm, jd) {
+        const g = libToGregorian(jy, jm, jd);
+        return {
+            year: g.gy,
+            month: g.gm,
+            day: g.gd
+        };
+    },
+    daysBetween(j1, j2) { 
+        if(!j1||!j2) return 0; 
+        try { 
+            const g1 = libToGregorian(j1.year, j1.month, j1.day); 
+            const d1 = new Date(g1.gy, g1.gm - 1, g1.gd); 
+            const g2 = libToGregorian(j2.year, j2.month, j2.day); 
+            const d2 = new Date(g2.gy, g2.gm - 1, g2.gd); 
+            return Math.round((d2.getTime() - d1.getTime()) / 86400000); 
+        } catch (e) { return 0; } 
+    }
 };
 
 let personsCache = [];
@@ -54,8 +71,9 @@ async function checkAuth() {
         document.getElementById('userName').textContent = profile.name;
         loadUserData(profile);
     } else {
-        document.getElementById('adminWrapper').classList.remove('hidden');
-        loadAdminData();
+        // اصلاح امنیتی: اگر پروفایل پیدا نشد، پنل ادمین نمایش داده نشود
+        alert('پروفایل کاربری شما در سیستم یافت نشد. لطفا با مدیر سیستم تماس بگیرید.');
+        await supabase.auth.signOut();
     }
 }
 
@@ -225,33 +243,84 @@ document.getElementById('settleForm').addEventListener('submit', async (e) => {
 
 document.getElementById('userWorkForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
-    if (!currentUserProfile) return alert('پروفایل شما یافت نشد. لطفا خارج شده و دوباره وارد شوید.');
+
+    if (!currentUserProfile) {
+        alert('پروفایل شما یافت نشد. لطفاً خارج شوید و دوباره وارد شوید.');
+        return;
+    }
+
+    const form = e.currentTarget;
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    if (submitButton.disabled) return;
+
+    const title = document.getElementById('userWorkTitle').value.trim();
+    const pages = Number.parseInt(
+        document.getElementById('userWorkPages').value,
+        10
+    );
+    const description = document.getElementById('userWorkDesc').value.trim();
+
+    if (!title) {
+        alert('عنوان کار را وارد کنید.');
+        return;
+    }
+
+    if (!Number.isInteger(pages) || pages < 0) {
+        alert('تعداد صفحات معتبر نیست.');
+        return;
+    }
+
     const pid = currentUserProfile.id;
-    
+
     const today = Jalaali.today();
-    const startDate = currentUserProfile.delivery_date ? Jalaali.parseJalali(currentUserProfile.delivery_date) : today;
-    const daysPassed = Jalaali.daysBetween(startDate, today);
+    const startDate = currentUserProfile.delivery_date
+        ? Jalaali.parseJalali(currentUserProfile.delivery_date)
+        : today;
+
+    if (!startDate) {
+        alert('تاریخ شروع کار معتبر نیست. لطفاً با مدیر تماس بگیرید.');
+        return;
+    }
+
+    const daysPassed = Math.max(0, Jalaali.daysBetween(startDate, today));
     const currentPeriod = Math.floor(daysPassed / 10) + 1;
-    
-    const { error } = await supabase.from('typist_reports').insert([{
-        typist_id: pid,
-        period: currentPeriod,
-        pages: parseInt(document.getElementById('userWorkPages').value) || 0,
-        description: document.getElementById('userWorkDesc').value
-    }]);
-    
-    if (error) { 
-        // اگر دوره تکراری باشد، این خطا رخ می‌دهد
-        if (error.message.includes('duplicate key value')) {
-            alert("شما قبلا گزارش این دوره را ثبت کرده‌اید. باید ۱۰ روز دیگر صبر کنید.");
-        } else {
-            alert("خطا در ثبت گزارش: " + error.message);
+
+    const reportDescription = [title, description]
+        .filter(Boolean)
+        .join(' — ');
+
+    submitButton.disabled = true;
+    submitButton.textContent = 'در حال ثبت...';
+
+    try {
+        const { data, error } = await supabase
+            .from('typist_reports')
+            .insert([{
+                typist_id: pid,
+                period: currentPeriod,
+                pages: pages,
+                description: reportDescription
+            }])
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Report insert error:', error);
+            alert('خطا در ثبت گزارش: ' + error.message);
+            return;
         }
-    } else {
-        alert("گزارش با موفقیت ثبت شد.");
-        document.getElementById('userWorkForm').reset();
-        checkAuth(); // رفرش صفحه کاربر
+
+        alert('گزارش با موفقیت ثبت شد.');
+        form.reset();
+
+        await loadUserData(currentUserProfile);
+    } catch (err) {
+        console.error('Unexpected report error:', err);
+        alert('خطای غیرمنتظره هنگام ثبت گزارش: ' + (err.message || err));
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'ثبت گزارش';
     }
 });
 
@@ -311,7 +380,6 @@ document.getElementById('closeSettleBtn').addEventListener('click', window.close
 document.getElementById('personBackdrop').addEventListener('click', window.closePersonModal);
 document.getElementById('settleBackdrop').addEventListener('click', window.closeSettleModal);
 
-// اتصال تقویم به فیلد تاریخ
 document.getElementById('pDeliveryDate').addEventListener('click', (e) => {
     e.preventDefault();
     openCalendar(e.target);
