@@ -21,14 +21,6 @@ const Jalaali = {
         if (parts.length !== 3 || parts.some(isNaN) || parts.some(p => p <= 0)) return null;
         return { year: parts[0], month: parts[1], day: parts[2] }; 
     },
-    toGregorian(jy, jm, jd) {
-        const g = libToGregorian(jy, jm, jd);
-        return {
-            year: g.gy,
-            month: g.gm,
-            day: g.gd
-        };
-    },
     daysBetween(j1, j2) { 
         if(!j1||!j2) return 0; 
         try { 
@@ -71,7 +63,6 @@ async function checkAuth() {
         document.getElementById('userName').textContent = profile.name;
         loadUserData(profile);
     } else {
-        // اصلاح امنیتی: اگر پروفایل پیدا نشد، پنل ادمین نمایش داده نشود
         alert('پروفایل کاربری شما در سیستم یافت نشد. لطفا با مدیر سیستم تماس بگیرید.');
         await supabase.auth.signOut();
     }
@@ -344,8 +335,9 @@ function renderCalendarModal() {
     const t = Jalaali.today();
     const { viewYear: vy, viewMonth: vm, selected: sel } = calendarState;
     
-    const fg = Jalaali.toGregorian(vy, vm, 1);
-    const sd = (new Date(fg.year, fg.month-1, fg.day).getDay() + 1) % 7;
+    // استفاده مستقیم از libToGregorian برای جلوگیری از خطا
+    const fg = libToGregorian(vy, vm, 1);
+    const sd = (new Date(fg.gy, fg.gm-1, fg.gd).getDay() + 1) % 7;
     const dm = libMonthLength(vy, vm);
     
     let h = `<div class="flex justify-between mb-4">
