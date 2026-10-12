@@ -15,15 +15,8 @@
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; } .dark ::-webkit-scrollbar-thumb { background: #334155; }
         .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(226, 232, 240, 0.8); }
         .dark .glass { background: rgba(15, 23, 42, 0.85); border-color: rgba(51, 65, 85, 0.5); }
-        
-        /* استایل‌های تقویم */
         .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-        .cal-day { 
-            display: flex; align-items: center; justify-content: center; 
-            aspect-ratio: 1; font-size: 14px; cursor: pointer; 
-            border-radius: 8px; transition: background-color 0.2s; 
-            color: #334155; font-weight: 500;
-        }
+        .cal-day { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; font-size: 14px; cursor: pointer; border-radius: 8px; transition: background-color 0.2s; color: #334155; font-weight: 500; }
         .dark .cal-day { color: #cbd5e1; }
         .cal-day:hover { background-color: #f0fdfa; color: #0f766e; }
         .dark .cal-day:hover { background-color: #134e4a; color: #5eead4; }
@@ -33,6 +26,8 @@
         .date-input-wrapper { position: relative; }
         .date-input-wrapper input { cursor: pointer; }
         .date-input-wrapper::after { content: '🗓'; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 16px; opacity: 0.7; }
+        .card-accordion { overflow: hidden; transition: max-height 0.3s ease-in-out; max-height: 0; }
+        .card-accordion.open { max-height: 500px; }
     </style>
 </head>
 <body class="text-slate-800 dark:text-slate-200 min-h-screen antialiased">
