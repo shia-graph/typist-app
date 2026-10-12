@@ -26,6 +26,7 @@ const Jalaali = {
 
 let personsCache = [];
 let currentUser = null;
+let currentUserProfile = null; // متغیر جدید برای ذخیره پروفایل کاربر لاگین شده
 let currentSettleId = null;
 let calendarTargetInput = null;
 let calendarState = { viewYear: null, viewMonth: null, selected: null };
@@ -40,6 +41,8 @@ async function checkAuth() {
 
     const { data: profile, error: profileError } = await supabase.from('typists').select('*').eq('user_id', user.id).maybeSingle();
     if (profileError) console.error("Profile Error:", profileError);
+    
+    currentUserProfile = profile; // ذخیره پروفایل در متغیر سراسری
     
     if (profile && profile.is_admin) {
         document.getElementById('userWrapper').classList.add('hidden');
@@ -175,7 +178,7 @@ async function loadUserData(profile) {
 }
 
 // ============================================
-// فرم‌ها و رویدادها
+// فرم‌ها و رویدادها (اصلاح شده)
 // ============================================
 document.getElementById('personForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -222,14 +225,14 @@ document.getElementById('settleForm').addEventListener('submit', async (e) => {
 
 document.getElementById('userWorkForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const pid = personsCache.find(p => p.user_id === currentUser.id)?.id || (await supabase.from('typists').select('id').eq('user_id', currentUser.id).single()).data?.id;
-    if(!pid) return alert('پروفایل شما یافت نشد.');
+    
+    // ✅ استفاده از پروفایلی که هنگام ورود ذخیره شده است
+    if (!currentUserProfile) return alert('پروفایل شما یافت نشد. لطفا خارج شده و دوباره وارد شوید.');
+    const pid = currentUserProfile.id;
     
     const today = Jalaali.today();
-    const { data: prof } = await supabase.from('typists').select('delivery_date').eq('id', pid).single();
-    const startDate = prof?.delivery_date;
-    const jStart = startDate ? Jalaali.parseJalali(startDate) : today;
-    const daysPassed = Jalaali.daysBetween(jStart, today);
+    const startDate = currentUserProfile.delivery_date ? Jalaali.parseJalali(currentUserProfile.delivery_date) : today;
+    const daysPassed = Jalaali.daysBetween(startDate, today);
     const currentPeriod = Math.floor(daysPassed / 10) + 1;
     
     const { error } = await supabase.from('typist_reports').insert([{
@@ -239,11 +242,12 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
         description: document.getElementById('userWorkDesc').value
     }]);
     
-    if (error) { alert("خطا در ثبت گزارش: " + error.message); } 
-    else {
+    if (error) { 
+        alert("خطا در ثبت گزارش: " + error.message); 
+    } else {
         alert("گزارش با موفقیت ثبت شد.");
         document.getElementById('userWorkForm').reset();
-        checkAuth();
+        checkAuth(); // رفرش صفحه کاربر
     }
 });
 
