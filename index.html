@@ -15,6 +15,10 @@
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; } .dark ::-webkit-scrollbar-thumb { background: #334155; }
         .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(226, 232, 240, 0.8); }
         .dark .glass { background: rgba(15, 23, 42, 0.85); border-color: rgba(51, 65, 85, 0.5); }
+        .cal-day { width: 100%; aspect-ratio: 1; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; transition: all 0.15s; }
+        .cal-day:hover { background: #ccfbf1; color: #0f766e; } .dark .cal-day:hover { background: #134e4a; color: #5eead4; }
+        .cal-day.selected { background: #0d9488 !important; color: white !important; font-weight: 700; }
+        .cal-day.today { border: 2px solid #14b8a6; }
     </style>
 </head>
 <body class="text-slate-800 dark:text-slate-200 min-h-screen antialiased">
@@ -75,7 +79,7 @@
         <div id="userWorkList" class="space-y-2"></div>
     </div>
 
-    <!-- مودال ثبت تایپیست -->
+    <!-- مودال ثبت تایپیست (با فیلد تاریخ) -->
     <div id="personModal" class="fixed inset-0 z-50 hidden">
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" id="personBackdrop"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
@@ -89,6 +93,14 @@
                         <input type="hidden" id="personId">
                         <div><label class="block text-xs font-bold mb-1">نام</label><input type="text" id="pName" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
                         <div><label class="block text-xs font-bold mb-1">شماره تماس</label><input type="tel" id="pPhone" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm" dir="ltr"></div>
+                        
+                        <!-- فیلد تاریخ دریافت کار (برجسته شده) -->
+                        <div class="relative" id="personDateWrapper" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px; margin-top:8px;">
+                            <label class="block text-xs font-bold mb-1 text-blue-600">تاریخ دریافت کار (شروع ۱۰ روز)</label>
+                            <input type="text" id="pDeliveryDate" placeholder="انتخاب از تقویم" required readonly class="w-full bg-white dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm cursor-pointer" dir="ltr">
+                            <p class="text-[10px] text-slate-400 mt-1">برای باز کردن تقویم کلیک کنید</p>
+                        </div>
+
                         <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 rounded-xl shadow-lg">ذخیره</button>
                     </form>
                 </div>
@@ -131,6 +143,12 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- مودال تقویم -->
+    <div id="calendarModal" class="fixed inset-0 z-[60] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm cal-backdrop"></div>
+        <div class="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-2xl border border-slate-200 p-6 relative z-10 pointer-events-auto"><div id="calendarContainer"></div></div>
     </div>
 
     <script type="module" src="app.js"></script>
