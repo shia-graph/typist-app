@@ -34,7 +34,8 @@ async function checkAuth() {
     if (!user) return;
     currentUser = user;
 
-    const { data: profile } = await supabase.from('typists').select('*').eq('user_id', user.id).maybeSingle();
+    const { data: profile, error: profileError } = await supabase.from('typists').select('*').eq('user_id', user.id).maybeSingle();
+    if (profileError) console.error("Profile Error:", profileError);
     
     if (profile && profile.is_admin) {
         document.getElementById('userWrapper').classList.add('hidden');
@@ -55,8 +56,11 @@ async function checkAuth() {
 // منطق ادمین
 // ============================================
 async function loadAdminData() {
-    const { data } = await supabase.from('typists').select('*, typist_reports(*), payments(*)').neq('is_admin', true);
-    personsCache = data || [];
+    const { data, error } = await supabase.from('typists').select('*, typist_reports(*), payments(*)');
+    if (error) { alert("خطا در دریافت لیست: " + error.message); return; }
+    
+    // فیلتر کردن ادمین‌ها در سمت کلاینت
+    personsCache = (data || []).filter(p => !p.is_admin);
     
     const list = document.getElementById('adminList');
     list.innerHTML = personsCache.map(p => {
@@ -104,9 +108,23 @@ document.getElementById('personForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('personId').value;
     const payload = { name: document.getElementById('pName').value, phone: document.getElementById('pPhone').value };
-    if (id) { await supabase.from('typists').update(payload).eq('id', id); }
-    else { await supabase.from('typists').insert([payload]); }
-    closePersonModal(); loadAdminData();
+    
+    let error;
+    if (id) { 
+        const res = await supabase.from('typists').update(payload).eq('id', id); 
+        error = res.error;
+    } else { 
+        const res = await supabase.from('typists').insert([payload]); 
+        error = res.error;
+    }
+
+    if (error) {
+        alert("خطا در ذخیره تایپیست: " + error.message);
+    } else {
+        alert("تایپیست با موفقیت ذخیره شد.");
+        closePersonModal(); 
+        loadAdminData();
+    }
 });
 
 window.openSettleModal = (id) => {
@@ -119,7 +137,6 @@ window.openSettleModal = (id) => {
 };
 window.closeSettleModal = () => document.getElementById('settleModal').classList.add('hidden');
 
-// تابع محاسبه خودکار مبلغ تسویه
 window.calcSettle = () => {
     const q = parseFloat(document.getElementById('settleQty').value) || 0;
     const r = parseFloat(document.getElementById('settleRate').value) || 0;
@@ -128,17 +145,26 @@ window.calcSettle = () => {
 
 document.getElementById('settleForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    await supabase.from('payments').insert([{
+    const amount = parseFloat(document.getElementById('settleAmount').value) || 0;
+    if (amount <= 0) { alert("مبلغ نامعتبر است"); return; }
+
+    const { error } = await supabase.from('payments').insert([{
         person_id: currentSettleId,
-        amount: parseFloat(document.getElementById('settleAmount').value) || 0,
+        amount: amount,
         description: document.getElementById('settleDesc').value,
         status: 'valid'
     }]);
-    closeSettleModal(); loadAdminData();
+    
+    if (error) { alert("خطا در ثبت تسویه: " + error.message); }
+    else { alert("تسویه با موفقیت ثبت شد."); closeSettleModal(); loadAdminData(); }
 });
 
 window.deletePerson = async (id) => {
-    if(confirm('حذف شود؟')) { await supabase.from('typists').delete().eq('id', id); loadAdminData(); }
+    if(confirm('حذف شود؟')) { 
+        const { error } = await supabase.from('typists').delete().eq('id', id); 
+        if (error) { alert("خطا در حذف: " + error.message); }
+        else { loadAdminData(); }
+    }
 };
 
 // ============================================
@@ -146,9 +172,12 @@ window.deletePerson = async (id) => {
 // ============================================
 async function loadUserData(profile) {
     const pid = profile.id;
-    const { data: reports } = await supabase.from('typist_reports').select('*').eq('typist_id', pid).order('created_at', { ascending: false });
-    const { data: settles } = await supabase.from('payments').select('*').eq('person_id', pid);
+    const { data: reports, error: rErr } = await supabase.from('typist_reports').select('*').eq('typist_id', pid).order('created_at', { ascending: false });
+    const { data: settles, error: sErr } = await supabase.from('payments').select('*').eq('person_id', pid);
     
+    if (rErr) console.error("Reports Error:", rErr);
+    if (sErr) console.error("Settles Error:", sErr);
+
     const totalSettled = settles?.reduce((s, r) => s + Number(r.amount || 0), 0) || 0;
     
     const today = Jalaali.today();
@@ -179,7 +208,8 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
     if(!pid) return alert('پروفایل شما یافت نشد.');
     
     const today = Jalaali.today();
-    const startDate = (await supabase.from('typists').select('delivery_date').eq('id', pid).single()).data?.delivery_date;
+    const { data: prof } = await supabase.from('typists').select('delivery_date').eq('id', pid).single();
+    const startDate = prof?.delivery_date;
     const jStart = startDate ? Jalaali.parseJalali(startDate) : today;
     const daysPassed = Jalaali.daysBetween(jStart, today);
     const currentPeriod = Math.floor(daysPassed / 10) + 1;
@@ -191,9 +221,9 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
         description: document.getElementById('userWorkDesc').value
     }]);
     
-    if (error) { alert('خطا: شاید قبلا این دوره را ثبت کرده‌اید.'); } 
+    if (error) { alert("خطا در ثبت گزارش: " + error.message); } 
     else {
-        alert('گزارش با موفقیت ثبت شد.');
+        alert("گزارش با موفقیت ثبت شد.");
         document.getElementById('userWorkForm').reset();
         checkAuth();
     }
@@ -205,7 +235,7 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const { error } = await supabase.auth.signInWithPassword({ email: document.getElementById('emailInput').value, password: document.getElementById('passwordInput').value });
-    if (error) document.getElementById('loginError').classList.remove('hidden');
+    if (error) alert("خطا در ورود: " + error.message);
 });
 document.getElementById('logoutBtn').addEventListener('click', async () => await supabase.auth.signOut());
 document.getElementById('logoutBtn2').addEventListener('click', async () => await supabase.auth.signOut());
