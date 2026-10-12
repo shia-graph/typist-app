@@ -19,6 +19,9 @@
         .cal-day:hover { background: #ccfbf1; color: #0f766e; } .dark .cal-day:hover { background: #134e4a; color: #5eead4; }
         .cal-day.selected { background: #0d9488 !important; color: white !important; font-weight: 700; }
         .cal-day.today { border: 2px solid #14b8a6; }
+        .date-input-wrapper { position: relative; }
+        .date-input-wrapper input { cursor: pointer; }
+        .date-input-wrapper::after { content: '🗓'; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 16px; opacity: 0.7; }
     </style>
 </head>
 <body class="text-slate-800 dark:text-slate-200 min-h-screen antialiased">
@@ -93,15 +96,12 @@
                         <input type="hidden" id="personId">
                         <div><label class="block text-xs font-bold mb-1">نام</label><input type="text" id="pName" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
                         <div><label class="block text-xs font-bold mb-1">شماره تماس</label><input type="tel" id="pPhone" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm" dir="ltr"></div>
-                        
-                        <!-- فیلد تاریخ (واضح و قابل کلیک) -->
                         <div>
                             <label class="block text-xs font-bold mb-1 text-blue-600">تاریخ دریافت کار (شروع ۱۰ روز)</label>
-                            <div class="relative" id="personDateWrapper">
-                                <input type="text" id="pDeliveryDate" placeholder="برای انتخاب کلیک کنید" required readonly class="w-full bg-slate-50 dark:bg-slate-950 border border-blue-200 rounded-xl py-2.5 px-4 text-sm cursor-pointer" dir="ltr">
+                            <div class="date-input-wrapper">
+                                <input type="text" id="pDeliveryDate" placeholder="انتخاب از تقویم" required readonly class="w-full bg-slate-50 dark:bg-slate-950 border border-blue-200 rounded-xl py-2.5 px-4 text-sm" dir="ltr">
                             </div>
                         </div>
-
                         <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 rounded-xl shadow-lg">ذخیره</button>
                     </form>
                 </div>
