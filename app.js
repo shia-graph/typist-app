@@ -9,8 +9,10 @@ const esc = (str) => { if (!str) return ''; return String(str).replace(/[&<>"']/
 const formatNum = (num) => new Intl.NumberFormat('fa-IR').format(Math.round(num || 0));
 
 const Jalaali = {
+    jMonthName: ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'],
     today() { const n = new Date(); const j = libToJalaali(n.getFullYear(), n.getMonth()+1, n.getDate()); return { year: j.jy, month: j.jm, day: j.jd }; },
     toPersianDigits(str) { if(!str) return ''; const p = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹']; return String(str).replace(/[0-9]/g, d => p[+d]); },
+    formatJalali(jy, jm, jd) { return this.toPersianDigits(`${jy}/${String(jm).padStart(2,'0')}/${String(jd).padStart(2,'0')}`); },
     parseJalali(str) { 
         if (!str || typeof str !== 'string') return null;
         const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
@@ -107,7 +109,12 @@ async function loadAdminData() {
 document.getElementById('personForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('personId').value;
-    const payload = { name: document.getElementById('pName').value, phone: document.getElementById('pPhone').value };
+    // ✅ اضافه شدن فیلد تاریخ به اطلاعات ذخیره شونده
+    const payload = { 
+        name: document.getElementById('pName').value, 
+        phone: document.getElementById('pPhone').value,
+        delivery_date: document.getElementById('pDeliveryDate').value 
+    };
     
     let error;
     if (id) { 
@@ -230,6 +237,76 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
 });
 
 // ============================================
+// کدهای تقویم شمسی (که جا افتاده بود)
+// ============================================
+let calendarTargetInput = null;
+let calendarState = { viewYear: null, viewMonth: null, selected: null };
+
+function openCalendar(inp) {
+    calendarTargetInput = inp;
+    const t = Jalaali.today();
+    calendarState = { 
+        viewYear: t.year, 
+        viewMonth: t.month, 
+        selected: Jalaali.parseJalali(inp.value) 
+    };
+    renderCalendarModal();
+    document.getElementById('calendarModal').classList.remove('hidden');
+}
+
+function renderCalendarModal() {
+    const c = document.getElementById('calendarContainer');
+    const t = Jalaali.today();
+    const { viewYear: vy, viewMonth: vm, selected: sel } = calendarState;
+    
+    const fg = Jalaali.toGregorian(vy, vm, 1);
+    const sd = (new Date(fg.year, fg.month-1, fg.day).getDay() + 1) % 7;
+    const dm = libMonthLength(vy, vm);
+    
+    let h = `<div class="flex justify-between mb-4">
+        <button onclick="calPrev()" class="bg-slate-100 dark:bg-slate-800 rounded-lg w-8 h-8">◀</button>
+        <div class="font-bold">${Jalaali.jMonthName[vm-1]} ${Jalaali.toPersianDigits(vy)}</div>
+        <button onclick="calNext()" class="bg-slate-100 dark:bg-slate-800 rounded-lg w-8 h-8">▶</button>
+    </div>
+    <div class="grid grid-cols-7 gap-1 text-center text-xs mb-2">
+        ${['ش','ی','د','س','چ','پ','ج'].map(d=>`<div>${d}</div>`).join('')}
+    </div>
+    <div class="grid grid-cols-7 gap-1">`;
+    
+    for (let i=0; i<sd; i++) h += `<div></div>`;
+    for (let d=1; d<=dm; d++) {
+        const isT = vy===t.year && vm===t.month && d===t.day;
+        const isS = sel && sel.year===vy && sel.month===vm && sel.day===d;
+        h += `<div class="cal-day ${isT?'today':''} ${isS?'selected':''}" onclick="calSelect(${d})">${Jalaali.toPersianDigits(d)}</div>`;
+    }
+    h += `</div>`;
+    c.innerHTML = h;
+}
+
+window.calPrev = () => { calendarState.viewMonth--; if (calendarState.viewMonth < 1) { calendarState.viewMonth = 12; calendarState.viewYear--; } renderCalendarModal(); };
+window.calNext = () => { calendarState.viewMonth++; if (calendarState.viewMonth > 12) { calendarState.viewMonth = 1; calendarState.viewYear++; } renderCalendarModal(); };
+window.calSelect = (d) => { 
+    calendarTargetInput.value = Jalaali.formatJalali(calendarState.viewYear, calendarState.viewMonth, d); 
+    document.getElementById('calendarModal').classList.add('hidden'); 
+};
+
+// اتصال رویدادها
+document.getElementById('addPersonBtn').addEventListener('click', () => {
+    document.getElementById('personForm').reset();
+    document.getElementById('personId').value = '';
+    document.getElementById('personModal').classList.remove('hidden');
+});
+
+document.getElementById('personDateWrapper').addEventListener('click', (e) => {
+    e.preventDefault();
+    openCalendar(document.getElementById('pDeliveryDate'));
+});
+
+document.getElementById('calendarModal').addEventListener('click', (e) => {
+    if (e.target.classList.contains('cal-backdrop')) document.getElementById('calendarModal').classList.add('hidden');
+});
+
+// ============================================
 // راه‌اندازی
 // ============================================
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -237,6 +314,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     const { error } = await supabase.auth.signInWithPassword({ email: document.getElementById('emailInput').value, password: document.getElementById('passwordInput').value });
     if (error) alert("خطا در ورود: " + error.message);
 });
+
 document.getElementById('logoutBtn').addEventListener('click', async () => await supabase.auth.signOut());
 document.getElementById('logoutBtn2').addEventListener('click', async () => await supabase.auth.signOut());
 
