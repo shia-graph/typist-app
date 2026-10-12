@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>سامانه مدیریت کارکرد و پرداخت</title>
+    <title>سامانه مدیریت کارکرد و تسویه</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
     <script>
         tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['Vazirmatn', 'sans-serif'] }, colors: { primary: { 50: '#f0fdfa', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e' } } } } }
@@ -16,8 +15,6 @@
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; } .dark ::-webkit-scrollbar-thumb { background: #334155; }
         .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(226, 232, 240, 0.8); }
         .dark .glass { background: rgba(15, 23, 42, 0.85); border-color: rgba(51, 65, 85, 0.5); }
-        .input-field { padding-right: 42px; }
-        .input-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none; }
         .cal-day { width: 100%; aspect-ratio: 1; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; transition: all 0.15s; }
         .cal-day:hover { background: #ccfbf1; color: #0f766e; } .dark .cal-day:hover { background: #134e4a; color: #5eead4; }
         .cal-day.selected { background: #0d9488 !important; color: white !important; font-weight: 700; }
@@ -38,84 +35,65 @@
         </div>
     </div>
 
+    <!-- پورتال ادمین -->
     <div id="adminWrapper" class="hidden">
         <header class="sticky top-0 z-40 glass border-b border-slate-200/50 dark:border-slate-800/50">
             <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-                <h1 class="text-lg font-black tracking-tight">پنل مدیریت مالی</h1>
-                <div class="flex items-center gap-2">
-                    <button onclick="exportToExcel('persons')" class="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-200">خروجی اکسل</button>
-                    <button id="logoutBtn" class="px-4 py-2.5 rounded-xl bg-red-50 text-red-600 text-sm font-bold border border-red-100">خروج</button>
-                </div>
+                <h1 class="text-lg font-black tracking-tight">پنل مدیریت گزارش‌ها</h1>
+                <button id="logoutBtn" class="px-4 py-2.5 rounded-xl bg-red-50 text-red-600 text-sm font-bold border border-red-100">خروج</button>
             </div>
         </header>
         <main class="max-w-7xl mx-auto px-4 py-8">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <div class="glass rounded-2xl p-5 border border-slate-200/50"><p class="text-xs text-slate-500 mb-1">اشخاص</p><p id="stat-persons" class="text-3xl font-black text-blue-600">۰</p></div>
-                <div class="glass rounded-2xl p-5 border border-slate-200/50"><p class="text-xs text-slate-500 mb-1">کارکردها</p><p id="stat-work" class="text-3xl font-black text-emerald-600">۰</p></div>
-                <div class="glass rounded-2xl p-5 border border-slate-200/50"><p class="text-xs text-slate-500 mb-1">پرداخت‌ها</p><p id="stat-payments" class="text-3xl font-black text-amber-600">۰</p></div>
-                <div class="glass rounded-2xl p-5 border border-slate-200/50"><p class="text-xs text-slate-500 mb-1">بدهی</p><p id="stat-balance" class="text-3xl font-black text-red-600">۰</p></div>
-            </div>
+            <div id="adminAlert" class="mb-6"></div>
             <div class="flex justify-between items-center mb-6">
-                <h2 class="text-lg font-black">فهرست اشخاص</h2>
-                <button id="addPersonBtn" class="bg-primary-600 text-white text-sm font-bold px-4 py-2.5 rounded-xl shadow-lg">+ شخص جدید</button>
+                <h2 class="text-lg font-black">فهرست تایپیست‌ها</h2>
+                <button id="addPersonBtn" class="bg-primary-600 text-white text-sm font-bold px-4 py-2.5 rounded-xl shadow-lg">+ تایپیست جدید</button>
             </div>
-            <div class="glass rounded-2xl border border-slate-200/50 overflow-hidden">
-                <table class="w-full text-sm text-right">
-                    <thead class="bg-slate-50 text-xs text-slate-500"><tr><th class="p-4">نام شخص</th><th class="p-4">مجموع کارکرد</th><th class="p-4">مجموع پرداخت</th><th class="p-4">مانده</th><th class="p-4">عملیات</th></tr></thead>
-                    <tbody id="personsList"></tbody>
-                </table>
-            </div>
+            <div id="adminList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </main>
     </div>
 
+    <!-- پورتال تایپیست -->
     <div id="userWrapper" class="hidden max-w-3xl mx-auto px-4 py-8">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-xl font-black">پنل کارکرد: <span id="userName"></span></h1>
             <button id="logoutBtn2" class="px-4 py-2 rounded-xl bg-red-50 text-red-600 text-sm font-bold border border-red-100">خروج</button>
         </div>
-        <div class="grid grid-cols-2 gap-4 mb-8">
-            <div class="glass rounded-2xl p-5 border border-slate-200/50"><p class="text-xs text-slate-500 mb-1">مجموع کارکرد شما</p><p id="userTotalWork" class="text-2xl font-black text-emerald-600">۰</p></div>
-            <div class="glass rounded-2xl p-5 border border-slate-200/50"><p class="text-xs text-slate-500 mb-1">مجموع پرداخت‌های شما</p><p id="userTotalPaid" class="text-2xl font-black text-amber-600">۰</p></div>
+        
+        <div class="glass rounded-2xl p-5 border border-slate-200/50 mb-6 text-center">
+            <p class="text-sm text-slate-500 mb-1">وضعیت دوره فعلی</p>
+            <p id="userStatus" class="text-xl font-black text-blue-600">در حال بررسی...</p>
         </div>
+
         <div class="glass rounded-2xl p-6 border border-slate-200/50 space-y-4 mb-8">
-            <h2 class="text-lg font-bold">ثبت کارکرد جدید</h2>
+            <h2 class="text-lg font-bold">ثبت گزارش ۱۰ روزه</h2>
             <form id="userWorkForm" class="space-y-4">
-                <div class="relative" id="userDateWrapper">
-                    <label class="block text-xs font-bold mb-1">تاریخ</label>
-                    <input type="text" id="userWorkDate" readonly class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm cursor-pointer" dir="ltr">
-                </div>
                 <div><label class="block text-xs font-bold mb-1">عنوان کار</label><input type="text" id="userWorkTitle" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
-                <div class="grid grid-cols-3 gap-4">
-                    <div><label class="block text-xs font-bold mb-1">تعداد</label><input type="number" id="userWorkQty" value="0" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
-                    <div><label class="block text-xs font-bold mb-1">نرخ</label><input type="number" id="userWorkRate" value="0" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
-                    <div><label class="block text-xs font-bold mb-1">مبلغ کل</label><input type="number" id="userWorkTotal" readonly class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 rounded-xl py-2.5 px-4 text-sm font-bold"></div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-xs font-bold mb-1">تعداد صفحه</label><input type="number" id="userWorkPages" value="0" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
+                    <div><label class="block text-xs font-bold mb-1">توضیحات</label><input type="text" id="userWorkDesc" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
                 </div>
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl">ثبت کارکرد</button>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl">ثبت گزارش</button>
             </form>
         </div>
-        <h2 class="text-lg font-bold mb-4">سوابق کارکرد شما</h2>
+        <h2 class="text-lg font-bold mb-4">سوابق شما</h2>
         <div id="userWorkList" class="space-y-2"></div>
     </div>
 
+    <!-- مودال ادمین -->
     <div id="personModal" class="fixed inset-0 z-50 hidden">
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" id="personBackdrop"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
-            <div class="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 pointer-events-auto flex flex-col max-h-[90vh]">
+            <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 pointer-events-auto">
                 <div class="flex justify-between items-center p-6 border-b border-slate-100">
-                    <h2 class="text-lg font-black" id="personModalTitle">ثبت شخص جدید</h2>
+                    <h2 class="text-lg font-black" id="personModalTitle">ثبت تایپیست</h2>
                     <button onclick="closePersonModal()" class="text-slate-400 hover:text-slate-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
                 </div>
-                <div class="p-6 overflow-y-auto">
+                <div class="p-6">
                     <form id="personForm" class="space-y-4">
                         <input type="hidden" id="personId">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div><label class="block text-xs font-bold mb-1">نام و نام خانوادگی</label><input type="text" id="pName" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
-                            <div><label class="block text-xs font-bold mb-1">شماره تماس</label><input type="tel" id="pPhone" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm" dir="ltr"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div><label class="block text-xs font-bold mb-1">نرخ کلمه</label><input type="number" id="pWordRate" value="0" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
-                            <div><label class="block text-xs font-bold mb-1">نرخ صفحه</label><input type="number" id="pPageRate" value="0" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
-                        </div>
+                        <div><label class="block text-xs font-bold mb-1">نام</label><input type="text" id="pName" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
+                        <div><label class="block text-xs font-bold mb-1">شماره تماس</label><input type="tel" id="pPhone" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm" dir="ltr"></div>
                         <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 rounded-xl shadow-lg">ذخیره</button>
                     </form>
                 </div>
@@ -123,57 +101,25 @@
         </div>
     </div>
 
-    <div id="ledgerModal" class="fixed inset-0 z-50 hidden">
-        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" id="ledgerBackdrop"></div>
-        <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
-            <div class="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-200 pointer-events-auto flex flex-col max-h-[90vh]">
-                <div class="flex justify-between items-center p-6 border-b border-slate-100">
-                    <h2 class="text-lg font-black" id="ledgerTitle">دفتر حساب</h2>
-                    <button onclick="closeLedgerModal()" class="text-slate-400 hover:text-slate-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-                </div>
-                <div class="p-6 overflow-y-auto space-y-6">
-                    <div class="grid grid-cols-3 gap-4">
-                        <div class="bg-emerald-50 p-4 rounded-xl text-center"><p class="text-xs text-emerald-600 mb-1">کارکرد</p><p class="font-black text-emerald-600" id="ledgerTotalWork">۰</p></div>
-                        <div class="bg-amber-50 p-4 rounded-xl text-center"><p class="text-xs text-amber-600 mb-1">پرداخت</p><p class="font-black text-amber-600" id="ledgerTotalPaid">۰</p></div>
-                        <div class="bg-red-50 p-4 rounded-xl text-center"><p class="text-xs text-red-600 mb-1">مانده</p><p class="font-black text-red-600" id="ledgerBalance">۰</p></div>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <h3 class="font-bold">تراکنش‌ها</h3>
-                        <button onclick="openPaymentModal(currentLedgerId)" class="bg-emerald-50 text-emerald-600 text-xs font-bold px-3 py-1.5 rounded-lg border border-emerald-200">+ ثبت پرداخت</button>
-                    </div>
-                    <div id="ledgerList" class="space-y-2"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="paymentModal" class="fixed inset-0 z-50 hidden">
-        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" id="paymentBackdrop"></div>
+    <!-- مودال تسویه حساب -->
+    <div id="settleModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" id="settleBackdrop"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
             <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 pointer-events-auto">
                 <div class="flex justify-between items-center p-6 border-b border-slate-100">
-                    <h2 class="text-lg font-black">ثبت پرداخت</h2>
-                    <button onclick="closePaymentModal()" class="text-slate-400 hover:text-slate-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                    <h2 class="text-lg font-black">ثبت تسویه حساب</h2>
+                    <button onclick="closeSettleModal()" class="text-slate-400 hover:text-slate-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
                 </div>
                 <div class="p-6">
-                    <form id="paymentForm" class="space-y-4">
-                        <input type="hidden" id="payPersonId">
-                        <div class="relative" id="payDateWrapper">
-                            <label class="block text-xs font-bold mb-1">تاریخ پرداخت</label>
-                            <input type="text" id="payDate" readonly class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm cursor-pointer" dir="ltr">
-                        </div>
-                        <div><label class="block text-xs font-bold mb-1">مبلغ (تومان)</label><input type="number" id="payAmount" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
-                        <div><label class="block text-xs font-bold mb-1">شماره پیگیری</label><input type="text" id="payTracking" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm" dir="ltr"></div>
-                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow-lg">ثبت پرداخت</button>
+                    <form id="settleForm" class="space-y-4">
+                        <input type="hidden" id="settlePersonId">
+                        <div><label class="block text-xs font-bold mb-1">مبلغ (تومان)</label><input type="number" id="settleAmount" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
+                        <div><label class="block text-xs font-bold mb-1">توضیحات</label><input type="text" id="settleDesc" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-xl py-2.5 px-4 text-sm"></div>
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow-lg">ثبت تسویه</button>
                     </form>
                 </div>
             </div>
         </div>
-    </div>
-
-    <div id="calendarModal" class="fixed inset-0 z-[60] hidden flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm cal-backdrop"></div>
-        <div class="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-2xl border border-slate-200 p-6 relative z-10 pointer-events-auto"><div id="calendarContainer"></div></div>
     </div>
 
     <script type="module" src="app.js"></script>
