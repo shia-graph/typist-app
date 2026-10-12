@@ -15,10 +15,21 @@
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; } .dark ::-webkit-scrollbar-thumb { background: #334155; }
         .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(226, 232, 240, 0.8); }
         .dark .glass { background: rgba(15, 23, 42, 0.85); border-color: rgba(51, 65, 85, 0.5); }
-        .cal-day { width: 100%; aspect-ratio: 1; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; transition: all 0.15s; }
-        .cal-day:hover { background: #ccfbf1; color: #0f766e; } .dark .cal-day:hover { background: #134e4a; color: #5eead4; }
-        .cal-day.selected { background: #0d9488 !important; color: white !important; font-weight: 700; }
+        
+        /* استایل‌های اصلاح شده و زیبای تقویم */
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .cal-day { 
+            display: flex; align-items: center; justify-content: center; 
+            aspect-ratio: 1; font-size: 14px; cursor: pointer; 
+            border-radius: 8px; transition: background-color 0.2s; 
+            color: #334155; font-weight: 500;
+        }
+        .dark .cal-day { color: #cbd5e1; }
+        .cal-day:hover { background-color: #f0fdfa; color: #0f766e; }
+        .dark .cal-day:hover { background-color: #134e4a; color: #5eead4; }
+        .cal-day.selected { background-color: #0d9488 !important; color: #fff !important; font-weight: 700; }
         .cal-day.today { border: 2px solid #14b8a6; }
+        .cal-header { color: #94a3b8; font-size: 12px; font-weight: 700; text-align: center; padding-bottom: 8px; }
         .date-input-wrapper { position: relative; }
         .date-input-wrapper input { cursor: pointer; }
         .date-input-wrapper::after { content: '🗓'; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 16px; opacity: 0.7; }
@@ -137,7 +148,7 @@
     <!-- مودال تقویم -->
     <div id="calendarModal" class="fixed inset-0 z-[60] hidden flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm cal-backdrop"></div>
-        <div class="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-2xl border border-slate-200 p-6 relative z-10 pointer-events-auto"><div id="calendarContainer"></div></div>
+        <div class="bg-white dark:bg-slate-900 w-full max-w-xs rounded-3xl shadow-2xl border border-slate-200 p-6 relative z-10 pointer-events-auto"><div id="calendarContainer"></div></div>
     </div>
 
     <script type="module" src="app.js"></script>
