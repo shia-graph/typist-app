@@ -126,27 +126,42 @@ async function loadAdminData() {
 
         return `
         <div class="glass rounded-2xl p-5 border border-slate-200/50">
-            <div class="flex justify-between items-center mb-4">
-                <div>
-                    <h3 class="font-bold">${esc(p.name)}</h3>
-                    <p class="text-xs text-slate-500">${esc(p.title || 'بدون عنوان')}</p>
+            <div onclick="window.toggleCard('${p.id}')" class="cursor-pointer">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h3 class="font-bold">${esc(p.name)}</h3>
+                        <p class="text-xs text-slate-500">${esc(p.title || 'بدون عنوان')}</p>
+                    </div>
+                    <a href="tel:${phoneEn}" class="text-blue-600 text-xs font-bold border border-blue-200 rounded-lg px-2 py-1" onclick="event.stopPropagation()">تماس</a>
                 </div>
-                <a href="tel:${phoneEn}" class="text-blue-600 text-xs font-bold border border-blue-200 rounded-lg px-2 py-1">تماس</a>
-            </div>
-            
-            <div class="mb-3">
-                <span class="text-xs font-bold px-2 py-1 rounded-lg ${statusClass}">${periodText}</span>
+                
+                <div class="mb-3">
+                    <span class="text-xs font-bold px-2 py-1 rounded-lg ${statusClass}">${periodText}</span>
+                </div>
+
+                <div class="text-xs text-slate-500 space-y-1">
+                    <p>مجموع تسویه شده: <span class="font-bold text-emerald-600">${formatNum(totalSettled)}</span> تومان</p>
+                    <p>تعداد گزارش‌ها: ${formatNum(reports.length)} مورد</p>
+                </div>
             </div>
 
-            <div class="text-xs text-slate-500 mb-4 space-y-1">
-                <p>مجموع تسویه شده: <span class="font-bold text-emerald-600">${formatNum(totalSettled)}</span> تومان</p>
-                <p>تعداد گزارش‌ها: ${formatNum(reports.length)} مورد</p>
-            </div>
-            <div class="flex gap-2">
-                <button onclick="window.openAdminReportModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-blue-50 text-blue-600 text-xs font-bold border border-blue-200">+ گزارش</button>
-                <button onclick="window.openSettleModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-200">+ تسویه</button>
-                <button onclick="window.editPerson('${p.id}')" class="py-2 px-3 rounded-xl bg-slate-50 text-slate-600 text-xs font-bold border border-slate-200">ویرایش</button>
-                <button onclick="window.deletePerson('${p.id}')" class="py-2 px-3 rounded-xl bg-red-50 text-red-600 text-xs font-bold border border-red-100">حذف</button>
+            <div id="card-details-${p.id}" class="card-accordion mt-4 border-t border-slate-200 pt-4">
+                <h4 class="font-bold text-sm mb-2">سوابق گزارش‌ها:</h4>
+                <div class="space-y-2 mb-4">
+                    ${reports.map(r => `<div class="text-xs bg-slate-50 p-2 rounded-lg">دوره ${r.period} - ${r.pages} صفحه</div>`).join('') || '<p class="text-xs text-slate-400">گزارشی ثبت نشده</p>'}
+                </div>
+                
+                <h4 class="font-bold text-sm mb-2">سوابق تسویه:</h4>
+                <div class="space-y-2 mb-4">
+                    ${settles.map(s => `<div class="text-xs bg-slate-50 p-2 rounded-lg">${formatNum(s.amount)} تومان</div>`).join('') || '<p class="text-xs text-slate-400">تسویه‌ای ثبت نشده</p>'}
+                </div>
+
+                <div class="flex gap-2">
+                    <button onclick="window.openAdminReportModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-blue-50 text-blue-600 text-xs font-bold border border-blue-200">+ گزارش</button>
+                    <button onclick="window.openSettleModal('${p.id}')" class="flex-1 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-200">+ تسویه</button>
+                    <button onclick="window.editPerson('${p.id}')" class="py-2 px-3 rounded-xl bg-slate-50 text-slate-600 text-xs font-bold border border-slate-200">ویرایش</button>
+                    <button onclick="window.deletePerson('${p.id}')" class="py-2 px-3 rounded-xl bg-red-50 text-red-600 text-xs font-bold border border-red-100">حذف</button>
+                </div>
             </div>
         </div>`;
     }).join('') || '<p class="text-center text-slate-400 col-span-full">هنوز تایپیستی ثبت نشده است.</p>';
@@ -155,6 +170,11 @@ async function loadAdminData() {
 // ============================================
 // توابع سراسری (Window)
 // ============================================
+window.toggleCard = (id) => {
+    const el = document.getElementById(`card-details-${id}`);
+    if (el) el.classList.toggle('open');
+};
+
 window.closePersonModal = () => document.getElementById('personModal').classList.add('hidden');
 window.editPerson = (id) => {
     const p = personsCache.find(x => x.id === id);
@@ -292,8 +312,6 @@ document.getElementById('userWorkForm').addEventListener('submit', async (e) => 
     }
 
     const pid = currentUserProfile.id;
-
-    // محاسبه دوره‌ای که تایپیست باید ثبت کند
     const { periodToReport } = calculatePeriodStatus(currentUserProfile.delivery_date, currentUserProfile.typist_reports || []);
 
     submitButton.disabled = true;
