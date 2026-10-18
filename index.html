@@ -5,11 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>سامانه مدیریت تایپیست‌ها</title>
 
+  <!-- PWA -->
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#4f46e5" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-  <!-- Supabase SDK (بدون eval) -->
+  <!-- Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -270,13 +274,15 @@
     .form-row { display: flex; flex-direction: column; gap: .35rem; }
     label { font-size: .8rem; font-weight: 700; color: #334155; }
 
-    input[type="text"], input[type="number"], select, textarea {
+    input[type="text"], input[type="number"], input[type="password"],
+    select, textarea {
       font-family: inherit; font-size: .9rem;
       padding: .65rem .85rem; border-radius: .75rem;
       border: 1px solid #e2e8f0; background: #fff;
       color: #1e293b; width: 100%; outline: none;
       transition: all .2s;
     }
+    input[type="hidden"] { display: none; }
     input:focus, select:focus, textarea:focus {
       border-color: transparent;
       box-shadow: 0 0 0 3px rgba(99,102,241,.3);
@@ -332,6 +338,8 @@
     .date-picker-input input {
       border: 0; padding: 0; background: transparent;
       cursor: pointer; font-weight: 700; width: 100%;
+      font-family: inherit; font-size: .9rem;
+      color: #1e293b; outline: none;
     }
     .date-picker-input input:focus { box-shadow: none; }
     .date-picker-input svg { width: 1.1rem; height: 1.1rem; color: #64748b; flex-shrink: 0; }
@@ -398,9 +406,7 @@
 
 <body>
 
-  <!-- ==================================================== -->
-  <!-- ==================== LOGIN ========================= -->
-  <!-- ==================================================== -->
+  <!-- ==================== LOGIN ==================== -->
   <div id="login-screen">
     <div class="login-card">
       <div class="login-icon">📝</div>
@@ -468,9 +474,7 @@
     </div>
   </div>
 
-  <!-- ==================================================== -->
-  <!-- ==================== PANEL ========================= -->
-  <!-- ==================================================== -->
+  <!-- ==================== PANEL ==================== -->
   <div id="panel-screen">
     <div class="container">
 
@@ -563,7 +567,7 @@
           <label for="inp-date">تاریخ ثبت</label>
           <div class="date-picker-wrap" data-datepicker>
             <div class="date-picker-input">
-              <input type="text" id="inp-date" placeholder="انتخاب تاریخ" readonly />
+              <input type="text" id="inp-date" placeholder="انتخاب تاریخ" readonly tabindex="-1" />
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -602,7 +606,7 @@
           <label for="inp-pay-date">تاریخ پرداخت</label>
           <div class="date-picker-wrap" data-datepicker>
             <div class="date-picker-input">
-              <input type="text" id="inp-pay-date" placeholder="انتخاب تاریخ" readonly />
+              <input type="text" id="inp-pay-date" placeholder="انتخاب تاریخ" readonly tabindex="-1" />
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -631,7 +635,20 @@
     </div>
   </div>
 
-  <!-- فایل JS جداگانه -->
+  <!-- فایل JS اصلی -->
   <script src="./app.js"></script>
+
+  <!-- ثبت Service Worker (اختیاری، در صورت وجود sw.js) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').then(function (reg) {
+          if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+        }).catch(function (err) {
+          console.warn('SW register failed:', err);
+        });
+      });
+    }
+  </script>
 </body>
 </html>
