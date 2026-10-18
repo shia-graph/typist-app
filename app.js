@@ -1,5 +1,5 @@
 // =========================================================
-// 1. SUPABASE CLIENT INITIALIZATION
+// 1. SUPABASE CLIENT & STATE INITIALIZATION
 // =========================================================
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyMzg2NjYsImV4cCI6MjA1NjgxNDY2Nn0.2O5_N4MSpPBygOnT2XN65O9C4Y7I47b8s6R3H6R3g7U';
@@ -9,8 +9,8 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON
 
 console.log("🚀 Typist Payroll App initialized successfully.");
 
-// GLOBAL APP STATE
-let currentUserRole = null; // 'admin' | 'typist'
+let currentLoginMode = 'admin'; // 'admin' | 'typist'
+let currentUserRole = null;
 let currentTypistId = null;
 let allTypists = [];
 let currentTypistDetail = null;
@@ -24,6 +24,7 @@ function toEnglishDigits(str) {
     if (!str) return '';
     return str.toString()
         .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+        .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦ realm'.indexOf(d))
         .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
         .trim();
 }
@@ -56,10 +57,10 @@ function showToast(message, type = 'info') {
 }
 
 // =========================================================
-// 3. UI VIEW & MODAL MANAGEMENT
+// 3. ATTACH ALL FUNCTIONS DIRECTLY TO WINDOW
 // =========================================================
 
-function toggleTheme() {
+window.toggleTheme = function() {
     const html = document.documentElement;
     const icon = document.getElementById('theme-icon');
     if (html.classList.contains('dark')) {
@@ -69,54 +70,56 @@ function toggleTheme() {
         html.classList.add('dark');
         if (icon) icon.textContent = '☀️';
     }
-}
+};
 
-function switchLoginTab(role) {
+window.switchLoginTab = function(mode) {
+    currentLoginMode = mode;
     const tabAdmin = document.getElementById('tab-admin');
     const tabTypist = document.getElementById('tab-typist');
-    const typistIdContainer = document.getElementById('typist-id-container');
+    const typistContainer = document.getElementById('typist-id-container');
+    const identifierInput = document.getElementById('login-identifier');
 
-    if (role === 'admin') {
+    if (mode === 'admin') {
         tabAdmin.className = "flex-1 py-3 text-center text-sm font-semibold text-indigo-600 border-b-2 border-indigo-600 transition";
         tabTypist.className = "flex-1 py-3 text-center text-sm font-semibold text-gray-500 dark:text-gray-400 border-b-2 border-transparent transition";
-        typistIdContainer.classList.add('hidden');
+        if (typistContainer) typistContainer.classList.add('hidden');
+        if (identifierInput) identifierInput.value = '';
     } else {
         tabTypist.className = "flex-1 py-3 text-center text-sm font-semibold text-indigo-600 border-b-2 border-indigo-600 transition";
         tabAdmin.className = "flex-1 py-3 text-center text-sm font-semibold text-gray-500 dark:text-gray-400 border-b-2 border-transparent transition";
-        typistIdContainer.classList.remove('hidden');
+        if (typistContainer) typistContainer.classList.remove('hidden');
     }
-}
+};
 
-function hideAllViews() {
+window.hideAllViews = function() {
     document.getElementById('view-login').classList.add('hidden');
     document.getElementById('view-admin-dashboard').classList.add('hidden');
     document.getElementById('view-typist-detail').classList.add('hidden');
     document.getElementById('view-typist-dashboard').classList.add('hidden');
     document.getElementById('main-header').classList.add('hidden');
-}
+};
 
-function logout() {
+window.logout = function() {
     currentUserRole = null;
     currentTypistId = null;
-    hideAllViews();
+    window.hideAllViews();
     document.getElementById('view-login').classList.remove('hidden');
     showToast('از سیستم خارج شدید', 'info');
-}
+};
 
 // =========================================================
-// 4. AUTHENTICATION & LOGIN
+// 4. AUTHENTICATION (LOGIN)
 // =========================================================
 
-async function handleLogin(e) {
+window.handleLogin = async function(e) {
     if (e) e.preventDefault();
 
-    const isTypistTab = !document.getElementById('typist-id-container').classList.contains('hidden');
     const passwordInput = document.getElementById('login-password').value;
 
-    if (isTypistTab) {
+    if (currentLoginMode === 'typist') {
         const identifierInput = document.getElementById('login-identifier').value;
         if (!identifierInput) {
-            showToast('لطفا کد ملی یا شماره تماس را وارد کنید', 'error');
+            showToast('لطفا کد ملی یا شماره همراه را وارد کنید', 'error');
             return;
         }
 
@@ -132,16 +135,17 @@ async function handleLogin(e) {
                 currentUserRole = 'typist';
                 currentTypistId = data.typist_id;
                 document.getElementById('user-welcome').textContent = `تایپیست: ${data.full_name}`;
-                showTypistDashboardView();
+                window.showTypistDashboardView();
                 showToast(`خوش آمدید ${data.full_name}`, 'success');
             } else {
                 showToast(data?.message || 'مشخصات ورود اشتباه است', 'error');
             }
         } catch (err) {
             console.error(err);
-            showToast('خطا در ارتباط با سرور', 'error');
+            showToast('خطا در لاگین تایپیست', 'error');
         }
     } else {
+        // ADMIN LOGIN
         try {
             const { data, error } = await window.supabaseClient.rpc('verify_admin_password', {
                 p_password: toEnglishDigits(passwordInput)
@@ -152,7 +156,7 @@ async function handleLogin(e) {
             if (data && data.success) {
                 currentUserRole = 'admin';
                 document.getElementById('user-welcome').textContent = 'مدیریت سیستم';
-                showDashboardView();
+                window.showDashboardView();
                 showToast('ورود موفقیت‌آمیز به پنل مدیریت', 'success');
             } else {
                 showToast(data?.message || 'رمز عبور مدیریت اشتباه است', 'error');
@@ -162,20 +166,20 @@ async function handleLogin(e) {
             showToast('خطا در لاگین مدیریت', 'error');
         }
     }
-}
+};
 
 // =========================================================
-// 5. ADMIN DASHBOARD ACTIONS
+// 5. ADMIN DASHBOARD
 // =========================================================
 
-async function showDashboardView() {
-    hideAllViews();
+window.showDashboardView = async function() {
+    window.hideAllViews();
     document.getElementById('main-header').classList.remove('hidden');
     document.getElementById('view-admin-dashboard').classList.remove('hidden');
-    await loadDashboardData();
-}
+    await window.loadDashboardData();
+};
 
-async function loadDashboardData() {
+window.loadDashboardData = async function() {
     try {
         const { data, error } = await window.supabaseClient.rpc('get_dashboard_summary');
         if (error) throw error;
@@ -188,19 +192,19 @@ async function loadDashboardData() {
         document.getElementById('stat-total-paid').textContent = formatToman(stats.total_paid);
         document.getElementById('stat-total-balance').textContent = formatToman(stats.total_balance);
 
-        renderTypistsTable(allTypists);
+        window.renderTypistsTable(allTypists);
     } catch (err) {
         console.error("Dashboard Load Error:", err);
-        showToast('خطا در لود اطلاعات داشبورد', 'error');
+        showToast('خطا در دریافت اطلاعات داشبورد', 'error');
     }
-}
+};
 
-function renderTypistsTable(typists) {
+window.renderTypistsTable = function(typists) {
     const tbody = document.getElementById('typists-table-body');
     tbody.innerHTML = '';
 
     if (!typists || typists.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-400">هیچ تایپیستی یافت نشد</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-400">هیچ تایپیستی ثبت نشده است</td></tr>`;
         return;
     }
 
@@ -233,9 +237,9 @@ function renderTypistsTable(typists) {
         `;
         tbody.appendChild(tr);
     });
-}
+};
 
-function filterTypists() {
+window.filterTypists = function() {
     const query = toEnglishDigits(document.getElementById('typist-search').value.toLowerCase());
     const filtered = allTypists.filter(t => 
         t.first_name.toLowerCase().includes(query) ||
@@ -243,21 +247,21 @@ function filterTypists() {
         t.phone.includes(query) ||
         t.national_id.includes(query)
     );
-    renderTypistsTable(filtered);
-}
+    window.renderTypistsTable(filtered);
+};
 
-function toggleSelectAllTypists(master) {
+window.toggleSelectAllTypists = function(master) {
     const checkboxes = document.querySelectorAll('.typist-checkbox');
     checkboxes.forEach(cb => cb.checked = master.checked);
-    updateGroupSmsCount();
-}
+    window.updateGroupSmsCount();
+};
 
-function updateGroupSmsCount() {
+window.updateGroupSmsCount = function() {
     const checked = document.querySelectorAll('.typist-checkbox:checked');
     document.getElementById('selected-sms-count').textContent = checked.length;
-}
+};
 
-function sendGroupSMS() {
+window.sendGroupSMS = function() {
     const checked = document.querySelectorAll('.typist-checkbox:checked');
     if (checked.length === 0) {
         showToast('هیچ تایپیستی انتخاب نشده است', 'error');
@@ -266,15 +270,15 @@ function sendGroupSMS() {
 
     const phones = Array.from(checked).map(cb => cb.getAttribute('data-phone')).filter(Boolean);
     if (phones.length === 0) {
-        showToast('شماره تماسی برای تایپیست‌های انتخاب شده یافت نشد', 'error');
+        showToast('شماره تماسی یافت نشد', 'error');
         return;
     }
 
-    const smsUrl = `sms:${phones.join(',')}?body=${encodeURIComponent('با سلام و احترام،')}`;
+    const smsUrl = `sms:${phones.join(',')}?body=${encodeURIComponent('با سلام،')}`;
     window.location.href = smsUrl;
-}
+};
 
-function exportBankCSV() {
+window.exportBankCSV = function() {
     if (!allTypists || allTypists.length === 0) {
         showToast('داده‌ای برای خروجی وجود ندارد', 'error');
         return;
@@ -303,20 +307,20 @@ function exportBankCSV() {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `پرداخت_بانکی_تایپیست_ها_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute("download", `پرداخت_بانکی_تایپیست_ها.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast('فایل CSV پرداخت بانکی دانلود شد', 'success');
-}
+    showToast('فایل CSV دانلود شد', 'success');
+};
 
 // =========================================================
 // 6. TYPIST DETAIL VIEW (ADMIN)
 // =========================================================
 
-async function viewTypistDetail(typistId) {
+window.viewTypistDetail = async function(typistId) {
     currentTypistId = typistId;
-    hideAllViews();
+    window.hideAllViews();
     document.getElementById('main-header').classList.remove('hidden');
     document.getElementById('view-typist-detail').classList.remove('hidden');
 
@@ -332,15 +336,15 @@ async function viewTypistDetail(typistId) {
         document.getElementById('detail-card-iban').textContent = `کارت: ${prof.card_number || '-'} | شبا: IR${prof.iban || '-'}`;
         document.getElementById('detail-financial-summary').textContent = `کارکرد: ${formatToman(prof.total_earned)} | دریافتی: ${formatToman(prof.total_paid)} | مانده: ${formatToman(prof.balance)} تومان`;
 
-        renderReportsTable(data.reports || [], true);
-        renderPaymentsTable(data.payments || []);
+        window.renderReportsTable(data.reports || [], true);
+        window.renderPaymentsTable(data.payments || []);
     } catch (err) {
         console.error(err);
         showToast('خطا در لود جزئیات تایپیست', 'error');
     }
-}
+};
 
-function renderReportsTable(reports, isAdmin = false) {
+window.renderReportsTable = function(reports, isAdmin = false) {
     const tbody = isAdmin ? document.getElementById('detail-reports-table-body') : document.getElementById('typist-self-reports-body');
     tbody.innerHTML = '';
 
@@ -360,7 +364,7 @@ function renderReportsTable(reports, isAdmin = false) {
                 <td class="p-3 text-center">${formatToman(r.rate_per_page)}</td>
                 <td class="p-3 text-center text-emerald-600 font-bold">${formatToman(r.total_price)}</td>
                 <td class="p-3 text-center dir-ltr">${r.delivery_date || '-'}</td>
-                <td class="p-3 text-center"><span class="px-2 py-1 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300 rounded text-xs">ثبت شده</span></td>
+                <td class="p-3 text-center"><span class="px-2 py-1 bg-indigo-50 text-indigo-600 rounded text-xs">ثبت شده</span></td>
                 <td class="p-3 text-center">
                     <button type="button" onclick="window.deleteReport('${r.id}')" class="px-2 py-1 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">حذف</button>
                 </td>
@@ -370,14 +374,14 @@ function renderReportsTable(reports, isAdmin = false) {
                 <td class="p-3 font-bold">${r.title}</td>
                 <td class="p-3 text-center">${r.page_count}</td>
                 <td class="p-3 text-center dir-ltr">${r.delivery_date || '-'}</td>
-                <td class="p-3 text-center"><span class="px-2 py-1 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300 rounded text-xs">ارسال شده</span></td>
+                <td class="p-3 text-center"><span class="px-2 py-1 bg-emerald-50 text-emerald-600 rounded text-xs">ارسال شده</span></td>
             `;
         }
         tbody.appendChild(tr);
     });
-}
+};
 
-function renderPaymentsTable(payments) {
+window.renderPaymentsTable = function(payments) {
     const tbody = document.getElementById('detail-payments-table-body');
     tbody.innerHTML = '';
 
@@ -400,14 +404,14 @@ function renderPaymentsTable(payments) {
         `;
         tbody.appendChild(tr);
     });
-}
+};
 
 // =========================================================
 // 7. TYPIST DASHBOARD (LOGGED IN TYPIST)
 // =========================================================
 
-async function showTypistDashboardView() {
-    hideAllViews();
+window.showTypistDashboardView = async function() {
+    window.hideAllViews();
     document.getElementById('main-header').classList.remove('hidden');
     document.getElementById('view-typist-dashboard').classList.remove('hidden');
 
@@ -421,18 +425,18 @@ async function showTypistDashboardView() {
         document.getElementById('typist-self-paid').textContent = `${formatToman(prof.total_paid)} تومان`;
         document.getElementById('typist-self-balance').textContent = `${formatToman(prof.balance)} تومان`;
 
-        renderReportsTable(data.reports || [], false);
+        window.renderReportsTable(data.reports || [], false);
     } catch (err) {
         console.error(err);
         showToast('خطا در لود اطلاعات تایپیست', 'error');
     }
-}
+};
 
 // =========================================================
 // 8. CRUD MODALS & ACTIONS
 // =========================================================
 
-function openTypistModal() {
+window.openTypistModal = function() {
     document.getElementById('modal-typist-title').textContent = "افزودن تایپیست جدید";
     document.getElementById('typist-id').value = "";
     document.getElementById('typist-first-name').value = "";
@@ -446,13 +450,13 @@ function openTypistModal() {
     document.getElementById('typist-password').value = "";
 
     document.getElementById('modal-typist').classList.remove('hidden');
-}
+};
 
-function closeTypistModal() {
+window.closeTypistModal = function() {
     document.getElementById('modal-typist').classList.add('hidden');
-}
+};
 
-function editTypist(typistId) {
+window.editTypist = function(typistId) {
     const t = allTypists.find(x => x.id === typistId);
     if (!t) return;
 
@@ -469,9 +473,9 @@ function editTypist(typistId) {
     document.getElementById('typist-password').value = "";
 
     document.getElementById('modal-typist').classList.remove('hidden');
-}
+};
 
-async function saveTypist(e) {
+window.saveTypist = async function(e) {
     if (e) e.preventDefault();
 
     const payload = {
@@ -491,27 +495,27 @@ async function saveTypist(e) {
         const { data, error } = await window.supabaseClient.rpc('upsert_typist', payload);
         if (error) throw error;
 
-        closeTypistModal();
-        showToast('اطلاعات تایپیست با موفقیت ذخیره شد', 'success');
-        loadDashboardData();
+        window.closeTypistModal();
+        showToast('اطلاعات تایپیست ذخیره شد', 'success');
+        window.loadDashboardData();
     } catch (err) {
         console.error(err);
         showToast('خطا در ذخیره اطلاعات تایپیست', 'error');
     }
-}
+};
 
-function openReportModal() {
+window.openReportModal = function() {
     document.getElementById('report-title').value = "";
     document.getElementById('report-page-count').value = "";
     document.getElementById('report-delivery-date').value = "";
     document.getElementById('modal-report').classList.remove('hidden');
-}
+};
 
-function closeReportModal() {
+window.closeReportModal = function() {
     document.getElementById('modal-report').classList.add('hidden');
-}
+};
 
-async function saveReport(e) {
+window.saveReport = async function(e) {
     if (e) e.preventDefault();
 
     const payload = {
@@ -525,21 +529,21 @@ async function saveReport(e) {
         const { data, error } = await window.supabaseClient.rpc('add_typist_report', payload);
         if (error) throw error;
 
-        closeReportModal();
+        window.closeReportModal();
         showToast('گزارش کار با موفقیت ثبت شد', 'success');
 
         if (currentUserRole === 'admin') {
-            viewTypistDetail(currentTypistId);
+            window.viewTypistDetail(currentTypistId);
         } else {
-            showTypistDashboardView();
+            window.showTypistDashboardView();
         }
     } catch (err) {
         console.error(err);
         showToast('خطا در ثبت گزارش کار', 'error');
     }
-}
+};
 
-async function deleteReport(reportId) {
+window.deleteReport = async function(reportId) {
     if (!confirm('آیا از حذف این گزارش کار مطمئن هستید؟')) return;
 
     try {
@@ -547,25 +551,25 @@ async function deleteReport(reportId) {
         if (error) throw error;
 
         showToast('گزارش کار حذف شد', 'success');
-        viewTypistDetail(currentTypistId);
+        window.viewTypistDetail(currentTypistId);
     } catch (err) {
         console.error(err);
         showToast('خطا در حذف گزارش کار', 'error');
     }
-}
+};
 
-function openPaymentModal() {
+window.openPaymentModal = function() {
     document.getElementById('payment-amount').value = "";
     document.getElementById('payment-date').value = "1403/12/01";
     document.getElementById('payment-description').value = "";
     document.getElementById('modal-payment').classList.remove('hidden');
-}
+};
 
-function closePaymentModal() {
+window.closePaymentModal = function() {
     document.getElementById('modal-payment').classList.add('hidden');
-}
+};
 
-async function savePayment(e) {
+window.savePayment = async function(e) {
     if (e) e.preventDefault();
 
     const payload = {
@@ -579,16 +583,16 @@ async function savePayment(e) {
         const { data, error } = await window.supabaseClient.rpc('add_payment', payload);
         if (error) throw error;
 
-        closePaymentModal();
+        window.closePaymentModal();
         showToast('پرداخت جدید ثبت شد', 'success');
-        viewTypistDetail(currentTypistId);
+        window.viewTypistDetail(currentTypistId);
     } catch (err) {
         console.error(err);
         showToast('خطا در ثبت پرداخت', 'error');
     }
-}
+};
 
-async function deletePayment(paymentId) {
+window.deletePayment = async function(paymentId) {
     if (!confirm('آیا از حذف این پرداخت مطمئن هستید؟')) return;
 
     try {
@@ -596,24 +600,24 @@ async function deletePayment(paymentId) {
         if (error) throw error;
 
         showToast('پرداخت حذف شد', 'success');
-        viewTypistDetail(currentTypistId);
+        window.viewTypistDetail(currentTypistId);
     } catch (err) {
         console.error(err);
         showToast('خطا در حذف پرداخت', 'error');
     }
-}
+};
 
-function openChangePasswordModal() {
+window.openChangePasswordModal = function() {
     document.getElementById('pass-old').value = "";
     document.getElementById('pass-new').value = "";
     document.getElementById('modal-change-password').classList.remove('hidden');
-}
+};
 
-function closeChangePasswordModal() {
+window.closeChangePasswordModal = function() {
     document.getElementById('modal-change-password').classList.add('hidden');
-}
+};
 
-async function saveChangePassword(e) {
+window.saveChangePassword = async function(e) {
     if (e) e.preventDefault();
 
     const oldPass = document.getElementById('pass-old').value;
@@ -637,32 +641,32 @@ async function saveChangePassword(e) {
         if (result.error) throw result.error;
 
         if (result.data && result.data.success) {
-            closeChangePasswordModal();
-            showToast('رمز عبور با موفقیت تغییر یافت', 'success');
+            window.closeChangePasswordModal();
+            showToast('رمز عبور تغییر یافت', 'success');
         } else {
-            showToast(result.data?.message || 'تغییر رمز عبور ناموفق بود', 'error');
+            showToast(result.data?.message || 'تغییر رمز نا‌موفق بود', 'error');
         }
     } catch (err) {
         console.error(err);
         showToast('خطا در تغییر رمز عبور', 'error');
     }
-}
+};
 
 // =========================================================
 // 9. SHAMSI DATEPICKER LOGIC
 // =========================================================
 
-function openDatePicker(targetInputId) {
+window.openDatePicker = function(targetInputId) {
     selectedDatePickerTargetId = targetInputId;
-    renderDatePickerDays();
+    window.renderDatePickerDays();
     document.getElementById('modal-datepicker').classList.remove('hidden');
-}
+};
 
-function closeDatePicker() {
+window.closeDatePicker = function() {
     document.getElementById('modal-datepicker').classList.add('hidden');
-}
+};
 
-function renderDatePickerDays() {
+window.renderDatePickerDays = function() {
     const daysContainer = document.getElementById('datepicker-days');
     if (!daysContainer) return;
 
@@ -672,12 +676,12 @@ function renderDatePickerDays() {
         btn.type = 'button';
         btn.className = "p-2 bg-gray-100 dark:bg-gray-700 hover:bg-indigo-600 hover:text-white rounded font-bold transition";
         btn.textContent = day;
-        btn.onclick = () => selectDate(day);
+        btn.onclick = () => window.selectDate(day);
         daysContainer.appendChild(btn);
     }
-}
+};
 
-function selectDate(day) {
+window.selectDate = function(day) {
     const year = document.getElementById('datepicker-year').value;
     const month = document.getElementById('datepicker-month').value;
     const dayStr = day < 10 ? `0${day}` : `${day}`;
@@ -688,39 +692,5 @@ function selectDate(day) {
         if (targetInput) targetInput.value = formattedDate;
     }
 
-    closeDatePicker();
-}
-
-// =========================================================
-// 10. EXPOSE ALL FUNCTIONS TO WINDOW SCOPE
-// =========================================================
-
-window.toggleTheme = toggleTheme;
-window.switchLoginTab = switchLoginTab;
-window.handleLogin = handleLogin;
-window.logout = logout;
-window.showDashboardView = showDashboardView;
-window.filterTypists = filterTypists;
-window.toggleSelectAllTypists = toggleSelectAllTypists;
-window.updateGroupSmsCount = updateGroupSmsCount;
-window.sendGroupSMS = sendGroupSMS;
-window.exportBankCSV = exportBankCSV;
-window.viewTypistDetail = viewTypistDetail;
-window.openTypistModal = openTypistModal;
-window.closeTypistModal = closeTypistModal;
-window.editTypist = editTypist;
-window.saveTypist = saveTypist;
-window.openReportModal = openReportModal;
-window.closeReportModal = closeReportModal;
-window.saveReport = saveReport;
-window.deleteReport = deleteReport;
-window.openPaymentModal = openPaymentModal;
-window.closePaymentModal = closePaymentModal;
-window.savePayment = savePayment;
-window.deletePayment = deletePayment;
-window.openChangePasswordModal = openChangePasswordModal;
-window.closeChangePasswordModal = closeChangePasswordModal;
-window.saveChangePassword = saveChangePassword;
-window.openDatePicker = openDatePicker;
-window.closeDatePicker = closeDatePicker;
-window.selectDate = selectDate;
+    window.closeDatePicker();
+};
