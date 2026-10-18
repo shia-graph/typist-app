@@ -2,26 +2,23 @@
 // تنظیمات اتصال Supabase
 // ==========================================
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
-const SUPABASE_KEY = 'GAPGPTMASKTOKENom14hbml2fcX0X';
+const SUPABASE_KEY = 'GAPGPTMASKTOKENoz86en1369oX0X';
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ==========================================
-// متغیرهای حالت برنامه (State)
+// متغیرهای وضعیت (State)
 // ==========================================
 let currentTypist = null;
 let isAdminLoggedIn = false;
 let allTypistsCache = [];
 
-// میانبر انتخاب المنتی
 const $ = (id) => document.getElementById(id);
 
-// بستن مودال‌ها
 function closeModal(modalId) {
     const m = $(modalId);
     if (m) m.classList.add('hidden');
 }
 
-// تغییر فیلد بر اساس مدل تسویه
 window.toggleSettleTypeUI = function() {
     const isFull = document.querySelector('input[name="settleType"]:checked')?.value === 'full';
     const container = $('monthlyPeriodContainer');
@@ -35,40 +32,24 @@ window.toggleSettleTypeUI = function() {
 };
 
 // ==========================================
-// راه‌اندازی اولیه و رویدادها
+// رویدادهای راه‌اندازی
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    // رویداد ورود به پنل مدیریت
     const adminBtn = $('adminToggleBtn');
-    if (adminBtn) {
-        adminBtn.addEventListener('click', handleAdminToggle);
-    }
+    if (adminBtn) adminBtn.addEventListener('click', handleAdminToggle);
 
-    // خروج از حساب تایپیست
     const logoutBtn = $('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', logoutTypist);
-    }
+    if (logoutBtn) logoutBtn.addEventListener('click', logoutTypist);
 
-    // فرم ورود تایپیست
     const loginForm = $('typistLoginForm');
-    if (loginForm) {
-        loginForm.addEventListener('submit', handleTypistLogin);
-    }
+    if (loginForm) loginForm.addEventListener('submit', handleTypistLogin);
 
-    // فرم ویرایش پروفایل تایپیست
     const profileForm = $('profileForm');
-    if (profileForm) {
-        profileForm.addEventListener('submit', handleProfileUpdate);
-    }
+    if (profileForm) profileForm.addEventListener('submit', handleProfileUpdate);
 
-    // دکمه باز کردن ویرایش پروفایل
     const editProfBtn = $('editProfileBtn');
-    if (editProfBtn) {
-        editProfBtn.addEventListener('click', openProfileModal);
-    }
+    if (editProfBtn) editProfBtn.addEventListener('click', openProfileModal);
 
-    // ثبت گزارش ۱۰ روزه جدید
     const openRepBtn = $('openReportModalBtn');
     if (openRepBtn) {
         openRepBtn.addEventListener('click', () => {
@@ -78,31 +59,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const repForm = $('reportForm');
-    if (repForm) {
-        repForm.addEventListener('submit', handleReportSubmit);
-    }
+    if (repForm) repForm.addEventListener('submit', handleReportSubmit);
 
-    // دکمه افزودن تایپیست توسط مدیر
     const newTypistBtn = $('newTypistBtn');
-    if (newTypistBtn) {
-        newTypistBtn.addEventListener('click', createNewTypistByAdmin);
-    }
+    if (newTypistBtn) newTypistBtn.addEventListener('click', createNewTypistByAdmin);
 
-    // دکمه اکسل
     const exportExcelBtn = $('exportExcelBtn');
-    if (exportExcelBtn) {
-        exportExcelBtn.addEventListener('click', exportToExcel);
-    }
+    if (exportExcelBtn) exportExcelBtn.addEventListener('click', exportToExcel);
 
-    // فرم ثبت تسویه مالی
     const paymentForm = $('paymentForm');
-    if (paymentForm) {
-        paymentForm.addEventListener('submit', handlePaymentSubmit);
-    }
+    if (paymentForm) paymentForm.addEventListener('submit', handlePaymentSubmit);
 });
 
 // ==========================================
-// ورود به پنل مدیریت با استعلام رمز از دیتابیس
+// ورود به پنل مدیریت
 // ==========================================
 async function handleAdminToggle() {
     const adminSec = $('adminSection');
@@ -136,7 +106,7 @@ async function handleAdminToggle() {
                 .single();
 
             if (error || !data) {
-                alert('خطا در دریافت رمز مدیر: ' + (error ? error.message : 'یافت نشد'));
+                alert('خطا در دریافت رمز مدیر از پایگاه داده: ' + (error ? error.message : 'یافت نشد'));
                 adminBtn.textContent = oldBtnText;
                 return;
             }
@@ -163,12 +133,12 @@ async function handleAdminToggle() {
     loadAdminData();
 }
 
-// بارگذاری داده‌های کامل در جدول پنل مدیریت
+// بارگذاری داده‌ها و رندر همزمان جدول دسکتاپ و کارت موبایل
 async function loadAdminData() {
     const tbody = $('adminTypistsTable');
-    if (!tbody) return;
-
-    tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">در حال دریافت داده‌ها...</td></tr>';
+    const cards = $('adminTypistsCards');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">در حال دریافت داده‌ها...</td></tr>';
+    if (cards) cards.innerHTML = '<div class="p-4 text-center text-slate-400 text-xs">در حال بارگذاری اطلاعات...</div>';
 
     try {
         const { data, error } = await client
@@ -181,72 +151,121 @@ async function loadAdminData() {
             .order('created_at', { ascending: false });
 
         if (error) {
-            tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-rose-500">خطا: ${error.message}</td></tr>`;
+            const errMsg = `خطا در دریافت اطلاعات: ${error.message}`;
+            if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-rose-500 font-semibold">${errMsg}</td></tr>`;
+            if (cards) cards.innerHTML = `<div class="p-4 text-center text-rose-500 text-xs">${errMsg}</div>`;
             return;
         }
 
         allTypistsCache = data || [];
 
         if (allTypistsCache.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">تایپیستی ثبت نشده است. از دکمه «+ تایپیست جدید» استفاده کنید.</td></tr>';
+            const emptyMsg = 'تایپیستی ثبت نشده است. از دکمه «+ تایپیست جدید» برای شروع استفاده کنید.';
+            if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">${emptyMsg}</td></tr>`;
+            if (cards) cards.innerHTML = `<div class="p-4 text-center text-slate-400 text-xs">${emptyMsg}</div>`;
             return;
         }
 
-        tbody.innerHTML = allTypistsCache.map(p => {
-            const reps = p.typist_reports || [];
-            const pays = p.payments || [];
+        // 1. رندر جدول دسکتاپ
+        if (tbody) {
+            tbody.innerHTML = allTypistsCache.map(p => {
+                const reps = p.typist_reports || [];
+                const pays = p.payments || [];
+                const totalPages = reps.reduce((sum, r) => sum + Number(r.pages_count || 0), 0);
+                const totalWords = reps.reduce((sum, r) => sum + Number(r.words_count || 0), 0);
+                const totalPaid = pays.reduce((sum, pay) => sum + Number(pay.amount || 0), 0);
+                const hasFullSettle = pays.some(pay => (pay.notes || '').includes('تسویه کامل و نهایی'));
 
-            const totalPages = reps.reduce((sum, r) => sum + Number(r.pages_count || 0), 0);
-            const totalWords = reps.reduce((sum, r) => sum + Number(r.words_count || 0), 0);
-            const totalPaid = pays.reduce((sum, pay) => sum + Number(pay.amount || 0), 0);
+                return `
+                    <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
+                        <td class="p-3">
+                            <div class="font-bold text-slate-900">${p.name || '-'}</div>
+                            <div class="text-[11px] text-slate-500">${p.title || 'تایپیست'}</div>
+                        </td>
+                        <td class="p-3 font-mono font-medium text-slate-700">${p.national_code || '-'}</td>
+                        <td class="p-3">
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-mono text-xs">${p.phone || '-'}</span>
+                                ${p.phone ? `
+                                    <a href="tel:${p.phone}" title="تماس تلفنی مستقیم" class="p-1 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                                    </a>
+                                ` : ''}
+                            </div>
+                        </td>
+                        <td class="p-3 font-mono text-slate-600 text-[11px]" dir="ltr">${p.shaba_number || '-'}</td>
+                        <td class="p-3">
+                            <div class="font-mono font-bold text-teal-700">${totalPages} صفحه</div>
+                            <div class="text-[11px] font-mono text-slate-500">${totalWords.toLocaleString()} کلمه</div>
+                        </td>
+                        <td class="p-3">
+                            <div class="font-mono font-bold text-emerald-600">${totalPaid.toLocaleString()}</div>
+                            ${hasFullSettle ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium">تسویه نهایی شده</span>' : ''}
+                        </td>
+                        <td class="p-3 text-center">
+                            <div class="flex items-center justify-center gap-1">
+                                <button onclick="viewTypistWorks('${p.id}')" title="مشاهده کارکردها" class="px-2 py-1 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 font-medium text-xs">کارکردها (${reps.length})</button>
+                                <button onclick="openPaymentModal('${p.id}', '${p.name}')" title="ثبت واریزی" class="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 font-medium text-xs">تسویه</button>
+                                <button onclick="editPersonByAdmin('${p.id}')" title="ویرایش اطلاعات" class="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium text-xs">ویرایش</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
 
-            // بررسی آخرین نوع تسویه (آیا تسویه کامل داشته است؟)
-            const hasFullSettle = pays.some(pay => (pay.notes || '').includes('تسویه کامل و نهایی'));
+        // 2. رندر کارت‌های موبایل
+        if (cards) {
+            cards.innerHTML = allTypistsCache.map(p => {
+                const reps = p.typist_reports || [];
+                const pays = p.payments || [];
+                const totalPages = reps.reduce((sum, r) => sum + Number(r.pages_count || 0), 0);
+                const totalWords = reps.reduce((sum, r) => sum + Number(r.words_count || 0), 0);
+                const totalPaid = pays.reduce((sum, pay) => sum + Number(pay.amount || 0), 0);
+                const hasFullSettle = pays.some(pay => (pay.notes || '').includes('تسویه کامل و نهایی'));
 
-            return `
-                <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-                    <td class="p-3">
-                        <div class="font-bold text-slate-900">${p.name || '-'}</div>
-                        <div class="text-[11px] text-slate-500">${p.title || 'تایپیست'}</div>
-                    </td>
-                    <td class="p-3 font-mono font-medium text-slate-700">${p.national_code || '-'}</td>
-                    <td class="p-3">
-                        <div class="flex items-center gap-1.5">
-                            <span class="font-mono text-xs">${p.phone || '-'}</span>
-                            ${p.phone ? `
-                                <a href="tel:${p.phone}" title="تماس تلفنی مستقیم" class="p-1 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
-                                </a>
-                            ` : ''}
+                return `
+                    <div class="p-3.5 bg-slate-50/70 border border-slate-200/80 rounded-xl space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="font-bold text-slate-900 text-sm">${p.name || '-'}</span>
+                                <span class="text-[11px] text-teal-700 font-medium mr-1.5">(${p.title || 'تایپیست'})</span>
+                            </div>
+                            ${hasFullSettle ? '<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">تسویه کامل</span>' : ''}
                         </div>
-                    </td>
-                    <td class="p-3 font-mono text-slate-600 text-[11px]" dir="ltr">${p.shaba_number || '-'}</td>
-                    <td class="p-3">
-                        <div class="font-mono font-bold text-teal-700">${totalPages} صفحه</div>
-                        <div class="text-[11px] font-mono text-slate-500">${totalWords.toLocaleString()} کلمه</div>
-                    </td>
-                    <td class="p-3">
-                        <div class="font-mono font-bold text-emerald-600">${totalPaid.toLocaleString()}</div>
-                        ${hasFullSettle ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium">تسویه نهایی شده</span>' : ''}
-                    </td>
-                    <td class="p-3 text-center">
-                        <div class="flex items-center justify-center gap-1">
-                            <button onclick="viewTypistWorks('${p.id}')" title="مشاهده کارکردها" class="px-2 py-1 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 font-medium text-xs">کارکردها (${reps.length})</button>
-                            <button onclick="openPaymentModal('${p.id}', '${p.name}')" title="ثبت واریزی" class="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 font-medium text-xs">تسویه</button>
-                            <button onclick="editPersonByAdmin('${p.id}')" title="ویرایش اطلاعات" class="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium text-xs">ویرایش</button>
+
+                        <div class="grid grid-cols-2 gap-2 text-xs font-mono text-slate-600 bg-white p-2 rounded-lg border border-slate-100">
+                            <div>کد ملی: <span class="text-slate-800 font-bold">${p.national_code || '-'}</span></div>
+                            <div class="flex items-center justify-between">
+                                <span>تماس:</span>
+                                ${p.phone ? `<a href="tel:${p.phone}" class="text-emerald-600 font-bold hover:underline">📞 ${p.phone}</a>` : '<span>-</span>'}
+                            </div>
+                            <div class="col-span-2 text-[11px] truncate">شبا: <span dir="ltr" class="text-slate-700">${p.shaba_number || '-'}</span></div>
                         </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
+
+                        <div class="flex items-center justify-between text-xs px-1">
+                            <div>کارکرد: <b class="text-teal-700 font-mono">${totalPages} صفحه</b> / <span class="font-mono text-slate-500">${totalWords.toLocaleString()} کلمه</span></div>
+                            <div>پرداختی: <b class="text-emerald-600 font-mono">${totalPaid.toLocaleString()} تومان</b></div>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 pt-1 border-t border-slate-200/60">
+                            <button onclick="viewTypistWorks('${p.id}')" class="flex-1 py-1.5 bg-teal-50 text-teal-700 rounded-lg text-xs font-medium hover:bg-teal-100 text-center">مشاهده کارها (${reps.length})</button>
+                            <button onclick="openPaymentModal('${p.id}', '${p.name}')" class="flex-1 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium hover:bg-emerald-100 text-center">ثبت تسویه</button>
+                            <button onclick="editPersonByAdmin('${p.id}')" class="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-300">ویرایش</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-rose-500">خطای بارگذاری: ${err.message}</td></tr>`;
+        const errorText = `خطای نامشخص: ${err.message}`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-rose-500 font-semibold">${errorText}</td></tr>`;
+        if (cards) cards.innerHTML = `<div class="p-4 text-center text-rose-500 text-xs">${errorText}</div>`;
     }
 }
 
-// ==========================================
-// مشاهده جزئیات کارهای هر تایپیست توسط مدیر
-// ==========================================
+// مشاهده کارکردهای تایپیست توسط مدیر
 window.viewTypistWorks = function(id) {
     const person = allTypistsCache.find(p => p.id === id);
     if (!person) return;
@@ -259,10 +278,9 @@ window.viewTypistWorks = function(id) {
     
     $('viewWorksStats').textContent = `مجموع: ${totalPages} صفحه | ${totalWords.toLocaleString()} کلمه | ${reps.length} دوره گزارش`;
 
-    // دکمه تماس در مودال
     $('viewWorksContactLink').innerHTML = person.phone 
-        ? `<a href="tel:${person.phone}" class="text-xs text-teal-700 font-medium flex items-center gap-1 hover:underline">
-            📞 تماس مستقیم با تایپیست (${person.phone})
+        ? `<a href="tel:${person.phone}" class="text-xs text-teal-700 font-semibold flex items-center justify-center gap-1 hover:underline">
+            📞 برقراری تماس با تایپیست (${person.phone})
            </a>`
         : '';
 
@@ -272,11 +290,11 @@ window.viewTypistWorks = function(id) {
     } else {
         tbody.innerHTML = reps.map(r => `
             <tr class="hover:bg-slate-50 border-b border-slate-100">
-                <td class="p-2.5 font-semibold text-slate-800">${r.period_name || 'دوره ۱۰ روزه'}</td>
-                <td class="p-2.5 font-mono text-teal-700 font-bold">${Number(r.pages_count).toLocaleString()}</td>
-                <td class="p-2.5 font-mono">${Number(r.words_count).toLocaleString()}</td>
-                <td class="p-2.5 font-mono text-slate-500 text-[11px]">${new Date(r.created_at).toLocaleDateString('fa-IR')}</td>
-                <td class="p-2.5 text-slate-600">${r.notes || '-'}</td>
+                <td class="p-2 sm:p-2.5 font-semibold text-slate-800">${r.period_name || 'دوره ۱۰ روزه'}</td>
+                <td class="p-2 sm:p-2.5 font-mono text-teal-700 font-bold">${Number(r.pages_count).toLocaleString()}</td>
+                <td class="p-2 sm:p-2.5 font-mono">${Number(r.words_count).toLocaleString()}</td>
+                <td class="p-2 sm:p-2.5 font-mono text-slate-500 text-[11px]">${new Date(r.created_at).toLocaleDateString('fa-IR')}</td>
+                <td class="p-2 sm:p-2.5 text-slate-600">${r.notes || '-'}</td>
             </tr>
         `).join('');
     }
@@ -284,9 +302,7 @@ window.viewTypistWorks = function(id) {
     $('viewWorksModal').classList.remove('hidden');
 };
 
-// ==========================================
-// لاگین تایپیست با کدملی و شماره تماس
-// ==========================================
+// ورود تایپیست با کدملی و تلفن
 async function handleTypistLogin(e) {
     e.preventDefault();
     const nc = $('loginNationalCode').value.trim();
@@ -311,15 +327,11 @@ async function handleTypistLogin(e) {
 
         if (error) {
             alert('خطای ارتباط: ' + error.message);
-            btn.disabled = false;
-            btn.textContent = 'ورود به پنل کاربری';
             return;
         }
 
         if (!data) {
-            alert('کاربری با این مشخصات یافت نشد! لطفاً با مدیر هماهنگ کنید.');
-            btn.disabled = false;
-            btn.textContent = 'ورود به پنل کاربری';
+            alert('کاربری با این مشخصات یافت نشد! لطفاً با مدیر سامانه تماس بگیرید.');
             return;
         }
 
@@ -357,10 +369,13 @@ function logoutTypist() {
     $('typistLoginForm').reset();
 }
 
+// بارگذاری گزارش‌های تایپیست به دو فرمت دسکتاپ و کارت موبایل
 async function loadTypistReports() {
     if (!currentTypist) return;
     const tbody = $('typistReportsTable');
-    tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">در حال دریافت سوابق...</td></tr>';
+    const cards = $('typistReportsCards');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">در حال دریافت سوابق...</td></tr>';
+    if (cards) cards.innerHTML = '<div class="p-4 text-center text-slate-400 text-xs">در حال دریافت سوابق...</div>';
 
     try {
         const { data, error } = await client
@@ -370,30 +385,57 @@ async function loadTypistReports() {
             .order('created_at', { ascending: false });
 
         if (error) {
-            tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-rose-500">خطا: ${error.message}</td></tr>`;
+            const errText = `خطا: ${error.message}`;
+            if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-rose-500 font-semibold">${errText}</td></tr>`;
+            if (cards) cards.innerHTML = `<div class="p-4 text-center text-rose-500 text-xs">${errText}</div>`;
             return;
         }
 
         if (!data || data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">هنوز گزارشی ثبت نشده است.</td></tr>';
+            const emptyText = 'تاکنون گزارشی برای شما ثبت نشده است.';
+            if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">${emptyText}</td></tr>`;
+            if (cards) cards.innerHTML = `<div class="p-4 text-center text-slate-400 text-xs">${emptyText}</div>`;
             return;
         }
 
-        tbody.innerHTML = data.map(r => `
-            <tr class="hover:bg-slate-50 border-b border-slate-100">
-                <td class="p-3 font-semibold text-slate-800">${r.period_name || 'دوره ۱۰ روزه'}</td>
-                <td class="p-3 font-mono text-teal-600 font-bold">${Number(r.pages_count).toLocaleString()}</td>
-                <td class="p-3 font-mono">${Number(r.words_count).toLocaleString()}</td>
-                <td class="p-3 font-mono text-slate-500 text-[11px]">${new Date(r.created_at).toLocaleDateString('fa-IR')}</td>
-                <td class="p-3 text-slate-500">${r.notes || '-'}</td>
-            </tr>
-        `).join('');
+        // رندر جدول دسکتاپ
+        if (tbody) {
+            tbody.innerHTML = data.map(r => `
+                <tr class="hover:bg-slate-50 border-b border-slate-100">
+                    <td class="p-3 font-semibold text-slate-800">${r.period_name || 'دوره ۱۰ روزه'}</td>
+                    <td class="p-3 font-mono text-teal-600 font-bold">${Number(r.pages_count).toLocaleString()}</td>
+                    <td class="p-3 font-mono">${Number(r.words_count).toLocaleString()}</td>
+                    <td class="p-3 font-mono text-slate-500 text-[11px]">${new Date(r.created_at).toLocaleDateString('fa-IR')}</td>
+                    <td class="p-3 text-slate-500">${r.notes || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        // رندر کارت موبایل
+        if (cards) {
+            cards.innerHTML = data.map(r => `
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-xs text-slate-900">${r.period_name || 'دوره ۱۰ روزه'}</span>
+                        <span class="text-[11px] font-mono text-slate-400">${new Date(r.created_at).toLocaleDateString('fa-IR')}</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-xs font-mono">
+                        <div>صفحات: <b class="text-teal-700">${Number(r.pages_count).toLocaleString()}</b></div>
+                        <div>کلمات: <b class="text-slate-700">${Number(r.words_count).toLocaleString()}</b></div>
+                    </div>
+                    ${r.notes ? `<div class="text-[11px] text-slate-500 pt-1 border-t border-slate-200/50">توضیح: ${r.notes}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-rose-500">خطای دریافت سوابق: ${err.message}</td></tr>`;
+        const errText = `خطا: ${err.message}`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-rose-500">${errText}</td></tr>`;
+        if (cards) cards.innerHTML = `<div class="p-4 text-center text-rose-500 text-xs">${errText}</div>`;
     }
 }
 
-// ویرایش پروفایل تایپیست
+// ویرایش پروفایل توسط تایپیست
 function openProfileModal() {
     if (!currentTypist) return;
     $('profName').value = currentTypist.name || '';
@@ -432,11 +474,11 @@ async function handleProfileUpdate(e) {
         closeModal('profileModal');
         renderTypistDashboard();
     } catch (err) {
-        alert('خطای غیرمنتظره: ' + err.message);
+        alert('خطا: ' + err.message);
     }
 }
 
-// ثبت گزارش ۱۰ روزه جدید
+// ثبت گزارش ۱۰ روزه
 async function handleReportSubmit(e) {
     e.preventDefault();
     if (!currentTypist) return;
@@ -455,23 +497,20 @@ async function handleReportSubmit(e) {
             .insert([reportData]);
 
         if (error) {
-            alert('خطا در ثبت گزارش: ' + error.message);
+            alert('خطا در ثبت کارکرد: ' + error.message);
             return;
         }
 
-        alert('گزارش ۱۰ روزه با موفقیت ثبت گردید.');
+        alert('کارکرد ۱۰ روزه با موفقیت ثبت شد.');
         closeModal('reportModal');
         $('reportForm').reset();
         loadTypistReports();
     } catch (err) {
-        alert('خطای ثبت: ' + err.message);
+        alert('خطا: ' + err.message);
     }
 }
 
-// ==========================================
-// عملیات پنل مدیریت و مدل‌های تسویه
-// ==========================================
-
+// افزودن تایپیست توسط مدیر
 async function createNewTypistByAdmin() {
     const name = prompt('نام و نام خانوادگی تایپیست:');
     if (!name) return;
@@ -501,13 +540,14 @@ async function createNewTypistByAdmin() {
             return;
         }
 
-        alert('تایپیست جدید با موفقیت ثبت شد.');
+        alert('تایپیست جدید با موفقیت اضافه شد.');
         loadAdminData();
     } catch (err) {
         alert('خطا: ' + err.message);
     }
 }
 
+// ویرایش تایپیست توسط مدیر
 async function editPersonByAdmin(id) {
     const person = allTypistsCache.find(p => p.id === id);
     if (!person) return;
@@ -536,7 +576,7 @@ async function editPersonByAdmin(id) {
             .eq('id', id);
 
         if (error) {
-            alert('خطا در ذخیره ویرایش: ' + error.message);
+            alert('خطا در ویرایش: ' + error.message);
             return;
         }
 
@@ -547,7 +587,7 @@ async function editPersonByAdmin(id) {
     }
 }
 
-// باز کردن مودال ثبت تسویه (با امکان انتخاب ۲ مدل)
+// باز کردن مودال تسویه
 window.openPaymentModal = function(id, name) {
     $('payTypistId').value = id;
     $('payTypistNameTitle').textContent = 'تسویه مالی برای: ' + name;
@@ -555,7 +595,6 @@ window.openPaymentModal = function(id, name) {
     $('payNotes').value = '';
     $('payPeriodMonth').value = '';
     
-    // پیش‌فرض مدل ماهانه
     const monthlyRadio = document.querySelector('input[name="settleType"][value="monthly"]');
     if (monthlyRadio) monthlyRadio.checked = true;
     window.toggleSettleTypeUI();
@@ -576,7 +615,6 @@ async function handlePaymentSubmit(e) {
         return;
     }
 
-    // ساخت توضیحات ساختاریافته بابت نوع تسویه
     let finalNotes = '';
     if (settleType === 'full') {
         finalNotes = '[تسویه کامل و نهایی] ' + userNotes;
@@ -603,12 +641,12 @@ async function handlePaymentSubmit(e) {
         closeModal('paymentModal');
         loadAdminData();
     } catch (err) {
-        alert('خطای اتصال به سرور: ' + err.message);
+        alert('خطای ارتباط: ' + err.message);
     }
 }
 
 // ==========================================
-// خروجی اکسل دقیقاً ۵ ستونه
+// خروجی استاندارد اکسل (دقیقاً ۵ ستون درخواستی)
 // نام و نام خانوادگی | کد ملی | شماره تماس | مبلغ | شماره شبا
 // ==========================================
 function exportToExcel() {
