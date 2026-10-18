@@ -20,6 +20,7 @@ if (!window.supabase) {
 // ============================================================
 const state = {
   typistId: null,
+  typistIdentifier: null, // برای تغییر رمز تایپیست
   typist: null,
   reports: [],
   payments: [],
@@ -31,7 +32,7 @@ const state = {
 };
 
 // ============================================================
-// ۳. مدیریت نشست (Session)
+// ۳. مدیریت نشست
 // ============================================================
 const Session = {
   save(data) {
@@ -246,7 +247,7 @@ function confirmDialog(message, title) {
 }
 
 // ============================================================
-// ۸. Prompt سفارشی (جایگزین prompt مرورگر)
+// ۸. Prompt سفارشی
 // ============================================================
 function promptDialog(message, title, isPassword) {
   if (!title) title = 'ورود اطلاعات';
@@ -425,9 +426,6 @@ const Validator = {
     const clean = faToEn(String(val || '')).replace(/\s/g, '');
     return /^\d{10}$/.test(clean) ? clean : null;
   },
-  identifier(val) {
-    return this.phone(val) || this.nationalId(val);
-  },
   positiveNumber(val, max) {
     if (max === undefined) max = Number.MAX_SAFE_INTEGER;
     const n = SafeNum.parse(val, -1);
@@ -497,55 +495,14 @@ function csvEscape(val) {
 }
 
 // ============================================================
-// ۱۲. خواندن / نوشتن رمز مدیر از دیتابیس (بدون hardcode)
+// ۱۲. فراخوانی توابع RPC (امن)
 // ============================================================
-async function getAdminPasswordFromDB() {
-  try {
-    const res = await window.db
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'admin_password')
-      .maybeSingle();
-
-    if (res.error) {
-      console.warn('خطا در خواندن رمز مدیر:', res.error.message);
-      return null;
-    }
-
-    if (res.data && res.data.value) {
-      return res.data.value;
-    }
-
-    // اگر رمز وجود نداشت، یک رمز پیش‌فرض بساز و در دیتابیس ذخیره کن
-    const defaultPass = '123456';
-    const insertRes = await window.db.from('app_settings').upsert({
-      key: 'admin_password',
-      value: defaultPass,
-      description: 'رمز عبور مدیر سامانه - حتماً تغییر دهید',
-    });
-
-    if (insertRes.error) {
-      console.warn('خطا در ایجاد رمز پیش‌فرض:', insertRes.error.message);
-    }
-    return defaultPass;
-  } catch (err) {
-    console.error('خطا در دسترسی به دیتابیس:', err);
-    return null;
+async function rpc(fnName, params) {
+  const res = await window.db.rpc(fnName, params || {});
+  if (res.error) {
+    throw new Error(res.error.message || 'خطای ناشناخته در ارتباط با سرور');
   }
-}
-
-async function updateAdminPasswordInDB(newPassword) {
-  try {
-    const res = await window.db.from('app_settings').upsert({
-      key: 'admin_password',
-      value: newPassword,
-      description: 'رمز عبور مدیر سامانه',
-    });
-    return !res.error;
-  } catch (err) {
-    console.error('خطا در بروزرسانی رمز:', err);
-    return false;
-  }
+  return res.data;
 }
 
 // ============================================================
@@ -579,23 +536,19 @@ async function handleAdminLogin(e) {
   setLoading(btn, true, 'ورود به پنل مدیریت');
 
   try {
-    const validPassword = await getAdminPasswordFromDB();
+    const result = await rpc('verify_admin_password', { p_password: pass });
 
-    if (validPassword === null) {
-      showLoginAlert('خطا در ارتباط با دیتابیس. لطفاً دوباره تلاش کنید.');
-      return;
-    }
-
-    if (pass === validPassword) {
-      Session.save({ role: 'admin', token: Date.now().toString(36) });
+    if (result && result.success) {
+      Session.save({ role: 'admin', token: result.token });
+      state.sessionToken = result.token;
       showLoginAlert('ورود موفق! در حال انتقال...', 'success');
       setTimeout(() => enterPanel('admin', null), 500);
     } else {
-      showLoginAlert('رمز عبور نادرست است!');
+      showLoginAlert((result && result.message) || 'رمز عبور نادرست است!');
     }
   } catch (err) {
     console.error('[Admin login]', err);
-    showLoginAlert('خطا در برقراری ارتباط: ' + err.message);
+    showLoginAlert('خطا در ارتباط با سرور: ' + err.message);
   } finally {
     setLoading(btn, false, 'ورود به پنل مدیریت');
   }
@@ -619,46 +572,33 @@ async function handleTypistLogin(e) {
     return;
   }
 
+  const passClean = faToEn(passRaw).replace(/\s/g, '');
+
   setLoading(btn, true, 'ورود به پرتال تایپیست');
 
   try {
-    const res = await window.db
-      .from('typists')
-      .select('id, name, phone, national_id, national_code')
-      .or('phone.eq.' + identifier + ',national_id.eq.' + identifier + ',national_code.eq.' + identifier)
-      .is('deleted_at', null)
-      .maybeSingle();
-
-    if (res.error) throw res.error;
-
-    if (!res.data) {
-      showLoginAlert('کاربری با این مشخصات یافت نشد!');
-      return;
-    }
-
-    const typist = res.data;
-
-    // رمز پیش‌فرض: ۴ رقم آخر کد ملی
-    const nid = typist.national_id || typist.national_code || '';
-    const defaultPass = nid.length >= 4 ? nid.slice(-4) : '0000';
-
-    const passClean = faToEn(passRaw).replace(/\s/g, '');
-
-    if (passClean !== defaultPass) {
-      showLoginAlert('رمز عبور نادرست است! (رمز پیش‌فرض: ۴ رقم آخر کد ملی)');
-      return;
-    }
-
-    Session.save({
-      role: 'typist',
-      typistId: typist.id,
-      token: Date.now().toString(36),
+    const result = await rpc('verify_typist_password', {
+      p_identifier: identifier,
+      p_password: passClean,
     });
-    showLoginAlert('خوش آمدید، ' + (typist.name || 'تایپیست') + '!', 'success');
-    setTimeout(() => enterPanel('typist', typist.id), 500);
+
+    if (result && result.success) {
+      Session.save({
+        role: 'typist',
+        typistId: result.typist_id,
+        typistIdentifier: identifier,
+        token: result.token,
+      });
+      state.sessionToken = result.token;
+      state.typistIdentifier = identifier;
+      showLoginAlert('خوش آمدید، ' + (result.name || 'تایپیست') + '!', 'success');
+      setTimeout(() => enterPanel('typist', result.typist_id), 500);
+    } else {
+      showLoginAlert((result && result.message) || 'ورود ناموفق!');
+    }
   } catch (err) {
     console.error('[Typist login]', err);
-    showLoginAlert('خطا در بررسی کاربر: ' + err.message);
+    showLoginAlert('خطا در ارتباط با سرور: ' + err.message);
   } finally {
     setLoading(btn, false, 'ورود به پرتال تایپیست');
   }
@@ -708,6 +648,7 @@ async function logout() {
 
   Session.clear();
   state.typistId = null;
+  state.typistIdentifier = null;
   state.typist = null;
   state.reports = [];
   state.payments = [];
@@ -724,7 +665,6 @@ async function logout() {
   if (typistId) typistId.value = '';
   if (typistPass) typistPass.value = '';
 
-  // نمایش مجدد عناصر مخفی‌شده
   const sel = document.getElementById('typist-select');
   const refreshBtn = document.getElementById('btn-refresh');
   if (sel) sel.style.display = '';
@@ -740,14 +680,7 @@ async function loadTypistsList() {
   const select = document.getElementById('typist-select');
   if (!select) return;
   try {
-    const res = await window.db
-      .from('typists')
-      .select('id, name')
-      .is('deleted_at', null)
-      .order('name', { ascending: true });
-
-    if (res.error) throw res.error;
-    const list = res.data || [];
+    const list = await rpc('get_typists_list') || [];
 
     if (list.length === 0) {
       select.innerHTML = '<option value="">هیچ تایپیستی وجود ندارد</option>';
@@ -765,7 +698,7 @@ async function loadTypistsList() {
   } catch (err) {
     console.error('خطا در بارگذاری تایپیست‌ها:', err);
     select.innerHTML = '<option value="">خطا در بارگذاری</option>';
-    toast('خطا در دریافت لیست تایپیست‌ها', 'error');
+    toast('خطا در دریافت لیست تایپیست‌ها: ' + err.message, 'error');
   }
 }
 
@@ -777,7 +710,6 @@ let currentFetchId = 0;
 async function selectTypist(typistId) {
   if (!typistId) return;
 
-  // کنترل دسترسی: تایپیست فقط می‌تواند اطلاعات خودش را ببیند
   if (state.role === 'typist' && state.typistId && typistId !== state.typistId) {
     toast('شما به اطلاعات این تایپیست دسترسی ندارید.', 'error');
     return;
@@ -790,27 +722,27 @@ async function selectTypist(typistId) {
 
   try {
     const results = await Promise.all([
-      window.db.from('typists').select('*').eq('id', typistId).single(),
-      window.db.from('typist_reports').select('*').eq('typist_id', typistId).order('created_at', { ascending: false }),
-      window.db.from('payments').select('*').eq('person_id', typistId).order('payment_date', { ascending: false }),
+      rpc('get_typist_profile', { p_typist_id: typistId }),
+      rpc('get_typist_reports', { p_typist_id: typistId }),
+      rpc('get_typist_payments', { p_typist_id: typistId }),
     ]);
 
     if (fetchId !== currentFetchId) return;
 
-    const tRes = results[0];
-    const rRes = results[1];
-    const pRes = results[2];
+    const profileArr = results[0] || [];
+    const reportsArr = results[1] || [];
+    const paymentsArr = results[2] || [];
 
-    if (tRes.error) throw tRes.error;
-    if (rRes.error) throw rRes.error;
-    if (pRes.error) throw pRes.error;
+    const typist = profileArr[0] || null;
+    if (!typist) {
+      toast('اطلاعات تایپیست یافت نشد.', 'error');
+      return;
+    }
 
-    const typist = tRes.data;
     state.typist = typist;
-
     renderProfile(typist);
-    state.reports = (rRes.data || []).map((r) => normalizeReport(r, typist));
-    state.payments = pRes.data || [];
+    state.reports = reportsArr.map((r) => normalizeReport(r, typist));
+    state.payments = paymentsArr;
 
     renderReports();
     renderPayments();
@@ -1081,6 +1013,7 @@ async function handleSubmitReport(e) {
   }
 
   const btn = document.getElementById('btn-submit-report');
+  const isEditing = !!state.editingReportId;
   btn.disabled = true;
   btn.textContent = 'در حال ذخیره...';
 
@@ -1093,51 +1026,39 @@ async function handleSubmitReport(e) {
 
     if (words === null || pages === null || rate === null) {
       toast('مقادیر عددی نامعتبر هستند.', 'warn');
-      btn.disabled = false;
-      btn.textContent = state.editingReportId ? 'ذخیره تغییرات' : 'ثبت در دیتابیس';
       return;
     }
 
     const parts = shamsiStringToParts(document.getElementById('inp-date').value);
     const isoDate = parts
-      ? shamsiToISO(parts.year, parts.month, parts.day)
-      : new Date().toISOString().slice(0, 10);
+      ? shamsiToISO(parts.year, parts.month, parts.day) + 'T12:00:00.000Z'
+      : new Date().toISOString();
 
-    const totalAmount = words * rate;
+    const result = await rpc('upsert_report', {
+      p_id: state.editingReportId || null,
+      p_typist_id: state.typistId,
+      p_words: words,
+      p_pages: pages,
+      p_rate: rate,
+      p_period: period,
+      p_description: desc,
+      p_created_at: isoDate,
+    });
 
-    const payload = {
-      typist_id: state.typistId,
-      words: words,
-      pages: pages,
-      rate: rate,
-      rate_per_word: rate,
-      total_amount: totalAmount,
-      period: period,
-      period_number: period,
-      description: desc,
-      is_settled: false,
-      created_at: isoDate + 'T12:00:00.000Z',
-    };
-
-    let result;
-    if (state.editingReportId) {
-      result = await window.db.from('typist_reports').update(payload).eq('id', state.editingReportId);
+    if (result && result.success) {
+      toast(isEditing ? 'گزارش ویرایش شد.' : 'گزارش ثبت شد.', 'success');
+      closeModal('modal-report');
+      state.editingReportId = null;
+      await selectTypist(state.typistId);
     } else {
-      result = await window.db.from('typist_reports').insert([payload]);
+      toast((result && result.message) || 'خطا در ذخیره.', 'error');
     }
-
-    if (result.error) throw result.error;
-
-    toast(state.editingReportId ? 'گزارش ویرایش شد.' : 'گزارش ثبت شد.', 'success');
-    closeModal('modal-report');
-    state.editingReportId = null;
-    await selectTypist(state.typistId);
   } catch (err) {
     console.error('[handleSubmitReport]', err);
     toast('خطا در ذخیره گزارش: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = state.editingReportId ? 'ذخیره تغییرات' : 'ثبت در دیتابیس';
+    btn.textContent = isEditing ? 'ذخیره تغییرات' : 'ثبت در دیتابیس';
   }
 }
 
@@ -1146,10 +1067,13 @@ async function deleteReport(id) {
   const ok = await confirmDialog('آیا از حذف این گزارش مطمئن هستید؟ این عمل قابل بازگشت نیست.', 'حذف گزارش');
   if (!ok) return;
   try {
-    const res = await window.db.from('typist_reports').delete().eq('id', id);
-    if (res.error) throw res.error;
-    toast('گزارش حذف شد.', 'success');
-    await selectTypist(state.typistId);
+    const result = await rpc('delete_report', { p_id: id });
+    if (result && result.success) {
+      toast('گزارش حذف شد.', 'success');
+      await selectTypist(state.typistId);
+    } else {
+      toast((result && result.message) || 'خطا در حذف.', 'error');
+    }
   } catch (err) {
     console.error('[deleteReport]', err);
     toast('خطا در حذف گزارش: ' + err.message, 'error');
@@ -1214,6 +1138,7 @@ async function handleSubmitPayment(e) {
   }
 
   const btn = document.getElementById('btn-submit-payment');
+  const isEditing = !!state.editingPaymentId;
   btn.disabled = true;
   btn.textContent = 'در حال ذخیره...';
 
@@ -1225,8 +1150,6 @@ async function handleSubmitPayment(e) {
 
     if (amount === null || amount <= 0) {
       toast('مبلغ باید بزرگ‌تر از صفر باشد.', 'warn');
-      btn.disabled = false;
-      btn.textContent = state.editingPaymentId ? 'ذخیره تغییرات' : 'ثبت واریز';
       return;
     }
 
@@ -1235,36 +1158,30 @@ async function handleSubmitPayment(e) {
       ? shamsiToISO(parts.year, parts.month, parts.day)
       : new Date().toISOString().slice(0, 10);
 
-    const payload = {
-      person_id: state.typistId,
-      amount: amount,
-      payment_date: isoDate,
-      method: method,
-      tracking_code: tracking || null,
-      description: desc || null,
-      status: 'valid',
-    };
+    const result = await rpc('upsert_payment', {
+      p_id: state.editingPaymentId || null,
+      p_person_id: state.typistId,
+      p_amount: amount,
+      p_payment_date: isoDate,
+      p_method: method,
+      p_tracking_code: tracking || null,
+      p_description: desc || null,
+    });
 
-    let result;
-    if (state.editingPaymentId) {
-      result = await window.db.from('payments').update(payload).eq('id', state.editingPaymentId);
+    if (result && result.success) {
+      toast(isEditing ? 'پرداخت ویرایش شد.' : 'پرداخت ثبت شد.', 'success');
+      closeModal('modal-payment');
+      state.editingPaymentId = null;
+      await selectTypist(state.typistId);
     } else {
-      payload.created_at = new Date().toISOString();
-      result = await window.db.from('payments').insert([payload]);
+      toast((result && result.message) || 'خطا در ذخیره.', 'error');
     }
-
-    if (result.error) throw result.error;
-
-    toast(state.editingPaymentId ? 'پرداخت ویرایش شد.' : 'پرداخت ثبت شد.', 'success');
-    closeModal('modal-payment');
-    state.editingPaymentId = null;
-    await selectTypist(state.typistId);
   } catch (err) {
     console.error('[handleSubmitPayment]', err);
     toast('خطا در ذخیره پرداخت: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = state.editingPaymentId ? 'ذخیره تغییرات' : 'ثبت واریز';
+    btn.textContent = isEditing ? 'ذخیره تغییرات' : 'ثبت واریز';
   }
 }
 
@@ -1273,10 +1190,13 @@ async function deletePayment(id) {
   const ok = await confirmDialog('آیا از حذف این پرداخت مطمئن هستید؟', 'حذف پرداخت');
   if (!ok) return;
   try {
-    const res = await window.db.from('payments').delete().eq('id', id);
-    if (res.error) throw res.error;
-    toast('پرداخت حذف شد.', 'success');
-    await selectTypist(state.typistId);
+    const result = await rpc('delete_payment', { p_id: id });
+    if (result && result.success) {
+      toast('پرداخت حذف شد.', 'success');
+      await selectTypist(state.typistId);
+    } else {
+      toast((result && result.message) || 'خطا در حذف.', 'error');
+    }
   } catch (err) {
     console.error('[deletePayment]', err);
     toast('خطا در حذف پرداخت: ' + err.message, 'error');
@@ -1292,39 +1212,31 @@ async function changeAdminPassword() {
   const oldPass = await promptDialog('رمز فعلی مدیر را وارد کنید:', 'تغییر رمز مدیر', true);
   if (oldPass === null || oldPass === '') return;
 
+  const newPass = await promptDialog('رمز جدید را وارد کنید (حداقل ۶ کاراکتر):', 'تغییر رمز مدیر', true);
+  if (newPass === null) return;
+
+  if (!newPass || newPass.length < 6) {
+    toast('رمز جدید باید حداقل ۶ کاراکتر باشد.', 'warn');
+    return;
+  }
+
+  const confirmPass = await promptDialog('رمز جدید را مجدداً وارد کنید:', 'تأیید رمز جدید', true);
+  if (confirmPass === null) return;
+
+  if (newPass !== confirmPass) {
+    toast('رمزهای وارد شده یکسان نیستند.', 'error');
+    return;
+  }
+
   try {
-    const currentPass = await getAdminPasswordFromDB();
-    if (currentPass === null) {
-      toast('خطا در خواندن رمز فعلی از دیتابیس.', 'error');
-      return;
-    }
-
-    if (oldPass !== currentPass) {
-      toast('رمز فعلی نادرست است.', 'error');
-      return;
-    }
-
-    const newPass = await promptDialog('رمز جدید را وارد کنید (حداقل ۶ کاراکتر):', 'تغییر رمز مدیر', true);
-    if (newPass === null) return;
-
-    if (!newPass || newPass.length < 6) {
-      toast('رمز جدید باید حداقل ۶ کاراکتر باشد.', 'warn');
-      return;
-    }
-
-    const confirmPass = await promptDialog('رمز جدید را مجدداً وارد کنید:', 'تأیید رمز جدید', true);
-    if (confirmPass === null) return;
-
-    if (newPass !== confirmPass) {
-      toast('رمزهای وارد شده یکسان نیستند.', 'error');
-      return;
-    }
-
-    const ok = await updateAdminPasswordInDB(newPass);
-    if (ok) {
+    const result = await rpc('change_admin_password', {
+      p_old_password: oldPass,
+      p_new_password: newPass,
+    });
+    if (result && result.success) {
       toast('رمز مدیر با موفقیت تغییر کرد.', 'success');
     } else {
-      toast('خطا در ذخیره رمز جدید.', 'error');
+      toast((result && result.message) || 'خطا در تغییر رمز.', 'error');
     }
   } catch (err) {
     console.error('[changeAdminPassword]', err);
@@ -1334,7 +1246,45 @@ async function changeAdminPassword() {
 
 async function changeTypistPassword() {
   if (state.role !== 'typist') return;
-  toast('تغییر رمز تایپیست در این نسخه فعال نیست. با مدیر تماس بگیرید.', 'info');
+  if (!state.typistIdentifier) {
+    toast('لطفاً دوباره وارد شوید.', 'error');
+    return;
+  }
+
+  const oldPass = await promptDialog('رمز فعلی را وارد کنید:', 'تغییر رمز', true);
+  if (oldPass === null || oldPass === '') return;
+
+  const newPass = await promptDialog('رمز جدید را وارد کنید (حداقل ۴ کاراکتر):', 'تغییر رمز', true);
+  if (newPass === null) return;
+
+  if (!newPass || newPass.length < 4) {
+    toast('رمز جدید باید حداقل ۴ کاراکتر باشد.', 'warn');
+    return;
+  }
+
+  const confirmPass = await promptDialog('رمز جدید را مجدداً وارد کنید:', 'تأیید رمز جدید', true);
+  if (confirmPass === null) return;
+
+  if (newPass !== confirmPass) {
+    toast('رمزهای وارد شده یکسان نیستند.', 'error');
+    return;
+  }
+
+  try {
+    const result = await rpc('change_typist_password', {
+      p_identifier: state.typistIdentifier,
+      p_old_password: oldPass,
+      p_new_password: newPass,
+    });
+    if (result && result.success) {
+      toast('رمز با موفقیت تغییر کرد.', 'success');
+    } else {
+      toast((result && result.message) || 'خطا در تغییر رمز.', 'error');
+    }
+  } catch (err) {
+    console.error('[changeTypistPassword]', err);
+    toast('خطا: ' + err.message, 'error');
+  }
 }
 
 // ============================================================
@@ -1384,12 +1334,10 @@ function exportToCSV() {
 // ۲۵. اتصال رویدادها
 // ============================================================
 function bindEvents() {
-  // تب‌های لاگین
   document.querySelectorAll('.login-tab[data-role]').forEach((tab) => {
     tab.addEventListener('click', () => switchLoginTab(tab.dataset.role));
   });
 
-  // نمایش/پنهان کردن رمز
   document.querySelectorAll('[data-toggle-pass]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const input = document.getElementById(btn.dataset.togglePass);
@@ -1398,18 +1346,15 @@ function bindEvents() {
     });
   });
 
-  // فرم‌های ورود
   const formAdmin = document.getElementById('form-admin');
   if (formAdmin) formAdmin.addEventListener('submit', handleAdminLogin);
 
   const formTypist = document.getElementById('form-typist');
   if (formTypist) formTypist.addEventListener('submit', handleTypistLogin);
 
-  // دکمه خروج
   const btnLogout = document.getElementById('btn-logout');
   if (btnLogout) btnLogout.addEventListener('click', logout);
 
-  // انتخاب تایپیست
   const typistSelect = document.getElementById('typist-select');
   if (typistSelect) {
     typistSelect.addEventListener('change', (e) => {
@@ -1417,7 +1362,6 @@ function bindEvents() {
     });
   }
 
-  // دکمه تازه‌سازی
   const btnRefresh = document.getElementById('btn-refresh');
   if (btnRefresh) {
     btnRefresh.addEventListener('click', () => {
@@ -1426,11 +1370,9 @@ function bindEvents() {
     });
   }
 
-  // دکمه خروجی CSV
   const btnExport = document.getElementById('btn-export-excel');
   if (btnExport) btnExport.addEventListener('click', exportToCSV);
 
-  // دکمه تغییر رمز
   const btnChangePass = document.getElementById('btn-change-password');
   if (btnChangePass) {
     btnChangePass.addEventListener('click', () => {
@@ -1439,7 +1381,6 @@ function bindEvents() {
     });
   }
 
-  // دکمه ثبت گزارش جدید
   const btnOpenReport = document.getElementById('btn-open-report-modal');
   if (btnOpenReport) {
     btnOpenReport.addEventListener('click', () => {
@@ -1456,17 +1397,14 @@ function bindEvents() {
     });
   }
 
-  // فرم ثبت گزارش
   const formReport = document.getElementById('form-new-report');
   if (formReport) formReport.addEventListener('submit', handleSubmitReport);
 
-  // محاسبه خودکار پیش‌نمایش مبلغ
   ['inp-words', 'inp-rate'].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', updateReportPreview);
   });
 
-  // دکمه ثبت پرداخت جدید
   const btnOpenPayment = document.getElementById('btn-open-payment-modal');
   if (btnOpenPayment) {
     btnOpenPayment.addEventListener('click', () => {
@@ -1483,11 +1421,9 @@ function bindEvents() {
     });
   }
 
-  // فرم ثبت پرداخت
   const formPayment = document.getElementById('form-new-payment');
   if (formPayment) formPayment.addEventListener('submit', handleSubmitPayment);
 
-  // بستن مودال با کلیک روی data-close یا پس‌زمینه
   document.addEventListener('click', (e) => {
     const closeBtn = e.target.closest('[data-close]');
     if (closeBtn) {
@@ -1495,14 +1431,12 @@ function bindEvents() {
       return;
     }
     if (e.target.classList && e.target.classList.contains('modal') && e.target.id) {
-      // فقط اگر روی خود پس‌زمینه مودال کلیک شد (نه محتوا)
       if (e.target.id !== 'custom-confirm-overlay' && e.target.id !== 'custom-prompt-overlay') {
         closeModal(e.target.id);
       }
     }
   });
 
-  // بستن مودال با کلید Escape
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       document.querySelectorAll('.modal:not(.hidden)').forEach((m) => {
@@ -1527,13 +1461,13 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   initAllDatePickers();
 
-  // بازیابی نشست قبلی
   const session = Session.load();
   if (session) {
     state.sessionToken = session.token;
     if (session.role === 'admin') {
       enterPanel('admin', null);
     } else if (session.role === 'typist' && session.typistId) {
+      state.typistIdentifier = session.typistIdentifier;
       enterPanel('typist', session.typistId);
     }
   }
