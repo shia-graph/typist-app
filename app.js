@@ -2,15 +2,29 @@
 // ۱. تنظیمات اتصال و تعریف کلاینت دیتابیس Supabase
 // ==========================================================================
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
-// توکن اصلی anon را در صورت نیاز اینجا بروز کنید
-const SUPABASE_KEY = 'GAPGPTMASKTOKEN9pzt6flk5otX0X';
+// تابع دریافت یا ساخت کلاینت مطمئن
+function getDb() {
+    if (window.db && window.db.from) return window.db;
+    
+    const clientCreator = (window.supabase && window.supabase.createClient) 
+                          || (typeof supabase !== 'undefined' && supabase.createClient);
+                          
+    if (clientCreator) {
+        const client = clientCreator(SUPABASE_URL, SUPABASE_KEY);
+        window.db = client;
+        window.client = client;
+        window.supabaseClient = client;
+        return client;
+    }
+    return null;
+}
 
-// ایجاد کلاینت متصل به سوپابیس
-const db = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
-window.db = db;
-window.client = db;
-window.supabaseClient = db;     
+// مقداردهی اولیه
+const db = getDb();
+window.getDb = getDb;
+
 
 // متغیرهای وضعیت
 let currentAdminLoggedIn = false;
