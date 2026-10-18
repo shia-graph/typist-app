@@ -4,6 +4,7 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
+
 window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
 window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -24,7 +25,6 @@ function toEnglishDigits(str) {
     if (!str) return '';
     return str.toString()
         .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
-        .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦ realm'.indexOf(d))
         .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
         .trim();
 }
@@ -419,8 +419,15 @@ window.showTypistDashboardView = async function() {
         const { data, error } = await window.supabaseClient.rpc('get_typist_detail', { p_typist_id: currentTypistId });
         if (error) throw error;
 
+        currentTypistDetail = data;
         const prof = data.profile || {};
+
         document.getElementById('typist-self-name').textContent = `سلام، ${prof.first_name} ${prof.last_name}`;
+        document.getElementById('typist-self-father').textContent = prof.father_name || '-';
+        document.getElementById('typist-self-national-id').textContent = prof.national_id || '-';
+        document.getElementById('typist-self-phone').textContent = prof.phone || '-';
+        document.getElementById('typist-self-card-iban').textContent = `کارت: ${prof.card_number || '-'} | شبا: IR${prof.iban || '-'}`;
+
         document.getElementById('typist-self-earned').textContent = `${formatToman(prof.total_earned)} تومان`;
         document.getElementById('typist-self-paid').textContent = `${formatToman(prof.total_paid)} تومان`;
         document.getElementById('typist-self-balance').textContent = `${formatToman(prof.balance)} تومان`;
@@ -429,6 +436,52 @@ window.showTypistDashboardView = async function() {
     } catch (err) {
         console.error(err);
         showToast('خطا در لود اطلاعات تایپیست', 'error');
+    }
+};
+
+window.openSelfProfileModal = function() {
+    const prof = currentTypistDetail?.profile || {};
+    document.getElementById('self-first-name').value = prof.first_name || '';
+    document.getElementById('self-last-name').value = prof.last_name || '';
+    document.getElementById('self-father-name').value = prof.father_name || '';
+    document.getElementById('self-national-id').value = prof.national_id || '';
+    document.getElementById('self-phone').value = prof.phone || '';
+    document.getElementById('self-card-number').value = prof.card_number || '';
+    document.getElementById('self-iban').value = prof.iban || '';
+
+    document.getElementById('modal-self-profile').classList.remove('hidden');
+};
+
+window.closeSelfProfileModal = function() {
+    document.getElementById('modal-self-profile').classList.add('hidden');
+};
+
+window.saveSelfProfile = async function(e) {
+    if (e) e.preventDefault();
+
+    const payload = {
+        p_id: currentTypistId,
+        p_first_name: document.getElementById('self-first-name').value,
+        p_last_name: document.getElementById('self-last-name').value,
+        p_father_name: document.getElementById('self-father-name').value,
+        p_national_id: toEnglishDigits(document.getElementById('self-national-id').value),
+        p_phone: toEnglishDigits(document.getElementById('self-phone').value),
+        p_card_number: toEnglishDigits(document.getElementById('self-card-number').value),
+        p_iban: toEnglishDigits(document.getElementById('self-iban').value),
+        p_page_rate: 0, // Preserve current rate in DB
+        p_password: null
+    };
+
+    try {
+        const { data, error } = await window.supabaseClient.rpc('upsert_typist', payload);
+        if (error) throw error;
+
+        window.closeSelfProfileModal();
+        showToast('پروفایل شما با موفقیت بروزرسانی شد', 'success');
+        window.showTypistDashboardView();
+    } catch (err) {
+        console.error(err);
+        showToast('خطا در بروزرسانی پروفایل', 'error');
     }
 };
 
