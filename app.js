@@ -70,32 +70,30 @@ window.submitAdminLogin = async function() {
     }
 
     try {
-        // صدا زدن تابع امن سرور سوپابیس (RPC)
-        // هیچ رمزی از دیتابیس به مرورگر دانلود نمی‌شود!
-        const { data: isValid, error } = await supabaseClient
-            .rpc('verify_admin_password', { input_password: enteredPassword });
+        // صدا زدن تابع سرور؛ تنها چیزی که به مرورگر برمی‌گردد true یا false است
+        const { data: isCorrect, error } = await supabaseClient
+            .rpc('check_admin_pass', { entered_pass: enteredPassword });
 
         if (error) {
-            console.error('خطای سرور در بررسی رمز:', error);
-            alert('خطا در برقراری ارتباط با پایگاه‌داده.');
+            console.error('خطای سرور:', error);
+            alert('خطا در برقراری ارتباط با سامانه اعتبارسنجی.');
             return;
         }
 
-        if (isValid === true) {
-            // ورود موفقیت‌آمیز
-            sessionStorage.setItem('admin_authenticated', 'true');
+        if (isCorrect === true) {
+            // ورود مجاز
+            sessionStorage.setItem('admin_logged_in', 'true');
             if (typeof window.closeAdminLoginModal === 'function') {
                 window.closeAdminLoginModal();
             }
-            // رفرش یا انتقال به پنل ادمین
             window.location.reload();
         } else {
             alert('رمز عبور وارد شده اشتباه است.');
             if (passwordInput) passwordInput.value = '';
         }
     } catch (err) {
-        console.error('خطا:', err);
-        alert('خطای غیرمنتظره در اعتبارسنجی ورود.');
+        console.error('خطای پیش‌بینی نشده:', err);
+        alert('خطا در ورود به سیستم.');
     }
 };
 
