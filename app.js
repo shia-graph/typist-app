@@ -1,6 +1,26 @@
+
 // ==========================================
-// تنظیمات اتصال Supabase
+// ۱. ثبت توابع سراسری روی window (جهت رفع ReferenceError)
 // ==========================================
+window.showLoginModal = function() {
+    const modal = document.getElementById('loginModal') || document.getElementById('typistLoginModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+    } else {
+        const sec = document.getElementById('loginSection');
+        if (sec) sec.scrollIntoView({ behavior: 'smooth' });
+    }
+};
+
+window.closeLoginModal = function() {
+    const modal = document.getElementById('loginModal') || document.getElementById('typistLoginModal');
+    if (modal) modal.classList.add('hidden');
+};
+
+// ==========================================
+// ۲. تنظیمات اتصال به دیتابیس Supabase
+// ==========================================
+
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -15,7 +35,7 @@ let allPayments = [];
 let calendarTargetInput = null;
 
 // ==========================================
-// ۲. کتابخانه محاسبات تقویم شمسی جلالی
+// ۳. کتابخانه محاسبات تقویم شمسی جلالی
 // ==========================================
 const Jalali = {
     toJalaali(gy, gm, gd) {
@@ -36,7 +56,7 @@ const Jalali = {
         return { jy, jm, jd };
     },
 
-    toGregorian(jy, jm, gd) {
+    toGregorian(jy, jm, jd) {
         let gy = (jy <= 979) ? 621 : 1600;
         jy -= (jy <= 979) ? 0 : 979;
         let days = (365 * jy) + Math.floor(jy / 33) * 8 + Math.floor(((jy % 33) + 3) / 4) 
@@ -52,6 +72,7 @@ const Jalali = {
         days %= 1461;
         gy += Math.floor((days - 1) / 365);
         if (days > 0) days = (days - 1) % 365;
+        const gd = days + 1;
         const sal_a = [0, 31, ((gy % 4 === 0 && gy % 100 !== 0) || (gy % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
         let gm = 0;
         while (gm < 13 && days >= sal_a[gm]) {
@@ -95,7 +116,7 @@ const Jalali = {
 };
 
 // ==========================================
-// ۳. موتور تایم‌لاین دوره ۱۰ روزه و وضعیت تاخیر
+// ۴. موتور تایم‌لاین ۱۰ روزه و وضعیت تاخیر
 // ==========================================
 function calculatePeriodTimeline(typist, reports) {
     const today = Jalali.todayString();
@@ -135,31 +156,12 @@ function calculatePeriodTimeline(typist, reports) {
 }
 
 // ==========================================
-// ۴. مدیریت مودال‌های بازشو و پاپ‌آپ ورود
-// ==========================================
-function showLoginModal() {
-    const modal = document.getElementById('loginModal') || document.getElementById('typistLoginModal');
-    if (modal) {
-        modal.classList.remove('hidden');
-    } else {
-        // در صورتی که ساختار صفحه تک‌صفحه‌ای باشد و سکشن لاگین باشد
-        const loginSec = document.getElementById('loginSection');
-        if (loginSec) loginSec.scrollIntoView({ behavior: 'smooth' });
-    }
-}
-
-function closeLoginModal() {
-    const modal = document.getElementById('loginModal') || document.getElementById('typistLoginModal');
-    if (modal) modal.classList.add('hidden');
-}
-
-// ==========================================
 // ۵. مدیریت پاپ‌آپ تقویم شمسی جلالی
 // ==========================================
 let calYear = 1405;
 let calMonth = 7;
 
-function openJalaliCalendar(inputElement) {
+window.openJalaliCalendar = function(inputElement) {
     calendarTargetInput = inputElement;
     const currentVal = inputElement.value ? Jalali.parse(inputElement.value) : null;
     const today = Jalali.parse(Jalali.todayString());
@@ -170,12 +172,12 @@ function openJalaliCalendar(inputElement) {
     renderCalendarPopup();
     const modal = document.getElementById('jalaliCalendarModal');
     if (modal) modal.classList.remove('hidden');
-}
+};
 
-function closeJalaliCalendar() {
+window.closeJalaliCalendar = function() {
     const modal = document.getElementById('jalaliCalendarModal');
     if (modal) modal.classList.add('hidden');
-}
+};
 
 function renderCalendarPopup() {
     const titleElem = document.getElementById('calMonthYearTitle');
@@ -198,28 +200,28 @@ function renderCalendarPopup() {
                 const formatted = `${calYear}/${String(calMonth).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
                 calendarTargetInput.value = formatted;
             }
-            closeJalaliCalendar();
+            window.closeJalaliCalendar();
         };
         gridElem.appendChild(btn);
     }
 }
 
-function prevCalMonth() {
+window.prevCalMonth = function() {
     calMonth--;
     if (calMonth < 1) { calMonth = 12; calYear--; }
     renderCalendarPopup();
-}
+};
 
-function nextCalMonth() {
+window.nextCalMonth = function() {
     calMonth++;
     if (calMonth > 12) { calMonth = 1; calYear++; }
     renderCalendarPopup();
-}
+};
 
 // ==========================================
 // ۶. ورود تایپیست و ورود مدیر
 // ==========================================
-async function handleTypistLogin() {
+window.handleTypistLogin = async function() {
     const nationalCode = (document.getElementById('loginNationalCode') || {}).value?.trim();
     const phone = (document.getElementById('loginPhone') || {}).value?.trim();
 
@@ -244,15 +246,15 @@ async function handleTypistLogin() {
 
         currentTypist = data;
         isAdmin = false;
-        closeLoginModal();
+        window.closeLoginModal();
         showTypistDashboard();
     } catch (err) {
         console.error('خطای ورود تایپیست:', err);
         alert('خطا در ورود: ' + err.message);
     }
-}
+};
 
-async function handleAdminLogin() {
+window.handleAdminLogin = async function() {
     const inputPass = prompt('رمز عبور مدیر را وارد نمایید:');
     if (!inputPass) return;
 
@@ -276,9 +278,9 @@ async function handleAdminLogin() {
         console.error('خطا در بررسی رمز مدیر:', err);
         alert('خطای اتصال به سرور در اعتبارسنجی مدیر.');
     }
-}
+};
 
-function logout() {
+window.logout = function() {
     currentTypist = null;
     isAdmin = false;
     const typSec = document.getElementById('typistDashboardSection');
@@ -288,10 +290,10 @@ function logout() {
     if (typSec) typSec.classList.add('hidden');
     if (admSec) admSec.classList.add('hidden');
     if (logSec) logSec.classList.remove('hidden');
-}
+};
 
 // ==========================================
-// ۷. پنل تایپیست و ثبت گزارش ۱۰ روزه
+// ۷. پنل تایپیست و ثبت کارکرد ۱۰ روزه
 // ==========================================
 async function showTypistDashboard() {
     const logSec = document.getElementById('loginSection');
@@ -320,7 +322,6 @@ async function loadTypistData() {
 
         const timeline = calculatePeriodTimeline(currentTypist, myReports);
 
-        // بروزرسانی جعبه تایم‌لاین
         const timelineBox = document.getElementById('periodTimelineBox');
         if (timelineBox) {
             timelineBox.innerHTML = `
@@ -342,7 +343,6 @@ async function loadTypistData() {
         const periodInput = document.getElementById('reportPeriodInput');
         if (periodInput) periodInput.value = timeline.activePeriod;
 
-        // رندر جدول کارکرد با جلوگیری ۱۰۰٪ از نمایش NaN
         const tbody = document.getElementById('typistReportsTbody');
         if (!tbody) return;
 
@@ -376,7 +376,7 @@ async function loadTypistData() {
     }
 }
 
-async function submitTypistReport() {
+window.submitTypistReport = async function() {
     const period = parseInt(document.getElementById('reportPeriodInput').value);
     const pages = parseInt(document.getElementById('reportPagesInput').value);
     const words = parseInt(document.getElementById('reportWordsInput')?.value) || 0;
@@ -417,7 +417,7 @@ async function submitTypistReport() {
     } catch (err) {
         alert('خطا در ثبت گزارش: ' + err.message);
     }
-}
+};
 
 // ==========================================
 // ۸. داشبورد مدیریت و ثبت کارکرد توسط مدیر
@@ -500,7 +500,7 @@ function renderAdminReportsList() {
     }).join('');
 }
 
-async function handleAdminDirectReportSubmit() {
+window.handleAdminDirectReportSubmit = async function() {
     const typistId = document.getElementById('adminTypistSelect').value;
     const period = parseInt(document.getElementById('adminReportPeriod').value);
     const pages = parseInt(document.getElementById('adminReportPages').value);
@@ -539,7 +539,7 @@ async function handleAdminDirectReportSubmit() {
     } catch (err) {
         alert('خطا در ثبت کارکرد: ' + err.message);
     }
-}
+};
 
 function renderAdminTypistsManagement() {
     const container = document.getElementById('adminTypistsListContainer');
@@ -573,7 +573,7 @@ function renderAdminTypistsManagement() {
                 </div>
 
                 <div class="flex items-center gap-2">
-                    <button onclick="openSettlementModal('${t.id}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition-colors">
+                    <button onclick="window.openSettlementModal('${t.id}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition-colors">
                         💰 تسویه‌حساب (ماهانه / کامل)
                     </button>
                 </div>
@@ -587,7 +587,7 @@ function renderAdminTypistsManagement() {
 // ==========================================
 let currentSettlementTypistId = null;
 
-function openSettlementModal(typistId) {
+window.openSettlementModal = function(typistId) {
     currentSettlementTypistId = typistId;
     const typist = allTypists.find(t => t.id === typistId);
     if (!typist) return;
@@ -596,15 +596,15 @@ function openSettlementModal(typistId) {
     if (nameSpan) nameSpan.innerText = typist.name;
     const modal = document.getElementById('settlementModal');
     if (modal) modal.classList.remove('hidden');
-}
+};
 
-function closeSettlementModal() {
+window.closeSettlementModal = function() {
     currentSettlementTypistId = null;
     const modal = document.getElementById('settlementModal');
     if (modal) modal.classList.add('hidden');
-}
+};
 
-async function executeSettlement() {
+window.executeSettlement = async function() {
     const model = document.getElementById('settlementTypeSelect').value;
     const amount = parseInt(document.getElementById('settlementAmountInput').value);
     const desc = document.getElementById('settlementDescInput').value.trim();
@@ -627,14 +627,14 @@ async function executeSettlement() {
         if (error) throw error;
 
         alert('✅ تسویه‌حساب با موفقیت ثبت شد.');
-        closeSettlementModal();
+        window.closeSettlementModal();
         await loadAdminAllData();
     } catch (err) {
         alert('خطا در ثبت تسویه: ' + err.message);
     }
-}
+};
 
-function exportSettlementsToExcel() {
+window.exportSettlementsToExcel = function() {
     if (allPayments.length === 0) {
         alert('داده‌ای برای خروجی اکسل وجود ندارد.');
         return;
@@ -666,31 +666,10 @@ function exportSettlementsToExcel() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-}
+};
 
-// ==========================================
-// ۱۰. متصل کردن توابع به شیء سراسری window
-// ==========================================
-// (برای جلوگیری از خطاهای ReferenceError مثل showLoginModal is not defined)
-window.showLoginModal = showLoginModal;
-window.closeLoginModal = closeLoginModal;
-window.handleTypistLogin = handleTypistLogin;
-window.handleAdminLogin = handleAdminLogin;
-window.logout = logout;
-window.submitTypistReport = submitTypistReport;
-window.handleAdminDirectReportSubmit = handleAdminDirectReportSubmit;
-window.openSettlementModal = openSettlementModal;
-window.closeSettlementModal = closeSettlementModal;
-window.executeSettlement = executeSettlement;
-window.exportSettlementsToExcel = exportSettlementsToExcel;
-window.openJalaliCalendar = openJalaliCalendar;
-window.closeJalaliCalendar = closeJalaliCalendar;
-window.prevCalMonth = prevCalMonth;
-window.nextCalMonth = nextCalMonth;
+// تایید بارگذاری بدون ارور
+console.log('✅ نسخه جدید سامانه با تعریف سراسری توابع با موفقیت لود شد.');
 
-// راه‌اندازی اولیه
-window.addEventListener('DOMContentLoaded', () => {
-    console.log('سامانه مدیریت تایپیست‌ها آماده است.');
-});
 
 
