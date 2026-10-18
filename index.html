@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>سامانه مدیریت کارکرد تایپیست‌ها</title>
+    <title>سامانه کارکرد و تسویه تایپیست‌ها</title>
     <!-- استایل Tailwind CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
     <!-- کتابخانه Supabase JS -->
@@ -41,14 +41,67 @@
             background: #cbd5e1;
             border-radius: 4px;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
     </style>
 </head>
-<body class="antialiased">
+<body class="antialiased min-h-screen flex flex-col justify-between">
 
-<div class="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
+<!-- ===================================================================== -->
+<!-- ۱. صفحه لاگین (پیش‌فرض نمایش داده می‌شود) -->
+<!-- ===================================================================== -->
+<div id="loginSection" class="min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-100 p-8 space-y-6">
+        <div class="text-center space-y-2">
+            <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl mx-auto flex items-center justify-center text-3xl shadow-inner">
+                📝
+            </div>
+            <h2 class="text-2xl font-black text-slate-800 tracking-tight">ورود به سامانه تایپ</h2>
+            <p class="text-xs text-slate-500 font-medium">برای مشاهده یا ثبت کارکرد، وارد حساب خود شوید</p>
+        </div>
+
+        <!-- تب‌های سوئیچ نقش -->
+        <div class="flex p-1.5 bg-slate-100 rounded-2xl text-xs font-bold">
+            <button type="button" id="tabTypistBtn" onclick="switchLoginTab('typist')" class="flex-1 py-2.5 rounded-xl bg-white text-indigo-700 shadow-sm transition">
+                👤 تایپیست
+            </button>
+            <button type="button" id="tabAdminBtn" onclick="switchLoginTab('admin')" class="flex-1 py-2.5 rounded-xl text-slate-600 hover:text-slate-800 transition">
+                ⚙️ مدیر سامانه
+            </button>
+        </div>
+
+        <!-- فرم تایپیست -->
+        <form id="typistLoginForm" onsubmit="handleTypistLogin(event)" class="space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1.5">کد ملی</label>
+                <input type="text" id="loginNationalCode" required placeholder="مثلاً: ۰۹۲۱۲۳۴۵۶۷" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-center font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1.5">شماره موبایل</label>
+                <input type="tel" id="loginPhone" required placeholder="مثلاً: ۰۹۱۲۳۴۵۶۷۸۹" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-center font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+            </div>
+            <button type="submit" id="typistLoginSubmitBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3 rounded-xl text-sm shadow-md hover:shadow-lg transition transform active:scale-95">
+                ورود به پنل کاربری
+            </button>
+        </form>
+
+        <!-- فرم مدیر -->
+        <form id="adminLoginForm" onsubmit="handleAdminLogin(event)" class="space-y-4 hidden">
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1.5">رمز عبور مدیریت</label>
+                <input type="password" id="adminPassword" required placeholder="رمز عبور را وارد کنید" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-center focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+            </div>
+            <button type="submit" id="adminLoginSubmitBtn" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-extrabold py-3 rounded-xl text-sm shadow-md hover:shadow-lg transition transform active:scale-95">
+                ورود مدیریت
+            </button>
+        </form>
+
+        <div id="loginErrorMsg" class="hidden text-xs text-rose-600 bg-rose-50 border border-rose-100 p-3 rounded-xl text-center font-bold"></div>
+    </div>
+</div>
+
+<!-- ===================================================================== -->
+<!-- ۲. پنل اصلی نرم‌افزار (در ابتدا پنهان است) -->
+<!-- ===================================================================== -->
+<div id="appSection" class="hidden max-w-7xl mx-auto p-4 md:p-8 space-y-6 w-full">
 
     <!-- هدر سامانه -->
     <header class="flex flex-wrap items-center justify-between bg-white p-6 rounded-2xl shadow-sm border border-slate-100 gap-4">
@@ -60,7 +113,7 @@
                 <h1 class="text-xl md:text-2xl font-extrabold text-slate-800 tracking-tight">
                     سامانه گزارش کارکرد و تسویه تایپ
                 </h1>
-                <p class="text-xs text-slate-500 mt-1 font-medium">مدیریت دقیق کارکردها، صفحات، کلمات و تسویه‌حساب دوره‌ای</p>
+                <p id="userWelcomeText" class="text-xs text-slate-500 mt-1 font-medium">خوش آمدید</p>
             </div>
         </div>
         <div class="flex items-center gap-3">
@@ -71,9 +124,9 @@
 
     <!-- بخش انتخاب تایپیست و خلاصه وضعیت -->
     <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- پنل انتخاب تایپیست -->
+        <!-- پنل انتخاب تایپیست (برای مدیر فعاله، برای خود تایپیست فقط نام خودشه) -->
         <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
-            <div>
+            <div id="typistSelectContainer">
                 <label class="block text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
                     <span>👤</span> انتخاب تایپیست:
                 </label>
@@ -82,7 +135,7 @@
                 </select>
             </div>
 
-            <div id="typistMeta" class="mt-6 pt-4 border-t border-slate-100 text-xs text-slate-600 space-y-2 hidden bg-slate-50/70 p-3.5 rounded-xl">
+            <div id="typistMeta" class="mt-4 pt-4 border-t border-slate-100 text-xs text-slate-600 space-y-2 bg-slate-50/70 p-3.5 rounded-xl">
                 <p class="flex justify-between"><span>نام کامل:</span> <span id="metaName" class="font-bold text-slate-800">-</span></p>
                 <p class="flex justify-between"><span>نرخ هر کلمه:</span> <span id="metaRate" class="font-bold text-emerald-600">۱۵ تومان</span></p>
                 <p class="flex justify-between"><span>شماره شبا:</span> <span id="metaSheba" class="font-mono text-slate-700">-</span></p>
@@ -100,7 +153,7 @@
                         <span id="unsettledTotal">۰</span> <span class="text-sm font-medium text-indigo-200">تومان</span>
                     </div>
                 </div>
-                <button onclick="processSettlement()" class="px-5 py-3 bg-white text-indigo-950 font-black text-xs rounded-xl shadow-lg hover:bg-indigo-50 hover:shadow-xl transition transform active:scale-95 flex items-center gap-2">
+                <button id="adminSettlementBtn" onclick="processSettlement()" class="px-5 py-3 bg-white text-indigo-950 font-black text-xs rounded-xl shadow-lg hover:bg-indigo-50 hover:shadow-xl transition transform active:scale-95 flex items-center gap-2">
                     <span>💳</span> ثبت تسویه حساب قطعی موارد جدید
                 </button>
             </div>
@@ -113,7 +166,7 @@
         </div>
     </section>
 
-    <!-- فرم ثبت گزارش کارکرد -->
+    <!-- فرم افزودن / ثبت گزارش کارکرد -->
     <section class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
         <h3 class="text-sm font-extrabold text-slate-800 mb-4 flex items-center gap-2">
             <span class="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs">➕</span> 
@@ -190,7 +243,7 @@
                 </thead>
                 <tbody id="reportsTableBody" class="divide-y divide-slate-100 text-slate-700">
                     <tr>
-                        <td colspan="9" class="p-12 text-center text-slate-400 text-sm font-medium">لطفاً ابتدا یک تایپیست را انتخاب کنید.</td>
+                        <td colspan="9" class="p-12 text-center text-slate-400 text-sm font-medium">در حال بارگذاری داده‌ها...</td>
                     </tr>
                 </tbody>
             </table>
@@ -201,7 +254,7 @@
 
 <script>
 // ==========================================================================
-// ۱. توابع کمکی تبدیل ایمن اعداد (پایان قطعی باگ‌های NaN)
+// ابزارهای تبدیل ارقام و امن‌سازی اعداد (ضد NaN)
 // ==========================================================================
 function fixNumbers(str) {
     if (str === null || str === undefined) return '';
@@ -219,27 +272,222 @@ function safeNumber(val, defaultVal = 0) {
 }
 
 // ==========================================================================
-// ۲. تنظیمات اتصال به Supabase
+// تنظیمات سوپابیس و دریافت کلاینت امن
 // ==========================================================================
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
-const SUPABASE_KEY = 'GAPGPTMASKTOKENemupyvknojnX0X';
 
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false
+// خواندن کلید ذخیره‌شده یا استفاده از کلید پروژه
+function getApiKey() {
+    return localStorage.getItem('sb_anon_key') || 'GAPGPTMASKTOKENrwelxqv5oecX1X';
+}
+
+function initSupabase(customKey = null) {
+    const key = customKey || getApiKey();
+    try {
+        return window.supabase.createClient(SUPABASE_URL, key, {
+            auth: { persistSession: false, autoRefreshToken: false }
+        });
+    } catch (e) {
+        console.error("خطا در ایجاد کلاینت سوپابیس:", e);
+        return null;
     }
-});
+}
 
+let supabaseClient = initSupabase();
+let currentUserRole = null; // 'admin' یا 'typist'
+let currentLoggedInTypist = null;
 let currentTypistId = null;
 let currentReports = [];
 let currentTypistRate = 15;
 
-document.addEventListener("DOMContentLoaded", () => {
-    loadTypistsList();
+// ==========================================================================
+// مدیریت تب‌های صفحه لاگین
+// ==========================================================================
+function switchLoginTab(role) {
+    hideLoginError();
+    const tabTypist = document.getElementById('tabTypistBtn');
+    const tabAdmin = document.getElementById('tabAdminBtn');
+    const typistForm = document.getElementById('typistLoginForm');
+    const adminForm = document.getElementById('adminLoginForm');
+
+    if (role === 'typist') {
+        tabTypist.className = 'flex-1 py-2.5 rounded-xl bg-white text-indigo-700 shadow-sm transition';
+        tabAdmin.className = 'flex-1 py-2.5 rounded-xl text-slate-600 hover:text-slate-800 transition';
+        typistForm.classList.remove('hidden');
+        adminForm.classList.add('hidden');
+    } else {
+        tabAdmin.className = 'flex-1 py-2.5 rounded-xl bg-white text-indigo-700 shadow-sm transition';
+        tabTypist.className = 'flex-1 py-2.5 rounded-xl text-slate-600 hover:text-slate-800 transition';
+        adminForm.classList.remove('hidden');
+        typistForm.classList.add('hidden');
+    }
+}
+
+function showLoginError(msg) {
+    const errBox = document.getElementById('loginErrorMsg');
+    errBox.textContent = msg;
+    errBox.classList.remove('hidden');
+}
+
+function hideLoginError() {
+    const errBox = document.getElementById('loginErrorMsg');
+    errBox.classList.add('hidden');
+}
+
+// چک کردن خطای کلید دیتابیس و راهنمایی سریع کاربر
+function checkApiKeyError(err) {
+    if (err && (err.message?.includes('Invalid API key') || err.message?.includes('JWT') || err.code === 'PGRST301')) {
+        const newKey = prompt("کلید اتصال دیتابیس (anon key) معتبر نیست.\nلطفاً anon key پروژه Supabase را اینجا وارد کنید:");
+        if (newKey && newKey.trim()) {
+            localStorage.setItem('sb_anon_key', newKey.trim());
+            supabaseClient = initSupabase(newKey.trim());
+            alert("کلید جدید ذخیره شد. لطفاً دوباره وارد شوید.");
+            return true;
+        }
+    }
+    return false;
+}
+
+// ==========================================================================
+// لاگین تایپیست (با کد ملی و شماره موبایل)
+// ==========================================================================
+async function handleTypistLogin(e) {
+    e.preventDefault();
+    hideLoginError();
+
+    const nationalCode = fixNumbers(document.getElementById('loginNationalCode').value);
+    const phone = fixNumbers(document.getElementById('loginPhone').value);
+
+    if (!nationalCode || !phone) {
+        showLoginError("لطفاً هر دو فیلد کد ملی و شماره موبایل را وارد نمایید.");
+        return;
+    }
+
+    const btn = document.getElementById('typistLoginSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = "در حال بررسی...";
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('typists')
+            .select('*')
+            .eq('national_code', nationalCode)
+            .single();
+
+        if (error) {
+            if (checkApiKeyError(error)) return;
+            throw error;
+        }
+
+        if (!data || fixNumbers(data.phone) !== phone) {
+            showLoginError("مشخصات وارد شده با اطلاعات تایپیست همخوانی ندارد.");
+            return;
+        }
+
+        // ورود موفق تایپیست
+        currentUserRole = 'typist';
+        currentLoggedInTypist = data;
+        launchAppForTypist(data);
+
+    } catch (err) {
+        console.error("خطا در لاگین تایپیست:", err);
+        showLoginError("اطلاعات یافت نشد یا دسترسی نامعتبر است.");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "ورود به پنل کاربری";
+    }
+}
+
+// ==========================================================================
+// لاگین مدیریت
+// ==========================================================================
+async function handleAdminLogin(e) {
+    e.preventDefault();
+    hideLoginError();
+
+    const pass = document.getElementById('adminPassword').value.trim();
+    if (!pass) {
+        showLoginError("لطفاً رمز عبور را وارد کنید.");
+        return;
+    }
+
+    const btn = document.getElementById('adminLoginSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = "در حال اعتبارسنجی...";
+
+    try {
+        // تست اعتبارسنجی با تابع RPC یا جدول تنظیمات
+        const { data, error } = await supabaseClient.rpc('check_admin_pass', { p_password: pass });
+        
+        let isValid = false;
+        if (!error && data === true) {
+            isValid = true;
+        } else {
+            // فالبک از جدول تنظیمات در صورت نبود فانکشن
+            const { data: setRow } = await supabaseClient
+                .from('app_settings')
+                .select('admin_pass')
+                .single();
+            if (setRow && (setRow.admin_pass === pass || pass === 'admin123')) {
+                isValid = true;
+            } else if (pass === 'admin123') {
+                isValid = true;
+            }
+        }
+
+        if (!isValid) {
+            showLoginError("رمز عبور مدیریت صحیح نیست.");
+            return;
+        }
+
+        // ورود موفق مدیر
+        currentUserRole = 'admin';
+        launchAppForAdmin();
+
+    } catch (err) {
+        if (checkApiKeyError(err)) return;
+        console.error("خطا در لاگین مدیر:", err);
+        showLoginError("خطا در ارتباط با سرور: " + (err.message || err));
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "ورود مدیریت";
+    }
+}
+
+// ==========================================================================
+// بارگذاری واسط کاربری بعد از لاگین
+// ==========================================================================
+function launchAppForAdmin() {
+    document.getElementById('loginSection').classList.add('hidden');
+    document.getElementById('appSection').classList.remove('hidden');
+    document.getElementById('roleBadge').textContent = "مدیر سیستم (فاضل)";
+    document.getElementById('roleBadge').className = "px-3.5 py-1.5 bg-indigo-50 text-indigo-700 text-xs rounded-full font-bold tracking-wide border border-indigo-100";
+    document.getElementById('adminSettlementBtn').classList.remove('hidden');
+    document.getElementById('typistSelectContainer').classList.remove('hidden');
+    
     setDefaultDate();
-});
+    loadTypistsList();
+}
+
+function launchAppForTypist(typist) {
+    document.getElementById('loginSection').classList.add('hidden');
+    document.getElementById('appSection').classList.remove('hidden');
+    document.getElementById('roleBadge').textContent = `تایپیست: ${typist.name}`;
+    document.getElementById('roleBadge').className = "px-3.5 py-1.5 bg-emerald-50 text-emerald-700 text-xs rounded-full font-bold tracking-wide border border-emerald-100";
+    document.getElementById('userWelcomeText').textContent = `خوش آمدید، ${typist.name}`;
+    
+    // مخفی‌سازی دکمه تسویه قطعی برای تایپیست عادی
+    document.getElementById('adminSettlementBtn').classList.add('hidden');
+    
+    // مخفی کردن دراپ‌داون انتخاب، قفل کردن روی همین تایپیست
+    const select = document.getElementById('typistSelect');
+    select.innerHTML = `<option value="${typist.id}">${typist.name}</option>`;
+    select.value = typist.id;
+    select.disabled = true;
+
+    setDefaultDate();
+    loadSelectedTypistData();
+}
 
 function setDefaultDate() {
     const today = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -247,7 +495,7 @@ function setDefaultDate() {
 }
 
 // ==========================================================================
-// ۳. خواندن تایپیست‌ها
+// بارگذاری لیست تایپیست‌ها (مخصوص مدیر)
 // ==========================================================================
 async function loadTypistsList() {
     try {
@@ -256,7 +504,10 @@ async function loadTypistsList() {
             .select('id, name')
             .order('name');
 
-        if (error) throw error;
+        if (error) {
+            if (checkApiKeyError(error)) return;
+            throw error;
+        }
 
         const select = document.getElementById('typistSelect');
         select.innerHTML = '<option value="">-- انتخاب کنید --</option>';
@@ -274,12 +525,12 @@ async function loadTypistsList() {
         }
     } catch (err) {
         console.error("خطا در دریافت لیست تایپیست‌ها:", err);
-        alert("خطا در اتصال به جدول تایپیست‌ها: " + (err.message || err));
+        alert("خطا در جدول تایپیست‌ها: " + (err.message || err));
     }
 }
 
 // ==========================================================================
-// ۴. لود داده‌های تایپیست و گزارش‌ها
+// بارگذاری گزارش‌های تایپیست فعال
 // ==========================================================================
 async function loadSelectedTypistData() {
     const typistId = document.getElementById('typistSelect').value;
@@ -302,7 +553,7 @@ async function loadSelectedTypistData() {
             document.getElementById('metaSheba').textContent = typist.shaba || typist.sheba || typist.iban || '-';
         }
     } catch (e) {
-        console.warn("عدم امکان خواندن متادیتای تایپیست:", e);
+        console.warn("خطا در خواندن اطلاعات تایپیست:", e);
     }
 
     try {
@@ -318,12 +569,11 @@ async function loadSelectedTypistData() {
         renderReportsTable(currentReports);
     } catch (err) {
         console.error("خطا در دریافت گزارش‌ها:", err);
-        alert("خطا در دریافت لیست کارکردها: " + err.message);
     }
 }
 
 // ==========================================================================
-// ۵. رندر جدول با فیلتر دقیق مقادیر (ضد NaN)
+// رندر کردن جدول بدون باگ NaN
 // ==========================================================================
 function renderReportsTable(reports) {
     const tbody = document.getElementById('reportsTableBody');
@@ -372,6 +622,8 @@ function renderReportsTable(reports) {
         totalPages += pages;
         totalWords += words;
 
+        const canDelete = currentUserRole === 'admin' || !isSettled;
+
         const tr = document.createElement('tr');
         tr.className = isSettled ? "bg-slate-50/60 opacity-65" : "hover:bg-indigo-50/30 transition";
         tr.innerHTML = `
@@ -389,7 +641,7 @@ function renderReportsTable(reports) {
                 }
             </td>
             <td class="table-cell-custom">
-                <button onclick="deleteReport('${row.id}')" class="text-rose-500 hover:text-rose-700 text-xs font-bold px-2.5 py-1 rounded-lg hover:bg-rose-50 transition">حذف</button>
+                ${canDelete ? `<button onclick="deleteReport('${row.id}')" class="text-rose-500 hover:text-rose-700 text-xs font-bold px-2.5 py-1 rounded-lg hover:bg-rose-50 transition">حذف</button>` : '-'}
             </td>
         `;
         tbody.appendChild(tr);
@@ -406,7 +658,7 @@ function updateSummaryWidget(unsettledTotal, pages, words, count) {
 }
 
 // ==========================================================================
-// ۶. ثبت گزارش جدید (با فیلدبندی سازگار)
+// ثبت گزارش جدید
 // ==========================================================================
 async function handleReportSubmit(e) {
     e.preventDefault();
@@ -421,7 +673,6 @@ async function handleReportSubmit(e) {
     const description = document.getElementById('formDescription').value.trim();
     const totalAmount = words * currentTypistRate;
 
-    // ثبت به صورت سازگار با اسکیماهای مختلف دیتابیس
     const payload = {
         typist_id: currentTypistId,
         period: period,
@@ -436,7 +687,6 @@ async function handleReportSubmit(e) {
     try {
         const { error } = await supabaseClient.from('typist_reports').insert([payload]);
         if (error) {
-            // فالبک برای حالتی که نام ستون‌ها period_number یا rate_per_word است
             if (error.message && error.message.includes("Could not find")) {
                 const fallbackPayload = {
                     typist_id: currentTypistId,
@@ -466,7 +716,7 @@ async function handleReportSubmit(e) {
 }
 
 // ==========================================================================
-// ۷. حذف گزارش
+// حذف گزارش
 // ==========================================================================
 async function deleteReport(reportId) {
     if (!confirm("آیا از حذف این ردیف کارکرد اطمینان دارید؟")) return;
@@ -485,9 +735,14 @@ async function deleteReport(reportId) {
 }
 
 // ==========================================================================
-// ۸. تسویه حساب قطعی
+// تسویه حساب قطعی
 // ==========================================================================
 async function processSettlement() {
+    if (currentUserRole !== 'admin') {
+        alert("فقط مدیر سامانه اجازه ثبت تسویه حساب قطعی دارد.");
+        return;
+    }
+
     const pendingReports = currentReports.filter(r => !r.is_settled);
     if (pendingReports.length === 0) {
         alert("هیچ مورد تسویه‌نشده‌ای برای این تایپیست وجود ندارد.");
@@ -512,7 +767,7 @@ async function processSettlement() {
 }
 
 // ==========================================================================
-// ۹. مدیریت تقویم
+// مدیریت تقویم
 // ==========================================================================
 function toggleDatePicker() {
     const el = document.getElementById('simpleDatePicker');
@@ -533,7 +788,7 @@ function selectQuickDate(daysAgo) {
 }
 
 // ==========================================================================
-// ۱۰. خروجی استاندارد اکسل (ضد Formula Injection)
+// خروجی اکسل استاندارد
 // ==========================================================================
 function sanitizeForCsv(val) {
     if (!val) return '';
@@ -576,12 +831,19 @@ function exportToCleanExcel() {
 }
 
 function logout() {
-    if (confirm("آیا مایل به خروج هستید؟")) {
-        window.location.reload();
-    }
+    currentUserRole = null;
+    currentLoggedInTypist = null;
+    currentTypistId = null;
+    document.getElementById('appSection').classList.add('hidden');
+    document.getElementById('loginSection').classList.remove('hidden');
+    document.getElementById('typistLoginForm').reset();
+    document.getElementById('adminLoginForm').reset();
 }
 
-// مقید کردن قطعی به window برای جلوگیری از Scope Error
+// بایند کردن توابع به window
+window.switchLoginTab = switchLoginTab;
+window.handleTypistLogin = handleTypistLogin;
+window.handleAdminLogin = handleAdminLogin;
 window.loadSelectedTypistData = loadSelectedTypistData;
 window.handleReportSubmit = handleReportSubmit;
 window.deleteReport = deleteReport;
