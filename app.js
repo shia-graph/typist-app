@@ -207,6 +207,7 @@ window.closeDatePicker = function() {
 };
 
 function renderDatePicker() {
+    if (!state.currentPickerDate) state.currentPickerDate = getTodayJalali();
     const { jy, jm } = state.currentPickerDate;
     
     const yearSelect = document.getElementById('dp-year-select');
@@ -303,7 +304,8 @@ window.handleLogin = async function(e) {
     
     try {
         if (state.activeTab === 'admin') {
-            const pwd = toEnglishDigits(document.getElementById('admin-password-input').value);
+            const adminInput = document.getElementById('admin-password-input');
+            const pwd = toEnglishDigits(adminInput ? adminInput.value : '');
             const { data, error } = await window.supabaseClient.rpc('verify_admin_password', { p_password: pwd });
             
             if (error) throw error;
@@ -317,8 +319,10 @@ window.handleLogin = async function(e) {
                 showToast(res?.message || 'رمز عبور مدیر اشتباه است', 'error');
             }
         } else {
-            const identifier = toEnglishDigits(document.getElementById('typist-identifier-input').value);
-            const pwd = toEnglishDigits(document.getElementById('typist-password-input').value);
+            const idenInput = document.getElementById('typist-identifier-input');
+            const pwdInput = document.getElementById('typist-password-input');
+            const identifier = toEnglishDigits(idenInput ? idenInput.value : '');
+            const pwd = toEnglishDigits(pwdInput ? pwdInput.value : '');
             
             if (!identifier) {
                 showToast('لطفا کد ملی یا شماره همراه را وارد کنید', 'warning');
@@ -515,7 +519,8 @@ window.closeGroupSmsModal = function() {
 };
 
 window.sendGroupSms = function() {
-    const bodyText = document.getElementById('sms-body-input').value;
+    const bodyInput = document.getElementById('sms-body-input');
+    const bodyText = bodyInput ? bodyInput.value : '';
     const selectedTypists = state.typists.filter(t => t && state.selectedTypistIds.has(t.id));
     const phones = selectedTypists.map(t => t.phone).filter(p => !!p).join(',');
     
@@ -930,7 +935,6 @@ window.exportBankCsv = function() {
         return;
     }
     
-    // Exact Headers: ردیف, نام, نام خانوادگی, نام پدر, کد ملی, شماره تماس, شماره کارت, شماره شبا, مبلغ پرداختی به ریال
     const headers = ['ردیف', 'نام', 'نام خانوادگی', 'نام پدر', 'کد ملی', 'شماره تماس', 'شماره کارت', 'شماره شبا', 'مبلغ پرداختی به ریال'];
     
     const rows = state.typists.filter(Boolean).map((t, index) => {
@@ -963,7 +967,7 @@ window.exportBankCsv = function() {
     showToast('فایل اکسل/CSV بانک با موفقیت دانلود شد', 'success');
 };
 
-// --- Initialize Event Listeners ---
+// --- Initialize Event Listeners safely ---
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     
@@ -975,23 +979,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const fieldAdmin = document.getElementById('field-admin-password');
     const fieldTypist = document.getElementById('field-typist-inputs');
     
-    if (tabAdmin && tabTypist) {
+    if (tabAdmin) {
         tabAdmin.addEventListener('click', () => {
             state.activeTab = 'admin';
             tabAdmin.classList.add('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
             tabAdmin.classList.remove('border-transparent', 'text-slate-400');
-            tabTypist.classList.remove('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
-            tabTypist.classList.add('border-transparent', 'text-slate-400');
+            if (tabTypist) {
+                tabTypist.classList.remove('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
+                tabTypist.classList.add('border-transparent', 'text-slate-400');
+            }
             if (fieldAdmin) fieldAdmin.classList.remove('hidden');
             if (fieldTypist) fieldTypist.classList.add('hidden');
         });
-        
+    }
+    
+    if (tabTypist) {
         tabTypist.addEventListener('click', () => {
             state.activeTab = 'typist';
             tabTypist.classList.add('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
             tabTypist.classList.remove('border-transparent', 'text-slate-400');
-            tabAdmin.classList.remove('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
-            tabAdmin.classList.add('border-transparent', 'text-slate-400');
+            if (tabAdmin) {
+                tabAdmin.classList.remove('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
+                tabAdmin.classList.add('border-transparent', 'text-slate-400');
+            }
             if (fieldTypist) fieldTypist.classList.remove('hidden');
             if (fieldAdmin) fieldAdmin.classList.add('hidden');
         });
@@ -1024,10 +1034,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (changePasswordForm) changePasswordForm.addEventListener('submit', window.handleChangePasswordSubmit);
 
     const dpPrevMonth = document.getElementById('dp-prev-month');
-    const dpNextMonth = document.getElementById('dp-next-month');
-    
     if (dpPrevMonth) {
         dpPrevMonth.onclick = () => {
+            if (!state.currentPickerDate) state.currentPickerDate = getTodayJalali();
             if (state.currentPickerDate.jm > 1) {
                 state.currentPickerDate.jm--;
             } else {
@@ -1038,8 +1047,10 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
     
+    const dpNextMonth = document.getElementById('dp-next-month');
     if (dpNextMonth) {
         dpNextMonth.onclick = () => {
+            if (!state.currentPickerDate) state.currentPickerDate = getTodayJalali();
             if (state.currentPickerDate.jm < 12) {
                 state.currentPickerDate.jm++;
             } else {
@@ -1051,17 +1062,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     const dpYearSelect = document.getElementById('dp-year-select');
-    const dpMonthSelect = document.getElementById('dp-month-select');
-    
     if (dpYearSelect) {
         dpYearSelect.onchange = (e) => {
+            if (!state.currentPickerDate) state.currentPickerDate = getTodayJalali();
             state.currentPickerDate.jy = parseInt(e.target.value);
             renderDatePicker();
         };
     }
     
+    const dpMonthSelect = document.getElementById('dp-month-select');
     if (dpMonthSelect) {
         dpMonthSelect.onchange = (e) => {
+            if (!state.currentPickerDate) state.currentPickerDate = getTodayJalali();
             state.currentPickerDate.jm = parseInt(e.target.value);
             renderDatePicker();
         };
