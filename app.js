@@ -1,39 +1,49 @@
-
 // ==========================================
-// ۱. ثبت توابع سراسری روی window (جهت رفع ReferenceError)
-// ==========================================
-window.showLoginModal = function() {
-    const modal = document.getElementById('loginModal') || document.getElementById('typistLoginModal');
-    if (modal) {
-        modal.classList.remove('hidden');
-    } else {
-        const sec = document.getElementById('loginSection');
-        if (sec) sec.scrollIntoView({ behavior: 'smooth' });
-    }
-};
-
-window.closeLoginModal = function() {
-    const modal = document.getElementById('loginModal') || document.getElementById('typistLoginModal');
-    if (modal) modal.classList.add('hidden');
-};
-
-// ==========================================
-// ۲. تنظیمات اتصال به دیتابیس Supabase
+// ۱. تنظیمات اتصال امن به دیتابیس Supabase
 // ==========================================
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
+const SUPABASE_KEY = 'GAPGPTMASKTOKEN8sawlhk45bhX0X';
 
-// ایجاد کلاینت و نگاشت روی هم db و هم client برای جلوگیری از ReferenceError
+// ایجاد کلاینت یکپارچه و ثبت روی window
 const db = (typeof supabase !== 'undefined') ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 window.db = db;
 window.client = db;
 
+// متغیرهای وضعیت برنامه
+let isAdmin = false;
+let currentTypist = null;
+let cachedTypists = [];
+
 // ==========================================
-// ۳. اعتبارسنجی امن مدیر (صرفاً از پایگاه داده)
+// ۲. توابع کمکی تاریخ شمسی و محاسبات دوره‌ای
+// ==========================================
+function getTodayShamsi() {
+    try {
+        const parts = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(new Date()).split('/');
+        
+        // تبدیل اعداد فارسی به انگلیسی استاندارد برای ذخیره دیتابیس
+        const toEn = str => str.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+        return `${toEn(parts[0])}/${toEn(parts[1])}/${toEn(parts[2])}`;
+    } catch (e) {
+        return '1403/01/01';
+    }
+}
+
+function safeNum(val) {
+    const n = Number(val);
+    return isNaN(n) ? 0 : n;
+}
+
+// ==========================================
+// ۳. احراز هویت و ورود امن مدیر (صرفاً از دیتابیس)
 // ==========================================
 window.handleAdminLogin = async function() {
     if (!window.db) {
-        alert('خطای سیستمی: اتصال به سرویس‌دهنده برقرار نشده است. لطفاً صفحه را تازه‌سازی کنید.');
+        alert('خطای اتصال به پایگاه داده.');
         return;
     }
 
@@ -41,7 +51,6 @@ window.handleAdminLogin = async function() {
     if (!inputPass || !inputPass.trim()) return;
 
     try {
-        // واکشی امن فقط مقدار رمز از دیتابیس
         const { data, error } = await window.db
             .from('app_settings')
             .select('value')
@@ -49,706 +58,578 @@ window.handleAdminLogin = async function() {
             .maybeSingle();
 
         if (error) {
-            console.error('Database Error:', error);
-            alert('خطا در دسترسی به پایگاه‌داده: ' + (error.message || 'عدم دسترسی'));
+            alert('خطا در دسترسی به پایگاه‌داده: ' + error.message);
             return;
         }
 
         if (!data || !data.value) {
-            alert('خطای امنیتی: رمز عبور مدیر در پایگاه‌داده پیکربندی نشده است.');
+            alert('رمز عبور مدیریت در دیتابیس تعریف نشده است.');
             return;
         }
 
-        // بررسی تطابق دقیق رمز وارد شده با دیتابیس
         if (inputPass.trim() === data.value.toString().trim()) {
             isAdmin = true;
             currentTypist = null;
-            showAdminDashboard();
+            document.getElementById('landingSection').classList.add('hidden');
+            document.getElementById('typistDashboard').classList.add('hidden');
+            document.getElementById('adminDashboard').classList.remove('hidden');
+            document.getElementById('btnLogout').classList.remove('hidden');
+            document.getElementById('btnAdminAuth').classList.add('hidden');
+            window.loadAdminDashboard();
         } else {
             alert('رمز عبور مدیریت نادرست است.');
         }
     } catch (err) {
-        console.error('Auth Error:', err);
-        alert('خطای اتصال در برقراری ارتباط با سرور.');
+        alert('خطا در اتصال به سرور جهت اعتبارسنجی مدیر.');
     }
 };
 
-// ==========================================
-// ۳. کتابخانه محاسبات تقویم شمسی جلالی
-// ==========================================
-const Jalali = {
-    toJalaali(gy, gm, gd) {
-        const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-        let jy = (gy <= 1600) ? 0 : 979;
-        gy -= (gy <= 1600) ? 621 : 1600;
-        const gy2 = (gm > 2) ? (gy + 1) : gy;
-        let days = (365 * gy) + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) 
-                 + Math.floor((gy2 + 399) / 400) - 80 + gd + g_d_m[gm - 1];
-        jy += 33 * Math.floor(days / 12053);
-        days %= 12053;
-        jy += 4 * Math.floor(days / 1461);
-        days %= 1461;
-        jy += Math.floor((days - 1) / 365);
-        if (days > 0) days = (days - 1) % 365;
-        const jm = (days < 186) ? 1 + Math.floor(days / 31) : 7 + Math.floor((days - 186) / 30);
-        const jd = 1 + ((days < 186) ? (days % 31) : ((days - 186) % 30));
-        return { jy, jm, jd };
-    },
-
-    toGregorian(jy, jm, jd) {
-        let gy = (jy <= 979) ? 621 : 1600;
-        jy -= (jy <= 979) ? 0 : 979;
-        let days = (365 * jy) + Math.floor(jy / 33) * 8 + Math.floor(((jy % 33) + 3) / 4) 
-                 + 78 + jd + ((jm < 7) ? (jm - 1) * 31 : ((jm - 7) * 30) + 186);
-        gy += 400 * Math.floor(days / 146097);
-        days %= 146097;
-        if (days > 36524) {
-            gy += 100 * Math.floor(--days / 36524);
-            days %= 36524;
-            if (days >= 365) days++;
-        }
-        gy += 4 * Math.floor(days / 1461);
-        days %= 1461;
-        gy += Math.floor((days - 1) / 365);
-        if (days > 0) days = (days - 1) % 365;
-        const gd = days + 1;
-        const sal_a = [0, 31, ((gy % 4 === 0 && gy % 100 !== 0) || (gy % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-        let gm = 0;
-        while (gm < 13 && days >= sal_a[gm]) {
-            days -= sal_a[gm];
-            gm++;
-        }
-        return { gy, gm, gd: days + 1 };
-    },
-
-    todayString() {
-        const now = new Date();
-        const j = this.toJalaali(now.getFullYear(), now.getMonth() + 1, now.getDate());
-        return `${j.jy}/${String(j.jm).padStart(2, '0')}/${String(j.jd).padStart(2, '0')}`;
-    },
-
-    parse(str) {
-        if (!str) return null;
-        const parts = String(str).trim().split('/').map(Number);
-        if (parts.length !== 3 || parts.some(isNaN)) return null;
-        return { jy: parts[0], jm: parts[1], jd: parts[2] };
-    },
-
-    formatDate(dateObj) {
-        if (!dateObj) return '-';
-        const d = new Date(dateObj);
-        if (isNaN(d.getTime())) return '-';
-        const j = this.toJalaali(d.getFullYear(), d.getMonth() + 1, d.getDate());
-        return `${j.jy}/${String(j.jm).padStart(2, '0')}/${String(j.jd).padStart(2, '0')}`;
-    },
-
-    daysBetween(jDateStr1, jDateStr2) {
-        const d1 = this.parse(jDateStr1);
-        const d2 = this.parse(jDateStr2);
-        if (!d1 || !d2) return 0;
-        const g1 = this.toGregorian(d1.jy, d1.jm, d1.jd);
-        const g2 = this.toGregorian(d2.jy, d2.jm, d2.jd);
-        const dt1 = new Date(g1.gy, g1.gm - 1, g1.gd);
-        const dt2 = new Date(g2.gy, g2.gm - 1, g2.gd);
-        return Math.floor((dt2 - dt1) / (1000 * 60 * 60 * 24));
-    }
+window.handleLogout = function() {
+    isAdmin = false;
+    currentTypist = null;
+    document.getElementById('landingSection').classList.remove('hidden');
+    document.getElementById('typistDashboard').classList.add('hidden');
+    document.getElementById('adminDashboard').classList.add('hidden');
+    document.getElementById('btnLogout').classList.add('hidden');
+    document.getElementById('btnAdminAuth').classList.remove('hidden');
 };
 
 // ==========================================
-// ۴. موتور تایم‌لاین ۱۰ روزه و وضعیت تاخیر
+// ۴. ورود و پنل تایپیست
 // ==========================================
-function calculatePeriodTimeline(typist, reports) {
-    const today = Jalali.todayString();
-    const startDate = typist.delivery_date || today;
-
-    const typistReports = reports
-        .filter(r => r.typist_id === typist.id)
-        .sort((a, b) => (Number(a.period) || 0) - (Number(b.period) || 0));
-
-    const highestSubmittedPeriod = typistReports.length > 0 
-        ? Math.max(...typistReports.map(r => Number(r.period) || 0)) 
-        : 0;
-
-    const activePeriod = highestSubmittedPeriod + 1;
-
-    let lastCheckpointDate = startDate;
-    if (typistReports.length > 0) {
-        const lastRep = typistReports[typistReports.length - 1];
-        lastCheckpointDate = Jalali.formatDate(lastRep.created_at);
-    }
-
-    const daysSinceCheckpoint = Math.max(0, Jalali.daysBetween(lastCheckpointDate, today));
-    const daysRemaining = 10 - daysSinceCheckpoint;
-    const isLate = daysRemaining < 0;
-    const delayDays = isLate ? Math.abs(daysRemaining) : 0;
-
-    return {
-        activePeriod,
-        highestSubmittedPeriod,
-        daysRemaining: Math.max(0, daysRemaining),
-        isLate,
-        delayDays,
-        statusLabel: isLate 
-            ? `⚠️ تاخیر در دوره ${activePeriod} (${delayDays} روز گذشته)` 
-            : `⏳ دوره ${activePeriod} (${daysRemaining} روز مانده تا موعد ثبت)`
-    };
-}
-
-// ==========================================
-// ۵. مدیریت پاپ‌آپ تقویم شمسی جلالی
-// ==========================================
-let calYear = 1405;
-let calMonth = 7;
-
-window.openJalaliCalendar = function(inputElement) {
-    calendarTargetInput = inputElement;
-    const currentVal = inputElement.value ? Jalali.parse(inputElement.value) : null;
-    const today = Jalali.parse(Jalali.todayString());
-    
-    calYear = currentVal ? currentVal.jy : today.jy;
-    calMonth = currentVal ? currentVal.jm : today.jm;
-
-    renderCalendarPopup();
-    const modal = document.getElementById('jalaliCalendarModal');
-    if (modal) modal.classList.remove('hidden');
-};
-
-window.closeJalaliCalendar = function() {
-    const modal = document.getElementById('jalaliCalendarModal');
-    if (modal) modal.classList.add('hidden');
-};
-
-function renderCalendarPopup() {
-    const titleElem = document.getElementById('calMonthYearTitle');
-    const gridElem = document.getElementById('calDaysGrid');
-    if (!titleElem || !gridElem) return;
-
-    const monthNames = ['', 'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
-    titleElem.innerText = `${monthNames[calMonth]} ${calYear}`;
-
-    gridElem.innerHTML = '';
-    const daysInMonth = (calMonth <= 6) ? 31 : (calMonth <= 11 ? 30 : 29);
-
-    for (let day = 1; day <= daysInMonth; day++) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'p-2 text-sm rounded-lg hover:bg-emerald-600 hover:text-white transition-colors border border-gray-100 text-gray-700 font-medium';
-        btn.innerText = day;
-        btn.onclick = () => {
-            if (calendarTargetInput) {
-                const formatted = `${calYear}/${String(calMonth).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
-                calendarTargetInput.value = formatted;
-            }
-            window.closeJalaliCalendar();
-        };
-        gridElem.appendChild(btn);
-    }
-}
-
-window.prevCalMonth = function() {
-    calMonth--;
-    if (calMonth < 1) { calMonth = 12; calYear--; }
-    renderCalendarPopup();
-};
-
-window.nextCalMonth = function() {
-    calMonth++;
-    if (calMonth > 12) { calMonth = 1; calYear++; }
-    renderCalendarPopup();
-};
-
-// ==========================================
-// ۶. ورود تایپیست و ورود مدیر
-// ==========================================
-window.handleTypistLogin = async function() {
-    const nationalCode = (document.getElementById('loginNationalCode') || {}).value?.trim();
-    const phone = (document.getElementById('loginPhone') || {}).value?.trim();
-
-    if (!nationalCode || !phone) {
-        alert('لطفاً کد ملی و شماره همراه خود را وارد نمایید.');
-        return;
-    }
+window.handleTypistLogin = async function(event) {
+    event.preventDefault();
+    const natCode = document.getElementById('typist_national_code').value.trim();
+    const phone = document.getElementById('typist_phone').value.trim();
 
     try {
-        const { data, error } = await db
+        const { data, error } = await window.db
             .from('typists')
             .select('*')
-            .eq('national_code', nationalCode)
+            .eq('national_code', natCode)
             .eq('phone', phone)
             .maybeSingle();
 
-        if (error) throw error;
+        if (error) {
+            alert('خطا در استعلام اطلاعات: ' + error.message);
+            return;
+        }
+
         if (!data) {
-            alert('مشخصات تایپیست در سامانه یافت نشد.');
+            alert('تایپیستی با این مشخصات یافت نشد! لطفاً با مدیر هماهنگ کنید.');
             return;
         }
 
         currentTypist = data;
         isAdmin = false;
-        window.closeLoginModal();
-        showTypistDashboard();
+        document.getElementById('landingSection').classList.add('hidden');
+        document.getElementById('adminDashboard').classList.add('hidden');
+        document.getElementById('typistDashboard').classList.remove('hidden');
+        document.getElementById('btnLogout').classList.remove('hidden');
+        document.getElementById('btnAdminAuth').classList.add('hidden');
+
+        window.renderTypistDashboardView();
     } catch (err) {
-        console.error('خطای ورود تایپیست:', err);
-        alert('خطا در ورود: ' + err.message);
+        alert('خطای اتصال به سرور.');
     }
 };
 
-window.handleAdminLogin = async function() {
-    const inputPass = prompt('رمز عبور مدیر را وارد نمایید:');
-    if (!inputPass) return;
+window.renderTypistDashboardView = async function() {
+    if (!currentTypist) return;
+    const t = currentTypist;
+    document.getElementById('typistWelcomeName').innerText = t.full_name || t.name || 'بدون نام';
+    document.getElementById('typistBadgeTitle').innerText = t.title || t.course_title || '—';
+    document.getElementById('typistAccountMeta').innerText = `شماره تماس: ${t.phone || '-'} | کد ملی: ${t.national_code || '-'} | شبا: IR${t.shaba || '-'}`;
 
-    const trimmedPass = inputPass.trim();
-    // رمز عبور پشتیبان برای زمان‌هایی که دیتابیس پاسخ نمی‌دهد:
-    const BACKUP_ADMIN_PASS = '123456'; 
+    const { data: reports, error } = await window.db
+        .from('typist_reports')
+        .select('*')
+        .eq('typist_id', t.id)
+        .order('period_number', { ascending: true });
 
+    const tbody = document.getElementById('typistReportsTbody');
+    tbody.innerHTML = '';
+
+    if (!reports || reports.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400">تاکنون گزارشی برای شما ثبت نشده است.</td></tr>`;
+        return;
+    }
+
+    reports.forEach(r => {
+        const pages = safeNum(r.pages);
+        const words = safeNum(r.words);
+        const amount = safeNum(r.total_amount || (words * (r.rate || t.rate_per_word || 15)));
+        const settledBadge = r.is_settled 
+            ? `<span class="bg-emerald-100 text-emerald-800 text-[11px] px-2 py-0.5 rounded font-bold">تسویه شده</span>`
+            : `<span class="bg-amber-100 text-amber-800 text-[11px] px-2 py-0.5 rounded font-bold">در انتظار تسویه</span>`;
+
+        tbody.innerHTML += `
+            <tr class="hover:bg-slate-50 transition">
+                <td class="p-3 font-bold text-slate-700">دوره ${r.period_number || 1}</td>
+                <td class="p-3 font-mono">${r.report_date || '-'}</td>
+                <td class="p-3 font-mono">${pages.toLocaleString('fa-IR')}</td>
+                <td class="p-3 font-mono">${words.toLocaleString('fa-IR')}</td>
+                <td class="p-3 font-mono font-bold text-blue-700">${amount.toLocaleString('fa-IR')} تومان</td>
+                <td class="p-3">${settledBadge}</td>
+                <td class="p-3 text-slate-500 text-xs">${r.description || '-'}</td>
+            </tr>
+        `;
+    });
+};
+
+// ویرایش پروفایل توسط تایپیست
+window.openEditProfileModal = function() {
+    if (!currentTypist) return;
+    document.getElementById('prof_name').value = currentTypist.full_name || currentTypist.name || '';
+    document.getElementById('prof_national_code').value = currentTypist.national_code || '';
+    document.getElementById('prof_phone').value = currentTypist.phone || '';
+    document.getElementById('prof_shaba').value = currentTypist.shaba || '';
+    document.getElementById('profileModal').classList.remove('hidden');
+};
+
+window.closeEditProfileModal = function() {
+    document.getElementById('profileModal').classList.add('hidden');
+};
+
+window.handleTypistSelfUpdate = async function(e) {
+    e.preventDefault();
+    const updates = {
+        full_name: document.getElementById('prof_name').value.trim(),
+        national_code: document.getElementById('prof_national_code').value.trim(),
+        phone: document.getElementById('prof_phone').value.trim(),
+        shaba: document.getElementById('prof_shaba').value.trim()
+    };
+
+    const { error } = await window.db.from('typists').update(updates).eq('id', currentTypist.id);
+    if (error) {
+        alert('خطا در به‌روزرسانی: ' + error.message);
+    } else {
+        alert('مشخصات شما با موفقیت ذخیره شد.');
+        currentTypist = { ...currentTypist, ...updates };
+        window.closeEditProfileModal();
+        window.renderTypistDashboardView();
+    }
+};
+
+// ==========================================
+// ۵. داشبورد مدیریت و عملیات تایپیست‌ها
+// ==========================================
+window.loadAdminDashboard = async function() {
     try {
-        // ۱. بررسی آماده بودن آبجکت اتصال
-        if (typeof db === 'undefined' || !db) {
-            console.warn('اتصال db برقرار نیست، بررسی با رمز پشتیبان...');
-            if (trimmedPass === BACKUP_ADMIN_PASS) {
-                isAdmin = true;
-                currentTypist = null;
-                showAdminDashboard();
-                return;
-            }
-        }
-
-        // ۲. استعلام رمز از دیتابیس
-        const { data, error } = await db
-            .from('app_settings')
-            .select('value')
-            .eq('key', 'admin_password')
-            .maybeSingle();
+        const { data: typists, error } = await window.db
+            .from('typists')
+            .select('*, typist_reports(*)');
 
         if (error) {
-            console.error('Supabase Query Error:', error);
-            // در صورت خطای دیتابیس، به رمز پشتیبان مراجعه کن
-            if (trimmedPass === BACKUP_ADMIN_PASS) {
-                alert('توجه: اتصال به جدول تنظیمات برقرار نشد، ورود با رمز پشتیبان انجام شد.');
-                isAdmin = true;
-                currentTypist = null;
-                showAdminDashboard();
-                return;
-            } else {
-                alert('خطای اتصال به دیتابیس: ' + error.message);
-                return;
-            }
-        }
-
-        // ۳. بررسی مطابقت رمز
-        const dbPass = data && data.value ? data.value.toString().trim() : BACKUP_ADMIN_PASS;
-
-        if (trimmedPass === dbPass || trimmedPass === BACKUP_ADMIN_PASS) {
-            isAdmin = true;
-            currentTypist = null;
-            showAdminDashboard();
-        } else {
-            alert('رمز عبور مدیر اشتباه است!');
-        }
-
-    } catch (err) {
-        console.error('خطای ارتباط:', err);
-        // اگر خطای شبکه یا اسکریپت رخ داد
-        if (trimmedPass === BACKUP_ADMIN_PASS) {
-            isAdmin = true;
-            currentTypist = null;
-            showAdminDashboard();
-        } else {
-            alert('خطا در اعتبارسنجی: ' + (err.message || 'مشکل در برقراری ارتباط'));
-        }
-    }
-};
-
-window.logout = function() {
-    currentTypist = null;
-    isAdmin = false;
-    const typSec = document.getElementById('typistDashboardSection');
-    const admSec = document.getElementById('adminDashboardSection');
-    const logSec = document.getElementById('loginSection');
-    
-    if (typSec) typSec.classList.add('hidden');
-    if (admSec) admSec.classList.add('hidden');
-    if (logSec) logSec.classList.remove('hidden');
-};
-
-// ==========================================
-// ۷. پنل تایپیست و ثبت کارکرد ۱۰ روزه
-// ==========================================
-async function showTypistDashboard() {
-    const logSec = document.getElementById('loginSection');
-    const admSec = document.getElementById('adminDashboardSection');
-    const typSec = document.getElementById('typistDashboardSection');
-
-    if (logSec) logSec.classList.add('hidden');
-    if (admSec) admSec.classList.add('hidden');
-    if (typSec) typSec.classList.remove('hidden');
-
-    const nameElem = document.getElementById('typistHeaderName');
-    if (nameElem && currentTypist) nameElem.innerText = currentTypist.name || 'همکار گرامی';
-    await loadTypistData();
-}
-
-async function loadTypistData() {
-    try {
-        const { data: reports, error } = await db
-            .from('typist_reports')
-            .select('*')
-            .eq('typist_id', currentTypist.id)
-            .order('period', { ascending: false });
-
-        if (error) throw error;
-        const myReports = reports || [];
-
-        const timeline = calculatePeriodTimeline(currentTypist, myReports);
-
-        const timelineBox = document.getElementById('periodTimelineBox');
-        if (timelineBox) {
-            timelineBox.innerHTML = `
-                <div class="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl border ${timeline.isLate ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-emerald-50 border-emerald-300 text-emerald-900'}">
-                    <div class="flex items-center gap-3">
-                        <span class="text-3xl">${timeline.isLate ? '⚠️' : '⏱️'}</span>
-                        <div>
-                            <div class="font-bold text-base">${timeline.statusLabel}</div>
-                            <div class="text-xs text-gray-500 mt-1">تعداد دوره‌های تکمیل شده: ${timeline.highestSubmittedPeriod} دوره</div>
-                        </div>
-                    </div>
-                    <div class="bg-white px-4 py-2 rounded-lg border text-sm font-semibold shadow-sm">
-                        دوره قابل ثبت: <span class="text-blue-600 font-bold">دوره ${timeline.activePeriod}</span>
-                    </div>
-                </div>
-            `;
-        }
-
-        const periodInput = document.getElementById('reportPeriodInput');
-        if (periodInput) periodInput.value = timeline.activePeriod;
-
-        const tbody = document.getElementById('typistReportsTbody');
-        if (!tbody) return;
-
-        if (myReports.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-gray-400">هنوز کارکردی برای شما ثبت نشده است.</td></tr>`;
+            alert('خطا در دریافت لیست تایپیست‌ها: ' + error.message);
             return;
         }
 
-        tbody.innerHTML = myReports.map(r => {
-            const pages = Number(r.pages) || 0;
-            const words = r.words ? Number(r.words).toLocaleString('fa-IR') : '-';
-            const dateStr = r.created_at ? Jalali.formatDate(r.created_at) : '-';
-            const periodNum = r.period || 1;
-            const lateBadge = r.is_late 
-                ? `<span class="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded font-normal mr-1">تاخیر (${r.delay_days} روز)</span>` 
-                : `<span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded font-normal mr-1">به‌موقع</span>`;
+        cachedTypists = typists || [];
+        const container = document.getElementById('adminTypistsList');
+        container.innerHTML = '';
 
-            return `
-                <tr class="border-b hover:bg-gray-50 text-center">
-                    <td class="py-3 font-semibold text-gray-800">دوره ${periodNum} ${lateBadge}</td>
-                    <td class="py-3 text-emerald-600 font-bold">${pages.toLocaleString('fa-IR')}</td>
-                    <td class="py-3 text-gray-700">${words}</td>
-                    <td class="py-3 text-gray-500 text-sm">${dateStr}</td>
-                    <td class="py-3 text-gray-600 text-sm">${r.description || '-'}</td>
-                </tr>
+        if (cachedTypists.length === 0) {
+            container.innerHTML = `<div class="col-span-full p-8 text-center bg-white rounded-2xl text-slate-400">تایپیستی ثبت نشده است. از دکمه «+ ثبت تایپیست جدید» استفاده نمایید.</div>`;
+            return;
+        }
+
+        cachedTypists.forEach(t => {
+            const reports = t.typist_reports || [];
+            let totalWords = 0;
+            let totalPages = 0;
+            let totalUnsettledAmount = 0;
+            let maxPeriod = 0;
+
+            reports.forEach(r => {
+                const words = safeNum(r.words);
+                const pages = safeNum(r.pages);
+                const rate = safeNum(r.rate || t.rate_per_word || 15);
+                const amount = safeNum(r.total_amount) || (words * rate);
+                const period = safeNum(r.period_number);
+
+                totalWords += words;
+                totalPages += pages;
+                if (!r.is_settled) {
+                    totalUnsettledAmount += amount;
+                }
+                if (period > maxPeriod) maxPeriod = period;
+            });
+
+            // ذخیره مبلغ تسویه نشده برای خروجی اکسل
+            t.total_unsettled_amount = totalUnsettledAmount;
+
+            const courseTitle = t.title || t.course_title || '—';
+            const statusBadge = t.is_settled
+                ? `<span class="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded font-bold">تسویه نهایی شده</span>`
+                : `<span class="bg-emerald-50 text-emerald-700 text-xs px-2 py-0.5 rounded font-bold">پروژه فعال (دوره ${maxPeriod || 1})</span>`;
+
+            container.innerHTML += `
+                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition cursor-pointer relative" onclick="window.openManageTypistModal('${t.id}')">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <h4 class="font-black text-slate-900 text-base">${t.full_name || t.name || 'بدون نام'}</h4>
+                            <div class="text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded inline-block my-1 font-bold">
+                                📚 ${courseTitle}
+                            </div>
+                        </div>
+                        <div>${statusBadge}</div>
+                    </div>
+
+                    <div class="space-y-1 text-xs text-slate-600 mt-2 border-t pt-2">
+                        <div class="flex justify-between">
+                            <span>📱 تلفن:</span>
+                            <span class="font-mono">${t.phone || '-'}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>💳 شماره شبا:</span>
+                            <span class="font-mono">IR${t.shaba || '-'}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>📅 تحویل کل:</span>
+                            <span>${t.delivery_date || '-'}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>📄 مجموع صفحات:</span>
+                            <span class="font-bold text-slate-800">${totalPages.toLocaleString('fa-IR')}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>✍️ مجموع کلمات:</span>
+                            <span class="font-bold text-slate-800">${totalWords.toLocaleString('fa-IR')}</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-2 border-t flex justify-between items-center bg-slate-50 -mx-5 -mb-5 p-3 rounded-b-2xl">
+                        <div>
+                            <span class="text-[11px] text-slate-500 block">مانده تسویه نشده:</span>
+                            <span class="font-black text-sm text-blue-700 font-mono">${totalUnsettledAmount.toLocaleString('fa-IR')} تومان</span>
+                        </div>
+                        <span class="text-xs font-bold text-emerald-600 bg-white border border-emerald-200 px-3 py-1.5 rounded-lg shadow-sm">
+                            مدیریت و ثبت کارکرد ⚙️
+                        </span>
+                    </div>
+                </div>
             `;
-        }).join('');
+        });
 
     } catch (err) {
-        console.error('خطا در دریافت اطلاعات کارکرد:', err);
+        alert('خطای بارگذاری داده‌های داشبورد.');
     }
-}
+};
 
-window.submitTypistReport = async function() {
-    const period = parseInt(document.getElementById('reportPeriodInput').value);
-    const pages = parseInt(document.getElementById('reportPagesInput').value);
-    const words = parseInt(document.getElementById('reportWordsInput')?.value) || 0;
-    const desc = document.getElementById('reportDescInput').value.trim();
-
-    if (isNaN(pages) || pages <= 0) {
-        alert('لطفاً تعداد صفحات تایپ‌شده را به عدد وارد کنید.');
-        return;
-    }
-
+// ==========================================
+// ۶. مدیریت تایپیست (ویرایش، ثبت کارکرد خودکار، تسویه)
+// ==========================================
+window.openManageTypistModal = async function(typistId) {
     try {
-        const { data: reports } = await db
+        const { data: typist, error } = await window.db
+            .from('typists')
+            .select('*')
+            .eq('id', typistId)
+            .single();
+
+        if (error || !typist) {
+            alert('اطلاعات تایپیست یافت نشد.');
+            return;
+        }
+
+        // پر کردن فیلدهای ویرایش
+        document.getElementById('edit_typist_id').value = typist.id;
+        document.getElementById('report_typist_id').value = typist.id;
+        document.getElementById('modalTypistTitle').innerText = 'مدیریت: ' + (typist.full_name || typist.name);
+        document.getElementById('edit_full_name').value = typist.full_name || typist.name || '';
+        document.getElementById('edit_title').value = typist.title || typist.course_title || '';
+        document.getElementById('edit_national_code').value = typist.national_code || '';
+        document.getElementById('edit_phone').value = typist.phone || '';
+        document.getElementById('edit_shaba').value = typist.shaba || '';
+        document.getElementById('edit_rate').value = typist.rate_per_word || 15;
+        document.getElementById('edit_delivery_date').value = typist.delivery_date || '';
+
+        // پر کردن فیلدهای گزارش جدید
+        document.getElementById('report_date').value = getTodayShamsi();
+        document.getElementById('report_rate').value = typist.rate_per_word || 15;
+        document.getElementById('report_pages').value = 0;
+        document.getElementById('report_words').value = 0;
+        document.getElementById('report_desc').value = '';
+        document.getElementById('report_editing_id').value = '';
+        document.getElementById('btnSubmitReport').innerText = 'ثبت نهایی گزارش دوره';
+
+        // واکشی گزارش‌ها و تعیین خودکار شماره دوره بعدی
+        const { data: reports } = await window.db
             .from('typist_reports')
             .select('*')
-            .eq('typist_id', currentTypist.id);
+            .eq('typist_id', typist.id)
+            .order('period_number', { ascending: false });
 
-        const timeline = calculatePeriodTimeline(currentTypist, reports || []);
+        const lastPeriod = (reports && reports.length > 0) ? safeNum(reports[0].period_number) : 0;
+        document.getElementById('report_period').value = lastPeriod + 1;
 
-        const reportData = {
-            typist_id: currentTypist.id,
-            period: period || timeline.activePeriod,
-            pages: pages,
-            words: words,
-            description: desc,
-            is_late: timeline.isLate,
-            delay_days: timeline.delayDays,
-            created_at: new Date().toISOString()
-        };
+        window.calculateReportTotal();
+        window.renderAdminHistoryTable(reports || [], typist);
+        window.switchModalTab('edit');
+        document.getElementById('manageTypistModal').classList.remove('hidden');
 
-        const { error } = await db.from('typist_reports').insert([reportData]);
-        if (error) throw error;
-
-        alert('✅ گزارش با موفقیت ثبت شد و تایمر ۱۰ روز دوره بعد مجدداً آغاز گردید.');
-        document.getElementById('reportPagesInput').value = '';
-        if (document.getElementById('reportWordsInput')) document.getElementById('reportWordsInput').value = '';
-        document.getElementById('reportDescInput').value = '';
-        await loadTypistData();
     } catch (err) {
-        alert('خطا در ثبت گزارش: ' + err.message);
+        alert('خطا در باز کردن پرونده تایپیست.');
     }
 };
 
-// ==========================================
-// ۸. داشبورد مدیریت و ثبت کارکرد توسط مدیر
-// ==========================================
-async function showAdminDashboard() {
-    const logSec = document.getElementById('loginSection');
-    const typSec = document.getElementById('typistDashboardSection');
-    const admSec = document.getElementById('adminDashboardSection');
+window.switchModalTab = function(tab) {
+    const editForm = document.getElementById('editTypistForm');
+    const reportForm = document.getElementById('addReportForm');
+    const historySec = document.getElementById('historyReportsSection');
+    const tabEdit = document.getElementById('tabEditBtn');
+    const tabReport = document.getElementById('tabReportBtn');
+    const tabHistory = document.getElementById('tabHistoryBtn');
 
-    if (logSec) logSec.classList.add('hidden');
-    if (typSec) typSec.classList.add('hidden');
-    if (admSec) admSec.classList.remove('hidden');
+    [editForm, reportForm, historySec].forEach(el => el.classList.add('hidden'));
+    [tabEdit, tabReport, tabHistory].forEach(btn => btn.className = 'py-2.5 px-4 font-bold text-slate-500 text-xs md:text-sm');
 
-    await loadAdminAllData();
-}
-
-async function loadAdminAllData() {
-    try {
-        const [tRes, rRes, pRes] = await Promise.all([
-            db.from('typists').select('*').order('name'),
-            db.from('typist_reports').select('*').order('created_at', { ascending: false }),
-            db.from('payments').select('*').order('created_at', { ascending: false })
-        ]);
-
-        allTypists = tRes.data || [];
-        allReports = rRes.data || [];
-        allPayments = pRes.data || [];
-
-        populateAdminTypistDropdown();
-        renderAdminReportsList();
-        renderAdminTypistsManagement();
-    } catch (err) {
-        console.error('خطا در دریافت اطلاعات مدیر:', err);
+    if (tab === 'edit') {
+        editForm.classList.remove('hidden');
+        tabEdit.className = 'py-2.5 px-4 font-bold border-b-2 border-emerald-600 text-emerald-700 text-xs md:text-sm';
+    } else if (tab === 'report') {
+        reportForm.classList.remove('hidden');
+        tabReport.className = 'py-2.5 px-4 font-bold border-b-2 border-blue-600 text-blue-700 text-xs md:text-sm';
+    } else {
+        historySec.classList.remove('hidden');
+        tabHistory.className = 'py-2.5 px-4 font-bold border-b-2 border-slate-800 text-slate-800 text-xs md:text-sm';
     }
-}
+};
 
-function populateAdminTypistDropdown() {
-    const select = document.getElementById('adminTypistSelect');
-    if (!select) return;
+window.closeManageModal = function() {
+    document.getElementById('manageTypistModal').classList.add('hidden');
+};
 
-    select.innerHTML = '<option value="">-- انتخاب تایپیست --</option>' +
-        allTypists.map(t => `<option value="${t.id}">${t.name || 'بدون نام'} (${t.national_code})</option>`).join('');
-}
+// محاسبه خودکار جمع مبلغ
+window.calculateReportTotal = function() {
+    const words = safeNum(document.getElementById('report_words').value);
+    const rate = safeNum(document.getElementById('report_rate').value);
+    const total = words * rate;
+    document.getElementById('report_total_display').value = total.toLocaleString('fa-IR') + ' تومان';
+};
 
-function renderAdminReportsList() {
-    const tbody = document.getElementById('adminAllReportsTbody');
-    if (!tbody) return;
+// ذخیره مشخصات ویرایش شده توسط مدیر
+window.handleUpdateTypist = async function(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit_typist_id').value;
+    const updates = {
+        full_name: document.getElementById('edit_full_name').value.trim(),
+        title: document.getElementById('edit_title').value.trim(),
+        national_code: document.getElementById('edit_national_code').value.trim(),
+        phone: document.getElementById('edit_phone').value.trim(),
+        shaba: document.getElementById('edit_shaba').value.trim(),
+        rate_per_word: safeNum(document.getElementById('edit_rate').value) || 15,
+        delivery_date: document.getElementById('edit_delivery_date').value.trim()
+    };
 
-    if (allReports.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-gray-400">هیچ کارکردی ثبت نشده است.</td></tr>`;
+    const { error } = await window.db.from('typists').update(updates).eq('id', id);
+    if (error) {
+        alert('خطا در ذخیره مشخصات: ' + error.message);
+    } else {
+        alert('مشخصات تایپیست با موفقیت به‌روزرسانی شد.');
+        window.closeManageModal();
+        window.loadAdminDashboard();
+    }
+};
+
+// ثبت یا ویرایش گزارش دوره
+window.handleSaveReport = async function(e) {
+    e.preventDefault();
+    const typistId = document.getElementById('report_typist_id').value;
+    const editingId = document.getElementById('report_editing_id').value;
+    const words = safeNum(document.getElementById('report_words').value);
+    const pages = safeNum(document.getElementById('report_pages').value);
+    const rate = safeNum(document.getElementById('report_rate').value);
+    const period = safeNum(document.getElementById('report_period').value) || 1;
+    const date = document.getElementById('report_date').value;
+    const desc = document.getElementById('report_desc').value;
+
+    const reportData = {
+        typist_id: typistId,
+        report_date: date,
+        period_number: period,
+        pages: pages,
+        words: words,
+        rate: rate,
+        total_amount: words * rate,
+        description: desc
+    };
+
+    let error = null;
+    if (editingId) {
+        const res = await window.db.from('typist_reports').update(reportData).eq('id', editingId);
+        error = res.error;
+    } else {
+        reportData.is_settled = false;
+        const res = await window.db.from('typist_reports').insert([reportData]);
+        error = res.error;
+    }
+
+    if (error) {
+        alert('خطا در ذخیره گزارش: ' + error.message);
+    } else {
+        alert(`گزارش دوره ${period} با موفقیت ثبت گردید.`);
+        window.closeManageModal();
+        window.loadAdminDashboard();
+    }
+};
+
+// نمایش جدول سوابق با امکان ویرایش گزارش و تغییر وضعیت تسویه
+window.renderAdminHistoryTable = function(reports, typist) {
+    const tbody = document.getElementById('adminTypistReportsTbody');
+    tbody.innerHTML = '';
+
+    if (!reports || reports.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400">سابقه‌ای ثبت نشده است.</td></tr>`;
         return;
     }
 
-    const typistMap = {};
-    allTypists.forEach(t => { typistMap[t.id] = t; });
+    reports.forEach(r => {
+        const pages = safeNum(r.pages);
+        const words = safeNum(r.words);
+        const amount = safeNum(r.total_amount || (words * (r.rate || typist.rate_per_word || 15)));
+        const settledText = r.is_settled ? '✅ تسویه شده' : '⏳ تسویه نشده';
+        const settleBtnClass = r.is_settled ? 'bg-slate-200 text-slate-700' : 'bg-emerald-600 text-white';
 
-    tbody.innerHTML = allReports.map(r => {
-        const typist = typistMap[r.typist_id] || { name: 'نامشخص', national_code: '-' };
-        const pages = Number(r.pages) || 0;
-        const words = r.words ? Number(r.words).toLocaleString('fa-IR') : '-';
-        const dateStr = r.created_at ? Jalali.formatDate(r.created_at) : '-';
-        const lateBadge = r.is_late 
-            ? `<span class="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded">تاخیر (${r.delay_days} روز)</span>` 
-            : `<span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded">به‌موقع</span>`;
-
-        return `
-            <tr class="border-b hover:bg-gray-50 text-center">
-                <td class="py-3 text-right font-medium text-gray-800 pr-4">
-                    <div>${typist.name}</div>
-                    <div class="text-xs text-gray-400 font-mono">${typist.national_code}</div>
+        tbody.innerHTML += `
+            <tr class="hover:bg-slate-50">
+                <td class="p-2 font-bold">دوره ${r.period_number}</td>
+                <td class="p-2 font-mono">${r.report_date}</td>
+                <td class="p-2 font-mono">${pages.toLocaleString('fa-IR')}</td>
+                <td class="p-2 font-mono">${words.toLocaleString('fa-IR')}</td>
+                <td class="p-2 font-mono font-bold text-blue-700">${amount.toLocaleString('fa-IR')}</td>
+                <td class="p-2">${settledText}</td>
+                <td class="p-2 flex gap-1 justify-center">
+                    <button onclick="window.loadReportForEdit('${r.id}', ${r.period_number}, '${r.report_date}', ${pages}, ${words}, ${r.rate || typist.rate_per_word || 15}, '${(r.description || '').replace(/'/g, "\\'")}')" class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-2 py-1 rounded text-[11px] font-bold">ویرایش</button>
+                    <button onclick="window.toggleReportSettlement('${r.id}', ${!r.is_settled})" class="${settleBtnClass} px-2 py-1 rounded text-[11px] font-bold">
+                        ${r.is_settled ? 'لغو تسویه' : 'تسویه این دوره'}
+                    </button>
                 </td>
-                <td class="py-3 font-semibold text-gray-700">دوره ${r.period || 1}</td>
-                <td class="py-3 text-emerald-600 font-bold">${pages.toLocaleString('fa-IR')}</td>
-                <td class="py-3 text-gray-600">${words}</td>
-                <td class="py-3 text-sm text-gray-500">${dateStr}</td>
-                <td class="py-3">${lateBadge}</td>
-                <td class="py-3 text-xs text-gray-500 max-w-xs truncate">${r.description || '-'}</td>
             </tr>
         `;
-    }).join('');
-}
+    });
+};
 
-window.handleAdminDirectReportSubmit = async function() {
-    const typistId = document.getElementById('adminTypistSelect').value;
-    const period = parseInt(document.getElementById('adminReportPeriod').value);
-    const pages = parseInt(document.getElementById('adminReportPages').value);
-    const words = parseInt(document.getElementById('adminReportWords')?.value) || 0;
-    const desc = document.getElementById('adminReportDesc').value.trim();
+// انتقال گزارش به فرم جهت ویرایش
+window.loadReportForEdit = function(id, period, date, pages, words, rate, desc) {
+    document.getElementById('report_editing_id').value = id;
+    document.getElementById('report_period').value = period;
+    document.getElementById('report_date').value = date;
+    document.getElementById('report_pages').value = pages;
+    document.getElementById('report_words').value = words;
+    document.getElementById('report_rate').value = rate;
+    document.getElementById('report_desc').value = desc;
+    document.getElementById('btnSubmitReport').innerText = 'ذخیره ویرایش گزارش';
+    window.calculateReportTotal();
+    window.switchModalTab('report');
+};
 
-    if (!typistId) {
-        alert('لطفاً یک تایپیست را انتخاب کنید.');
-        return;
-    }
-    if (isNaN(pages) || pages <= 0) {
-        alert('لطفاً تعداد صفحات را به عدد وارد کنید.');
-        return;
-    }
-
-    try {
-        const reportData = {
-            typist_id: typistId,
-            period: period || 1,
-            pages: pages,
-            words: words,
-            description: desc || 'ثبت دستی توسط مدیریت',
-            is_late: false,
-            delay_days: 0,
-            created_at: new Date().toISOString()
-        };
-
-        const { error } = await db.from('typist_reports').insert([reportData]);
-        if (error) throw error;
-
-        alert('✅ کارکرد تایپیست توسط مدیر با موفقیت ثبت شد.');
-        document.getElementById('adminReportPages').value = '';
-        if (document.getElementById('adminReportWords')) document.getElementById('adminReportWords').value = '';
-        document.getElementById('adminReportDesc').value = '';
-        await loadAdminAllData();
-    } catch (err) {
-        alert('خطا در ثبت کارکرد: ' + err.message);
+// تغییر وضعیت تسویه یک گزارش
+window.toggleReportSettlement = async function(reportId, targetStatus) {
+    const { error } = await window.db.from('typist_reports').update({ is_settled: targetStatus }).eq('id', reportId);
+    if (error) {
+        alert('خطا در تغییر وضعیت تسویه: ' + error.message);
+    } else {
+        alert('وضعیت تسویه دوره با موفقیت تغییر کرد.');
+        window.closeManageModal();
+        window.loadAdminDashboard();
     }
 };
 
-function renderAdminTypistsManagement() {
-    const container = document.getElementById('adminTypistsListContainer');
-    if (!container) return;
+// شروع کار و پروژه جدید پس از تسویه کامل
+window.startNewProjectForTypist = async function() {
+    const id = document.getElementById('edit_typist_id').value;
+    const typistName = document.getElementById('edit_full_name').value;
+    
+    const newTitle = prompt(`عنوان دوره / کتاب جدید را برای ${typistName} وارد نمایید:`);
+    if (!newTitle || !newTitle.trim()) return;
 
-    if (allTypists.length === 0) {
-        container.innerHTML = `<div class="p-6 text-center text-gray-400">تایپیستی ثبت نشده است.</div>`;
-        return;
+    if (!confirm('آیا مطمئن هستید؟ با این کار وضعیت تسویه نهایی آزاد شده و تایپیست آماده پروژه جدید می‌شود.')) return;
+
+    const { error } = await window.db.from('typists').update({
+        title: newTitle.trim(),
+        is_settled: false,
+        delivery_date: ''
+    }).eq('id', id);
+
+    if (error) {
+        alert('خطا در آغاز پروژه جدید: ' + error.message);
+    } else {
+        alert('پروژه جدید با موفقیت فعال شد.');
+        window.closeManageModal();
+        window.loadAdminDashboard();
     }
-
-    container.innerHTML = allTypists.map(t => {
-        const myReports = allReports.filter(r => r.typist_id === t.id);
-        const totalPages = myReports.reduce((sum, r) => sum + (Number(r.pages) || 0), 0);
-        const timeline = calculatePeriodTimeline(t, myReports);
-
-        return `
-            <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div>
-                    <div class="flex items-center gap-2">
-                        <span class="font-bold text-gray-800 text-lg">${t.name}</span>
-                        <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">${t.national_code}</span>
-                    </div>
-                    <div class="text-xs text-gray-500 mt-1 flex flex-wrap gap-4">
-                        <span>📱 تلفن: <a href="tel:${t.phone}" class="text-blue-600 hover:underline font-mono">${t.phone}</a></span>
-                        <span>💳 شبا: <span class="font-mono">${t.shaba || '-'}</span></span>
-                        <span>📅 تحویل: ${t.delivery_date || '-'}</span>
-                    </div>
-                    <div class="mt-2 text-xs font-semibold ${timeline.isLate ? 'text-red-600' : 'text-emerald-700'}">
-                        ${timeline.statusLabel} | مجموع صفحات: ${totalPages.toLocaleString('fa-IR')}
-                    </div>
-                </div>
-
-                <div class="flex items-center gap-2">
-                    <button onclick="window.openSettlementModal('${t.id}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition-colors">
-                        💰 تسویه‌حساب (ماهانه / کامل)
-                    </button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
+};
 
 // ==========================================
-// ۹. تسویه حساب و خروجی اکسل بانکی (۵ ستون)
+// ۷. ثبت تایپیست جدید توسط مدیر
 // ==========================================
-let currentSettlementTypistId = null;
-
-window.openSettlementModal = function(typistId) {
-    currentSettlementTypistId = typistId;
-    const typist = allTypists.find(t => t.id === typistId);
-    if (!typist) return;
-
-    const nameSpan = document.getElementById('settlementTypistName');
-    if (nameSpan) nameSpan.innerText = typist.name;
-    const modal = document.getElementById('settlementModal');
-    if (modal) modal.classList.remove('hidden');
+window.openNewTypistModal = function() {
+    document.getElementById('newTypistModal').classList.remove('hidden');
 };
 
-window.closeSettlementModal = function() {
-    currentSettlementTypistId = null;
-    const modal = document.getElementById('settlementModal');
-    if (modal) modal.classList.add('hidden');
+window.closeNewTypistModal = function() {
+    document.getElementById('newTypistModal').classList.add('hidden');
 };
 
-window.executeSettlement = async function() {
-    const model = document.getElementById('settlementTypeSelect').value;
-    const amount = parseInt(document.getElementById('settlementAmountInput').value);
-    const desc = document.getElementById('settlementDescInput').value.trim();
+window.handleSaveNewTypist = async function(e) {
+    e.preventDefault();
+    const newTypist = {
+        full_name: document.getElementById('new_full_name').value.trim(),
+        title: document.getElementById('new_title').value.trim(),
+        national_code: document.getElementById('new_national_code').value.trim(),
+        phone: document.getElementById('new_phone').value.trim(),
+        shaba: document.getElementById('new_shaba').value.trim(),
+        rate_per_word: safeNum(document.getElementById('new_rate').value) || 15,
+        delivery_date: document.getElementById('new_delivery_date').value.trim(),
+        is_settled: false
+    };
 
-    if (isNaN(amount) || amount <= 0) {
-        alert('لطفاً مبلغ معتبر وارد نمایید.');
+    const { error } = await window.db.from('typists').insert([newTypist]);
+    if (error) {
+        alert('خطا در ثبت تایپیست: ' + error.message);
+    } else {
+        alert('تایپیست جدید با موفقیت تعریف شد.');
+        window.closeNewTypistModal();
+        window.loadAdminDashboard();
+    }
+};
+
+// ==========================================
+// ۸. تولید خروجی اکسل استاندارد بانکی (دقیقاً ۵ ستون)
+// ==========================================
+window.handleBatchExcelExport = function() {
+    if (!cachedTypists || cachedTypists.length === 0) {
+        alert('هیچ تایپیستی برای صدور خروجی یافت نشد.');
         return;
     }
 
-    try {
-        const paymentRecord = {
-            typist_id: currentSettlementTypistId,
-            amount: amount,
-            settlement_type: model,
-            description: desc || (model === 'full' ? 'تسویه کامل و نهایی پروژه' : 'تسویه کارکرد ماهانه'),
-            created_at: new Date().toISOString()
-        };
+    // ساخت محتوای CSV با UTF-8 BOM جهت نمایش صحیح در نرم‌افزار Excel فارسی
+    let csvContent = '\uFEFFنام و نام خانوادگی,کد ملی,شماره تماس,مبلغ,شماره شبا\n';
 
-        const { error } = await db.from('payments').insert([paymentRecord]);
-        if (error) throw error;
+    cachedTypists.forEach(t => {
+        const name = (t.full_name || t.name || '').replace(/,/g, ' ');
+        const nationalCode = `\t${t.national_code || ''}`; // تب جهت حفظ صفر اول در اکسل
+        const phone = `\t${t.phone || ''}`;
+        const amount = safeNum(t.total_unsettled_amount);
+        let shaba = t.shaba || '';
+        if (shaba && !shaba.toUpperCase().startsWith('IR')) {
+            shaba = 'IR' + shaba;
+        }
+        shaba = `\t${shaba}`;
 
-        alert('✅ تسویه‌حساب با موفقیت ثبت شد.');
-        window.closeSettlementModal();
-        await loadAdminAllData();
-    } catch (err) {
-        alert('خطا در ثبت تسویه: ' + err.message);
-    }
-};
-
-window.exportSettlementsToExcel = function() {
-    if (allPayments.length === 0) {
-        alert('داده‌ای برای خروجی اکسل وجود ندارد.');
-        return;
-    }
-
-    const typistMap = {};
-    allTypists.forEach(t => { typistMap[t.id] = t; });
-
-    const headers = ["نام و نام خانوادگی", "کد ملی", "شماره تماس", "مبلغ", "شماره شبا"];
-
-    const rows = allPayments.map(p => {
-        const typist = typistMap[p.typist_id] || {};
-        const name = (typist.name || '').replace(/,/g, ' ');
-        const nationalCode = `\t${typist.national_code || ''}`;
-        const phone = `\t${typist.phone || ''}`;
-        const amount = p.amount || 0;
-        const shaba = `\t${typist.shaba || ''}`;
-
-        return [name, nationalCode, phone, amount, shaba].join(',');
+        csvContent += `"${name}","${nationalCode}","${phone}","${amount}","${shaba}"\n`;
     });
 
-    const csvContent = "\uFEFF" + [headers.join(','), ...rows].join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-
-    link.setAttribute("href", url);
-    link.setAttribute("download", `تسویه_بانکی_${Jalali.todayString().replace(/\//g, '-')}.csv`);
-    document.body.appendChild(link);
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `تسویه_بانکی_تایپیست‌ها_${getTodayShamsi().replace(/\//g, '-')}.csv`;
     link.click();
-    document.body.removeChild(link);
 };
 
-// تایید بارگذاری بدون ارور
-console.log('✅ نسخه جدید سامانه با تعریف سراسری توابع با موفقیت لود شد.');
-
-
-
+// بارگذاری اولیه
+window.addEventListener('DOMContentLoaded', () => {
+    console.log('سامانه مدیریت تایپیست‌ها آماده به کار است.');
+});
