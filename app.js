@@ -69,19 +69,28 @@ window.submitAdminLogin = async function() {
         return;
     }
 
+    // شناسایی کلاینت سوپابیس (چه supabase باشد و چه supabaseClient)
+    const client = (typeof supabaseClient !== 'undefined') ? supabaseClient : (typeof supabase !== 'undefined' ? supabase : null);
+
+    if (!client) {
+        console.error('خطا: شیء کلاینت Supabase در صفحه لود نشده است.');
+        alert('ارتباط با پایگاه داده برقرار نشد. لطفاً صفحه را مجدداً بارگذاری کنید.');
+        return;
+    }
+
     try {
-        // صدا زدن تابع سرور؛ تنها چیزی که به مرورگر برمی‌گردد true یا false است
-        const { data: isCorrect, error } = await supabaseClient
-            .rpc('check_admin_pass', { entered_pass: enteredPassword });
+        // فراخوانی امن تابع سرور بدون ارسال رمز اصلی به مرورگر
+        const { data, error } = await client.rpc('check_admin_pass', {
+            entered_pass: enteredPassword
+        });
 
         if (error) {
-            console.error('خطای سرور:', error);
-            alert('خطا در برقراری ارتباط با سامانه اعتبارسنجی.');
+            console.error('جزئیات خطای بازگشتی از Supabase:', error);
+            alert('خطای سرور: ' + (error.message || 'عدم دسترسی به اعتبارسنجی'));
             return;
         }
 
-        if (isCorrect === true) {
-            // ورود مجاز
+        if (data === true) {
             sessionStorage.setItem('admin_logged_in', 'true');
             if (typeof window.closeAdminLoginModal === 'function') {
                 window.closeAdminLoginModal();
@@ -91,9 +100,10 @@ window.submitAdminLogin = async function() {
             alert('رمز عبور وارد شده اشتباه است.');
             if (passwordInput) passwordInput.value = '';
         }
+
     } catch (err) {
-        console.error('خطای پیش‌بینی نشده:', err);
-        alert('خطا در ورود به سیستم.');
+        console.error('متن دقیق خطای رخ‌داده:', err);
+        alert('خطای اتصال: ' + (err.message || 'ناشناخته'));
     }
 };
 
