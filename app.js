@@ -210,13 +210,24 @@ function switchLoginTab(tab) {
 
 async function handleAdminLogin(e) {
   e.preventDefault();
-  const pass = document.getElementById('admin-password').value.trim();
+  const passInput = document.getElementById('admin-password');
+  const pass = passInput.value.trim();
   const errDiv = document.getElementById('login-error');
+  const btnSubmit = document.getElementById('btn-submit-admin');
+
   errDiv.classList.add('hidden');
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = 'در حال بررسی...';
 
   try {
     const { data, error } = await supabaseClient.rpc('verify_admin_password', { p_password: pass });
-    if (error || !data) throw new Error('رمز عبور مدیر اشتباه است');
+    
+    if (error) {
+      throw new Error('خطا در ارتباط با سرور: ' + error.message);
+    }
+    if (!data) {
+      throw new Error('رمز عبور مدیر اشتباه است');
+    }
 
     currentUser = { role: 'admin', name: 'مدیر سیستم' };
     sessionStorage.setItem('typist_user', JSON.stringify(currentUser));
@@ -224,6 +235,9 @@ async function handleAdminLogin(e) {
   } catch (err) {
     errDiv.textContent = err.message;
     errDiv.classList.remove('hidden');
+  } finally {
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = 'ورود به عنوان مدیر';
   }
 }
 
@@ -232,7 +246,11 @@ async function handleTypistLogin(e) {
   const identity = document.getElementById('typist-identity').value.trim();
   const pass = document.getElementById('typist-password').value.trim();
   const errDiv = document.getElementById('login-error');
+  const btnSubmit = document.getElementById('btn-submit-typist');
+
   errDiv.classList.add('hidden');
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = 'در حال بررسی...';
 
   try {
     const { data: typistId, error } = await supabaseClient.rpc('verify_typist_password', {
@@ -240,7 +258,12 @@ async function handleTypistLogin(e) {
       p_password: pass
     });
 
-    if (error || !typistId) throw new Error('کد ملی/شماره همراه یا رمز عبور اشتباه است');
+    if (error) {
+      throw new Error('خطا در ارتباط با سرور: ' + error.message);
+    }
+    if (!typistId) {
+      throw new Error('کد ملی/شماره همراه یا رمز عبور اشتباه است');
+    }
 
     currentUser = { role: 'typist', id: typistId };
     sessionStorage.setItem('typist_user', JSON.stringify(currentUser));
@@ -248,6 +271,9 @@ async function handleTypistLogin(e) {
   } catch (err) {
     errDiv.textContent = err.message;
     errDiv.classList.remove('hidden');
+  } finally {
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = 'ورود تایپیست';
   }
 }
 
@@ -845,7 +871,6 @@ function renderDatePickerHeader() {
     yearSelect.appendChild(opt);
   }
 
-  // Set top Title: e.g. "اسفند ۱۴۰۳"
   document.getElementById('dp-current-title').textContent = `${FARSI_MONTHS[dpState.month - 1]} ${dpState.year}`;
 }
 
