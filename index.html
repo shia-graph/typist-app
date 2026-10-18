@@ -3,23 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- تنظیم امن CSP برای مجاز کردن اجرای روان کتابخانه‌ها بدون بلاک شدن -->
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline'; font-src * data:;">
     <title>سامانه مدیریت کارکرد و تسویه حساب تایپیست‌ها</title>
 
-    <!-- Tailwind CSS (نسخه پایدار و بدون اخطار کنسول) -->
+    <!-- فونت استاندارد وزیرمتن -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+
+    <!-- Tailwind CSS (نسخه پایدار و سبک) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
 
     <!-- Supabase JS Client v2 -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <!-- تقویم پاپ‌آپ شمسی -->
-    <link rel="stylesheet" href="https://unpkg.com/persian-datepicker@1.2.0/dist/css/persian-datepicker.min.css"/>
+    <!-- جی‌کوئری و تقویم پاپ‌آپ شمسی (نسخه بدون باگ eval) -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://unpkg.com/persian-date@1.1.0/dist/persian-date.min.js"></script>
-    <script src="https://unpkg.com/persian-datepicker@1.2.0/dist/js/persian-datepicker.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/persian-datepicker/1.2.0/css/persian-datepicker.min.css"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/persian-date/1.1.0/persian-date.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/persian-datepicker/1.2.0/js/persian-datepicker.min.js"></script>
 
     <style>
-        body {
+        * {
             font-family: 'Vazirmatn', Tahoma, sans-serif;
+        }
+        body {
             background-color: #f1f5f9;
         }
         .datepicker-plot-area {
@@ -99,7 +106,7 @@
                     </button>
                 </div>
 
-                <!-- فرم ثبت گزارش ۱۰ روزه با تقویم پاپ‌آپ -->
+                <!-- فرم ثبت گزارش با تقویم پاپ‌آپ -->
                 <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-6">
                     <h3 class="text-sm font-bold text-indigo-900 mb-3 flex items-center gap-1.5">
                         <span>➕</span> ثبت گزارش کار جدید
@@ -111,11 +118,11 @@
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">تعداد صفحات</label>
-                            <input type="number" id="reportPagesInput" min="0" placeholder="مثلاً: 25" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white">
+                            <input type="text" id="reportPagesInput" placeholder="مثلاً: 25" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">تعداد کلمات</label>
-                            <input type="number" id="reportWordsInput" min="0" placeholder="مثلاً: 6250" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white">
+                            <input type="text" id="reportWordsInput" placeholder="مثلاً: 6250" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white">
                         </div>
                         <div class="flex items-end">
                             <button onclick="window.submitNewReport()" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg text-sm transition">
@@ -123,18 +130,26 @@
                             </button>
                         </div>
                     </div>
-                    <div class="mt-2">
-                        <input type="text" id="reportDescInput" placeholder="توضیحات اختیاری (مثلاً: بخش اول تا سوم)" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">نوع درس / عنوان کار</label>
+                            <input type="text" id="reportCourseInput" placeholder="مثلاً: فقه و اصول / تفسیر" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">توضیحات تکمیلی</label>
+                            <input type="text" id="reportDescInput" placeholder="توضیحات اختیاری (مثلاً: جلسات ۱ تا ۵)" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white">
+                        </div>
                     </div>
                 </div>
 
-                <!-- جدول سوابق -->
+                <!-- جدول سوابق کارکرد -->
                 <h3 class="text-sm font-bold text-gray-700 mb-3">سوابق کارکرد و گزارش‌های ارسالی</h3>
                 <div class="overflow-x-auto border border-gray-200 rounded-xl">
                     <table class="w-full text-right text-xs">
                         <thead class="bg-gray-100 text-gray-600 font-semibold border-b">
                             <tr>
                                 <th class="p-3">ردیف</th>
+                                <th class="p-3">نوع درس</th>
                                 <th class="p-3">تاریخ ثبت</th>
                                 <th class="p-3">تعداد صفحات</th>
                                 <th class="p-3">تعداد کلمات</th>
@@ -246,7 +261,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-semibold text-gray-600 mb-1">نرخ هر کلمه (تومان)</label>
-                        <input type="number" id="mRate" min="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg" placeholder="مثلاً: 120">
+                        <input type="text" id="mRate" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg" placeholder="مثلاً: 120">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-600 mb-1">تاریخ شروع پروژه</label>
@@ -266,13 +281,8 @@
         </div>
     </div>
 
-    <!-- فوتر -->
-    <footer class="bg-white border-t border-gray-200 py-3 text-center text-xs text-gray-500">
-        سامانه مالی کارکرد و تسویه حساب تایپیست‌ها - متصل به دیتابیس Supabase
-    </footer>
-
-    <!-- فایل اسکریپت اصلی -->
-       <script src="app.js?v=2.0"></script>
+    <!-- اسکریپت اصلی با کنترل کشینگ -->
+    <script src="app.js?v=2.5"></script>
 
 </body>
 </html>
