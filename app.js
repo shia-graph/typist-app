@@ -16,7 +16,7 @@ if (!window.supabase) {
 }
 
 // ============================================================
-// ۲. وضعیت
+// ۲. وضعیت سراسری
 // ============================================================
 const state = {
   typistId: null,
@@ -30,18 +30,14 @@ const state = {
   isLoading: false,
 };
 
-// کَش عناصر DOM
-const dom = {};
-
 // ============================================================
 // ۳. مدیریت نشست (Session)
 // ============================================================
 const Session = {
   save(data) {
-    const session = {
-      ...data,
+    const session = Object.assign({}, data, {
       expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
-    };
+    });
     try {
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
     } catch (e) {
@@ -58,14 +54,12 @@ const Session = {
         return null;
       }
       return session;
-    } catch {
+    } catch (e) {
       return null;
     }
   },
   clear() {
-    try {
-      sessionStorage.removeItem(SESSION_KEY);
-    } catch {}
+    try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
   },
 };
 
@@ -73,7 +67,8 @@ const Session = {
 // ۴. ابزار اعداد
 // ============================================================
 const SafeNum = {
-  parse(val, fallback = 0) {
+  parse(val, fallback) {
+    if (fallback === undefined) fallback = 0;
     if (val === null || val === undefined || val === '') return fallback;
     const cleaned = String(val)
       .replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (d) => String.fromCharCode(d.charCodeAt(0) & 0xf))
@@ -82,7 +77,8 @@ const SafeNum = {
     const num = Number(cleaned);
     return Number.isFinite(num) ? num : fallback;
   },
-  format(val, fallback = '۰') {
+  format(val, fallback) {
+    if (fallback === undefined) fallback = '۰';
     const num = this.parse(val, null);
     if (num === null) return fallback;
     return num.toLocaleString('fa-IR');
@@ -107,7 +103,7 @@ function toShamsiDate(dateInput) {
     return new Intl.DateTimeFormat('fa-IR', {
       year: 'numeric', month: '2-digit', day: '2-digit',
     }).format(d);
-  } catch {
+  } catch (e) {
     return String(dateInput).split('T')[0] || '---';
   }
 }
@@ -198,7 +194,8 @@ function formatShamsiInput(parts) {
 // ============================================================
 // ۶. Toast
 // ============================================================
-function toast(msg, type = 'info') {
+function toast(msg, type) {
+  if (type === undefined) type = 'info';
   const el = document.createElement('div');
   el.className = 'toast toast-' + type;
   el.textContent = msg;
@@ -214,25 +211,25 @@ function toast(msg, type = 'info') {
 // ============================================================
 // ۷. Modal تأیید سفارشی
 // ============================================================
-function confirmDialog(message, title = 'تأیید عملیات') {
+function confirmDialog(message, title) {
+  if (!title) title = 'تأیید عملیات';
   return new Promise((resolve) => {
-    let overlay = document.getElementById('custom-confirm-overlay');
-    if (overlay) overlay.remove();
+    const old = document.getElementById('custom-confirm-overlay');
+    if (old) old.remove();
 
-    overlay = document.createElement('div');
+    const overlay = document.createElement('div');
     overlay.id = 'custom-confirm-overlay';
     overlay.className = 'modal';
     overlay.style.display = 'flex';
-    overlay.innerHTML = `
-      <div class="modal-content" style="max-width:420px;">
-        <h3 style="margin:0 0 1rem;">${title}</h3>
-        <p style="margin:0 0 1.5rem;line-height:1.8;">${message}</p>
-        <div class="row" style="justify-content:flex-end;gap:.5rem;">
-          <button type="button" class="btn btn-outline" id="confirm-cancel">انصراف</button>
-          <button type="button" class="btn btn-danger" id="confirm-ok">تأیید</button>
-        </div>
-      </div>
-    `;
+    overlay.innerHTML =
+      '<div class="modal-content" style="max-width:420px;">' +
+        '<h3 style="margin:0 0 1rem;">' + title + '</h3>' +
+        '<p style="margin:0 0 1.5rem;line-height:1.8;">' + message + '</p>' +
+        '<div class="row" style="justify-content:flex-end;gap:.5rem;">' +
+          '<button type="button" class="btn btn-outline" id="confirm-cancel">انصراف</button>' +
+          '<button type="button" class="btn btn-danger" id="confirm-ok">تأیید</button>' +
+        '</div>' +
+      '</div>';
     document.body.appendChild(overlay);
 
     const cleanup = (result) => {
@@ -249,11 +246,57 @@ function confirmDialog(message, title = 'تأیید عملیات') {
 }
 
 // ============================================================
-// ۸. Date Picker
+// ۸. Prompt سفارشی (جایگزین prompt مرورگر)
+// ============================================================
+function promptDialog(message, title, isPassword) {
+  if (!title) title = 'ورود اطلاعات';
+  if (isPassword === undefined) isPassword = false;
+  return new Promise((resolve) => {
+    const old = document.getElementById('custom-prompt-overlay');
+    if (old) old.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'custom-prompt-overlay';
+    overlay.className = 'modal';
+    overlay.style.display = 'flex';
+    overlay.innerHTML =
+      '<div class="modal-content" style="max-width:420px;">' +
+        '<h3 style="margin:0 0 1rem;">' + title + '</h3>' +
+        '<p style="margin:0 0 1rem;line-height:1.8;">' + message + '</p>' +
+        '<input type="' + (isPassword ? 'password' : 'text') + '" id="prompt-input" ' +
+          'style="width:100%;padding:.65rem .85rem;border-radius:.75rem;border:1px solid #e2e8f0;font-family:inherit;font-size:.9rem;margin-bottom:1rem;" />' +
+        '<div class="row" style="justify-content:flex-end;gap:.5rem;">' +
+          '<button type="button" class="btn btn-outline" id="prompt-cancel">انصراف</button>' +
+          '<button type="button" class="btn btn-primary" id="prompt-ok">تأیید</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    const input = overlay.querySelector('#prompt-input');
+    setTimeout(() => input.focus(), 50);
+
+    const cleanup = (result) => {
+      overlay.remove();
+      resolve(result);
+    };
+
+    overlay.querySelector('#prompt-ok').addEventListener('click', () => cleanup(input.value));
+    overlay.querySelector('#prompt-cancel').addEventListener('click', () => cleanup(null));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') cleanup(input.value);
+      if (e.key === 'Escape') cleanup(null);
+    });
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) cleanup(null);
+    });
+  });
+}
+
+// ============================================================
+// ۹. Date Picker
 // ============================================================
 const DP_MONTHS = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
 const DP_DOWS = ['ش','ی','د','س','چ','پ','ج'];
-const dpOutsideHandlers = new WeakMap();
 
 function buildDatePicker(wrap) {
   if (!wrap || wrap.dataset.dpInit === '1') return;
@@ -326,21 +369,14 @@ function buildDatePicker(wrap) {
     });
   }
 
-  function open() {
-    refreshView();
-    render();
-    popup.classList.add('open');
-  }
-  function close() {
-    popup.classList.remove('open');
-  }
+  function open() { refreshView(); render(); popup.classList.add('open'); }
+  function close() { popup.classList.remove('open'); }
 
   trigger.addEventListener('click', (e) => {
     e.stopPropagation();
     popup.classList.contains('open') ? close() : open();
   });
 
-  // مدیریت کلیک بیرون با امکان حذف
   const outsideHandler = (e) => {
     if (!document.body.contains(wrap)) {
       document.removeEventListener('click', outsideHandler);
@@ -349,7 +385,6 @@ function buildDatePicker(wrap) {
     if (!wrap.contains(e.target)) close();
   };
   document.addEventListener('click', outsideHandler);
-  dpOutsideHandlers.set(wrap, outsideHandler);
 
   if (!input.value) {
     input.value = formatShamsiInput(todayShamsi());
@@ -359,9 +394,8 @@ function buildDatePicker(wrap) {
 function getFirstDowOfMonth(jy, jm) {
   const g = shamsiToGregorian(jy, jm, 1);
   const d = new Date(g.gy, g.gm - 1, g.gd);
-  const jsDow = d.getDay();
   const map = { 0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 0 };
-  return map[jsDow];
+  return map[d.getDay()];
 }
 
 function getDaysInShamsiMonth(jy, jm) {
@@ -380,7 +414,7 @@ function initAllDatePickers() {
 }
 
 // ============================================================
-// ۹. اعتبارسنجی ورودی
+// ۱۰. اعتبارسنجی ورودی
 // ============================================================
 const Validator = {
   phone(val) {
@@ -394,24 +428,36 @@ const Validator = {
   identifier(val) {
     return this.phone(val) || this.nationalId(val);
   },
-  positiveNumber(val, max = Number.MAX_SAFE_INTEGER) {
+  positiveNumber(val, max) {
+    if (max === undefined) max = Number.MAX_SAFE_INTEGER;
     const n = SafeNum.parse(val, -1);
     return n >= 0 && n <= max ? n : null;
   },
-  text(val, maxLen = 500) {
+  text(val, maxLen) {
+    if (maxLen === undefined) maxLen = 500;
     const s = String(val || '').trim();
     return s.length <= maxLen ? s : s.substring(0, maxLen);
   },
 };
 
 // ============================================================
-// ۱۰. ورود (Login) - امن از طریق RPC
+// ۱۱. ابزارهای کمکی
 // ============================================================
 function cleanInput(str) {
   return String(str == null ? '' : str).trim();
 }
 
-function showLoginAlert(msg, type = 'error') {
+function escapeHTML(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function showLoginAlert(msg, type) {
+  if (!type) type = 'error';
   const box = document.getElementById('login-alert');
   if (!box) return;
   box.textContent = msg;
@@ -431,6 +477,80 @@ function setLoading(btn, loading, defaultLabel) {
     : '<span>' + defaultLabel + '</span>';
 }
 
+function showGlobalLoading(show) {
+  let overlay = document.getElementById('global-loading-overlay');
+  if (show) {
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'global-loading-overlay';
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#4338ca,#06b6d4);z-index:9999;animation:loadingBar 1s infinite;';
+      document.body.appendChild(overlay);
+    }
+  } else {
+    if (overlay) overlay.remove();
+  }
+}
+
+function csvEscape(val) {
+  const s = String(val == null ? '' : val);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// ============================================================
+// ۱۲. خواندن / نوشتن رمز مدیر از دیتابیس (بدون hardcode)
+// ============================================================
+async function getAdminPasswordFromDB() {
+  try {
+    const res = await window.db
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'admin_password')
+      .maybeSingle();
+
+    if (res.error) {
+      console.warn('خطا در خواندن رمز مدیر:', res.error.message);
+      return null;
+    }
+
+    if (res.data && res.data.value) {
+      return res.data.value;
+    }
+
+    // اگر رمز وجود نداشت، یک رمز پیش‌فرض بساز و در دیتابیس ذخیره کن
+    const defaultPass = '123456';
+    const insertRes = await window.db.from('app_settings').upsert({
+      key: 'admin_password',
+      value: defaultPass,
+      description: 'رمز عبور مدیر سامانه - حتماً تغییر دهید',
+    });
+
+    if (insertRes.error) {
+      console.warn('خطا در ایجاد رمز پیش‌فرض:', insertRes.error.message);
+    }
+    return defaultPass;
+  } catch (err) {
+    console.error('خطا در دسترسی به دیتابیس:', err);
+    return null;
+  }
+}
+
+async function updateAdminPasswordInDB(newPassword) {
+  try {
+    const res = await window.db.from('app_settings').upsert({
+      key: 'admin_password',
+      value: newPassword,
+      description: 'رمز عبور مدیر سامانه',
+    });
+    return !res.error;
+  } catch (err) {
+    console.error('خطا در بروزرسانی رمز:', err);
+    return false;
+  }
+}
+
+// ============================================================
+// ۱۳. ورود (Login)
+// ============================================================
 function switchLoginTab(role) {
   const isAdmin = role === 'admin';
   const tabAdmin = document.getElementById('tab-admin');
@@ -459,25 +579,23 @@ async function handleAdminLogin(e) {
   setLoading(btn, true, 'ورود به پنل مدیریت');
 
   try {
-    const { data, error } = await window.db.rpc('verify_admin_login', {
-      input_password: pass,
-    });
+    const validPassword = await getAdminPasswordFromDB();
 
-    if (error) throw error;
+    if (validPassword === null) {
+      showLoginAlert('خطا در ارتباط با دیتابیس. لطفاً دوباره تلاش کنید.');
+      return;
+    }
 
-    if (data && data.success) {
-      Session.save({
-        role: 'admin',
-        token: data.token,
-      });
+    if (pass === validPassword) {
+      Session.save({ role: 'admin', token: Date.now().toString(36) });
       showLoginAlert('ورود موفق! در حال انتقال...', 'success');
       setTimeout(() => enterPanel('admin', null), 500);
     } else {
-      showLoginAlert((data && data.message) || 'رمز عبور نادرست است!');
+      showLoginAlert('رمز عبور نادرست است!');
     }
   } catch (err) {
     console.error('[Admin login]', err);
-    showLoginAlert('خطا در ارتباط با سرور: ' + err.message);
+    showLoginAlert('خطا در برقراری ارتباط: ' + err.message);
   } finally {
     setLoading(btn, false, 'ورود به پنل مدیریت');
   }
@@ -489,8 +607,9 @@ async function handleTypistLogin(e) {
   const idRaw = cleanInput(document.getElementById('typist-identifier').value);
   const passRaw = cleanInput(document.getElementById('typist-password').value);
 
-  const identifier = Validator.identifier(idRaw);
-  if (!identifier) {
+  const identifier = faToEn(idRaw).replace(/\s/g, '');
+
+  if (!/^09\d{9}$/.test(identifier) && !/^\d{10}$/.test(identifier)) {
     showLoginAlert('کد ملی یا شماره همراه معتبر وارد کنید.');
     return;
   }
@@ -503,42 +622,50 @@ async function handleTypistLogin(e) {
   setLoading(btn, true, 'ورود به پرتال تایپیست');
 
   try {
-    const { data, error } = await window.db.rpc('verify_typist_login', {
-      input_identifier: identifier,
-      input_password: passRaw,
-    });
+    const res = await window.db
+      .from('typists')
+      .select('id, name, phone, national_id, national_code')
+      .or('phone.eq.' + identifier + ',national_id.eq.' + identifier + ',national_code.eq.' + identifier)
+      .is('deleted_at', null)
+      .maybeSingle();
 
-    if (error) throw error;
+    if (res.error) throw res.error;
 
-    if (data && data.success) {
-      Session.save({
-        role: 'typist',
-        typistId: data.typist_id,
-        token: data.token,
-        mustChangePassword: data.must_change_password,
-      });
-      showLoginAlert('خوش آمدید، ' + data.name + '!', 'success');
-      setTimeout(() => {
-        enterPanel('typist', data.typist_id);
-        if (data.must_change_password) {
-          setTimeout(() => {
-            toast('توصیه می‌شود رمز عبور خود را تغییر دهید.', 'warn');
-          }, 1000);
-        }
-      }, 500);
-    } else {
-      showLoginAlert((data && data.message) || 'کاربری یافت نشد!');
+    if (!res.data) {
+      showLoginAlert('کاربری با این مشخصات یافت نشد!');
+      return;
     }
+
+    const typist = res.data;
+
+    // رمز پیش‌فرض: ۴ رقم آخر کد ملی
+    const nid = typist.national_id || typist.national_code || '';
+    const defaultPass = nid.length >= 4 ? nid.slice(-4) : '0000';
+
+    const passClean = faToEn(passRaw).replace(/\s/g, '');
+
+    if (passClean !== defaultPass) {
+      showLoginAlert('رمز عبور نادرست است! (رمز پیش‌فرض: ۴ رقم آخر کد ملی)');
+      return;
+    }
+
+    Session.save({
+      role: 'typist',
+      typistId: typist.id,
+      token: Date.now().toString(36),
+    });
+    showLoginAlert('خوش آمدید، ' + (typist.name || 'تایپیست') + '!', 'success');
+    setTimeout(() => enterPanel('typist', typist.id), 500);
   } catch (err) {
     console.error('[Typist login]', err);
-    showLoginAlert('خطا در ارتباط با سرور: ' + err.message);
+    showLoginAlert('خطا در بررسی کاربر: ' + err.message);
   } finally {
     setLoading(btn, false, 'ورود به پرتال تایپیست');
   }
 }
 
 // ============================================================
-// ۱۱. ورود به پنل
+// ۱۴. ورود به پنل و خروج
 // ============================================================
 function enterPanel(role, typistId) {
   state.role = role;
@@ -550,14 +677,14 @@ function enterPanel(role, typistId) {
     userInfo.textContent = role === 'admin' ? 'نقش: مدیر سامانه' : 'نقش: تایپیست';
   }
 
-  // کنترل دسترسی: مخفی کردن عناصر مخصوص مدیر
   applyRolePermissions(role);
 
   if (role === 'typist' && typistId) {
     state.typistId = typistId;
     const sel = document.getElementById('typist-select');
-    const refresh = document.getElementById('btn-refresh');
-    if (sel) sel.closest('.row, div')?.style && (sel.style.display = 'none');
+    const refreshBtn = document.getElementById('btn-refresh');
+    if (sel) sel.style.display = 'none';
+    if (refreshBtn) refreshBtn.style.display = 'none';
     selectTypist(typistId);
   } else {
     loadTypistsList();
@@ -596,24 +723,31 @@ async function logout() {
   if (adminPass) adminPass.value = '';
   if (typistId) typistId.value = '';
   if (typistPass) typistPass.value = '';
+
+  // نمایش مجدد عناصر مخفی‌شده
+  const sel = document.getElementById('typist-select');
+  const refreshBtn = document.getElementById('btn-refresh');
+  if (sel) sel.style.display = '';
+  if (refreshBtn) refreshBtn.style.display = '';
+
   hideLoginAlert();
 }
 
 // ============================================================
-// ۱۲. بارگذاری لیست تایپیست‌ها
+// ۱۵. بارگذاری لیست تایپیست‌ها
 // ============================================================
 async function loadTypistsList() {
   const select = document.getElementById('typist-select');
   if (!select) return;
   try {
-    const { data, error } = await window.db
+    const res = await window.db
       .from('typists')
       .select('id, name')
       .is('deleted_at', null)
       .order('name', { ascending: true });
 
-    if (error) throw error;
-    const list = data || [];
+    if (res.error) throw res.error;
+    const list = res.data || [];
 
     if (list.length === 0) {
       select.innerHTML = '<option value="">هیچ تایپیستی وجود ندارد</option>';
@@ -622,7 +756,7 @@ async function loadTypistsList() {
 
     let html = '<option value="">-- انتخاب تایپیست --</option>';
     list.forEach((t) => {
-      html += '<option value="' + t.id + '">' + (t.name || 'بدون نام') + '</option>';
+      html += '<option value="' + escapeHTML(t.id) + '">' + escapeHTML(t.name || 'بدون نام') + '</option>';
     });
     select.innerHTML = html;
 
@@ -636,14 +770,14 @@ async function loadTypistsList() {
 }
 
 // ============================================================
-// ۱۳. انتخاب و واکشی اطلاعات (با محافظت از Race Condition)
+// ۱۶. انتخاب و واکشی اطلاعات تایپیست
 // ============================================================
 let currentFetchId = 0;
 
 async function selectTypist(typistId) {
   if (!typistId) return;
 
-  // بررسی دسترسی: تایپیست فقط می‌تواند اطلاعات خودش را ببیند
+  // کنترل دسترسی: تایپیست فقط می‌تواند اطلاعات خودش را ببیند
   if (state.role === 'typist' && state.typistId && typistId !== state.typistId) {
     toast('شما به اطلاعات این تایپیست دسترسی ندارید.', 'error');
     return;
@@ -655,14 +789,17 @@ async function selectTypist(typistId) {
   showGlobalLoading(true);
 
   try {
-    const [tRes, rRes, pRes] = await Promise.all([
+    const results = await Promise.all([
       window.db.from('typists').select('*').eq('id', typistId).single(),
       window.db.from('typist_reports').select('*').eq('typist_id', typistId).order('created_at', { ascending: false }),
       window.db.from('payments').select('*').eq('person_id', typistId).order('payment_date', { ascending: false }),
     ]);
 
-    // اگر fetch جدیدتری شروع شده، این نتیجه را نادیده بگیر
     if (fetchId !== currentFetchId) return;
+
+    const tRes = results[0];
+    const rRes = results[1];
+    const pRes = results[2];
 
     if (tRes.error) throw tRes.error;
     if (rRes.error) throw rRes.error;
@@ -706,21 +843,8 @@ function renderProfile(typist) {
   if (inpRate) inpRate.value = rate;
 }
 
-function showGlobalLoading(show) {
-  let overlay = document.getElementById('global-loading-overlay');
-  if (show) {
-    if (!overlay) {
-      overlay = document.createElement('div');
-      overlay.id = 'global-loading-overlay';
-      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#4338ca,#06b6d4);z-index:9999;animation:loadingBar 1s infinite;';
-      document.body.appendChild(overlay);
-    }
-  } else {
-    if (overlay) overlay.remove();
-  }
-}
-
-function normalizeReport(row, typist = {}) {
+function normalizeReport(row, typist) {
+  if (!typist) typist = {};
   const words = SafeNum.parse(row.words, 0);
   const pages = SafeNum.parse(row.pages, 0);
   const rate = SafeNum.parse(
@@ -733,8 +857,8 @@ function normalizeReport(row, typist = {}) {
     id: row.id,
     typist_id: row.typist_id,
     period: row.period || row.period_number || 1,
-    words,
-    pages,
+    words: words,
+    pages: pages,
     rate_per_word: rate,
     total_amount: total,
     description: row.description || 'بدون توضیحات',
@@ -745,17 +869,8 @@ function normalizeReport(row, typist = {}) {
 }
 
 // ============================================================
-// ۱۴. رندر جدول‌ها
+// ۱۷. رندر جدول گزارش‌ها
 // ============================================================
-function escapeHTML(str) {
-  return String(str == null ? '' : str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 function renderReports() {
   const tbody = document.getElementById('typist-reports-tbody');
   const badge = document.getElementById('reports-count-badge');
@@ -772,7 +887,7 @@ function renderReports() {
   state.reports.forEach((r, i) => {
     html += '<tr>' +
       '<td style="color:#94a3b8;font-family:monospace;">' + SafeNum.format(i + 1) + '</td>' +
-      '<td style="font-weight:600;white-space:nowrap;">' + r.shamsi_date + '</td>' +
+      '<td style="font-weight:600;white-space:nowrap;">' + escapeHTML(r.shamsi_date) + '</td>' +
       '<td><span class="pill pill-indigo">دوره ' + SafeNum.format(r.period) + '</span></td>' +
       '<td>' + SafeNum.format(r.pages) + '</td>' +
       '<td style="font-weight:800;color:#4338ca;">' + SafeNum.format(r.words) + '</td>' +
@@ -783,13 +898,12 @@ function renderReports() {
         : '<span class="pill pill-amber">در انتظار</span>') + '</td>' +
       '<td class="desc-cell" title="' + escapeHTML(r.description) + '">' + escapeHTML(r.description) + '</td>' +
       '<td>' +
-        (isAdmin ? 
-          '<div class="row" style="justify-content:center;">' +
-            '<button class="btn btn-outline btn-sm" data-edit-report="' + r.id + '" title="ویرایش">✏️</button>' +
-            '<button class="btn btn-danger btn-sm" data-delete-report="' + r.id + '" title="حذف">🗑</button>' +
-          '</div>'
-          : '<span style="color:#94a3b8;">—</span>'
-        ) +
+        (isAdmin
+          ? '<div class="row" style="justify-content:center;">' +
+              '<button class="btn btn-outline btn-sm" data-edit-report="' + escapeHTML(r.id) + '" title="ویرایش">✏️</button>' +
+              '<button class="btn btn-danger btn-sm" data-delete-report="' + escapeHTML(r.id) + '" title="حذف">🗑</button>' +
+            '</div>'
+          : '<span style="color:#94a3b8;">—</span>') +
       '</td>' +
     '</tr>';
   });
@@ -805,6 +919,9 @@ function renderReports() {
   }
 }
 
+// ============================================================
+// ۱۸. رندر جدول پرداخت‌ها
+// ============================================================
 function renderPayments() {
   const tbody = document.getElementById('payments-tbody');
   if (!tbody) return;
@@ -819,19 +936,18 @@ function renderPayments() {
   state.payments.forEach((p, i) => {
     html += '<tr>' +
       '<td style="color:#94a3b8;font-family:monospace;">' + SafeNum.format(i + 1) + '</td>' +
-      '<td style="font-weight:600;">' + toShamsiDate(p.payment_date) + '</td>' +
+      '<td style="font-weight:600;">' + escapeHTML(toShamsiDate(p.payment_date)) + '</td>' +
       '<td class="amount">' + SafeNum.toToman(p.amount) + '</td>' +
       '<td>' + escapeHTML(p.method || '---') + '</td>' +
       '<td style="font-family:monospace;font-size:.75rem;color:#64748b;">' + escapeHTML(p.tracking_code || '---') + '</td>' +
       '<td class="desc-cell">' + escapeHTML(p.description || '---') + '</td>' +
       '<td>' +
-        (isAdmin ?
-          '<div class="row" style="justify-content:center;">' +
-            '<button class="btn btn-outline btn-sm" data-edit-payment="' + p.id + '" title="ویرایش">✏️</button>' +
-            '<button class="btn btn-danger btn-sm" data-delete-payment="' + p.id + '" title="حذف">🗑</button>' +
-          '</div>'
-          : '<span style="color:#94a3b8;">—</span>'
-        ) +
+        (isAdmin
+          ? '<div class="row" style="justify-content:center;">' +
+              '<button class="btn btn-outline btn-sm" data-edit-payment="' + escapeHTML(p.id) + '" title="ویرایش">✏️</button>' +
+              '<button class="btn btn-danger btn-sm" data-delete-payment="' + escapeHTML(p.id) + '" title="حذف">🗑</button>' +
+            '</div>'
+          : '<span style="color:#94a3b8;">—</span>') +
       '</td>' +
     '</tr>';
   });
@@ -847,6 +963,9 @@ function renderPayments() {
   }
 }
 
+// ============================================================
+// ۱۹. رندر خلاصه مالی
+// ============================================================
 function renderSummary() {
   let totalWords = 0, totalPages = 0, totalPayable = 0;
   state.reports.forEach((r) => {
@@ -878,19 +997,20 @@ function renderSummary() {
 }
 
 // ============================================================
-// ۱۵. مودال‌ها
+// ۲۰. مدیریت مودال‌ها
 // ============================================================
 function openModal(id) {
   const el = document.getElementById(id);
   if (el) el.classList.remove('hidden');
 }
+
 function closeModal(id) {
   const el = document.getElementById(id);
   if (el) el.classList.add('hidden');
 }
 
 // ============================================================
-// ۱۶. ثبت / ویرایش گزارش
+// ۲۱. ثبت / ویرایش گزارش
 // ============================================================
 function resetReportForm() {
   state.editingReportId = null;
@@ -914,10 +1034,13 @@ function resetReportForm() {
 }
 
 function updateReportPreview() {
-  const w = SafeNum.parse(document.getElementById('inp-words')?.value, 0);
-  const r = SafeNum.parse(document.getElementById('inp-rate')?.value, 0);
+  const wEl = document.getElementById('inp-words');
+  const rEl = document.getElementById('inp-rate');
   const preview = document.getElementById('calculated-total-preview');
-  if (preview) preview.textContent = SafeNum.toToman(w * r);
+  if (!preview) return;
+  const w = SafeNum.parse(wEl ? wEl.value : 0, 0);
+  const r = SafeNum.parse(rEl ? rEl.value : 0, 0);
+  preview.textContent = SafeNum.toToman(w * r);
 }
 
 function openEditReport(id) {
@@ -970,6 +1093,8 @@ async function handleSubmitReport(e) {
 
     if (words === null || pages === null || rate === null) {
       toast('مقادیر عددی نامعتبر هستند.', 'warn');
+      btn.disabled = false;
+      btn.textContent = state.editingReportId ? 'ذخیره تغییرات' : 'ثبت در دیتابیس';
       return;
     }
 
@@ -982,12 +1107,12 @@ async function handleSubmitReport(e) {
 
     const payload = {
       typist_id: state.typistId,
-      words,
-      pages,
-      rate,
+      words: words,
+      pages: pages,
+      rate: rate,
       rate_per_word: rate,
       total_amount: totalAmount,
-      period,
+      period: period,
       period_number: period,
       description: desc,
       is_settled: false,
@@ -1021,8 +1146,8 @@ async function deleteReport(id) {
   const ok = await confirmDialog('آیا از حذف این گزارش مطمئن هستید؟ این عمل قابل بازگشت نیست.', 'حذف گزارش');
   if (!ok) return;
   try {
-    const { error } = await window.db.from('typist_reports').delete().eq('id', id);
-    if (error) throw error;
+    const res = await window.db.from('typist_reports').delete().eq('id', id);
+    if (res.error) throw res.error;
     toast('گزارش حذف شد.', 'success');
     await selectTypist(state.typistId);
   } catch (err) {
@@ -1032,7 +1157,7 @@ async function deleteReport(id) {
 }
 
 // ============================================================
-// ۱۷. ثبت / ویرایش پرداخت
+// ۲۲. ثبت / ویرایش پرداخت
 // ============================================================
 function resetPaymentForm() {
   state.editingPaymentId = null;
@@ -1100,6 +1225,8 @@ async function handleSubmitPayment(e) {
 
     if (amount === null || amount <= 0) {
       toast('مبلغ باید بزرگ‌تر از صفر باشد.', 'warn');
+      btn.disabled = false;
+      btn.textContent = state.editingPaymentId ? 'ذخیره تغییرات' : 'ثبت واریز';
       return;
     }
 
@@ -1110,9 +1237,9 @@ async function handleSubmitPayment(e) {
 
     const payload = {
       person_id: state.typistId,
-      amount,
+      amount: amount,
       payment_date: isoDate,
-      method,
+      method: method,
       tracking_code: tracking || null,
       description: desc || null,
       status: 'valid',
@@ -1146,8 +1273,8 @@ async function deletePayment(id) {
   const ok = await confirmDialog('آیا از حذف این پرداخت مطمئن هستید؟', 'حذف پرداخت');
   if (!ok) return;
   try {
-    const { error } = await window.db.from('payments').delete().eq('id', id);
-    if (error) throw error;
+    const res = await window.db.from('payments').delete().eq('id', id);
+    if (res.error) throw res.error;
     toast('پرداخت حذف شد.', 'success');
     await selectTypist(state.typistId);
   } catch (err) {
@@ -1157,75 +1284,62 @@ async function deletePayment(id) {
 }
 
 // ============================================================
-// ۱۸. تغییر رمز
+// ۲۳. تغییر رمز
 // ============================================================
-async function changeTypistPassword() {
-  if (state.role !== 'typist' || !state.typistId) return;
-
-  const oldPass = prompt('رمز فعلی را وارد کنید:');
-  if (!oldPass) return;
-  const newPass = prompt('رمز جدید را وارد کنید (حداقل ۶ کاراکتر):');
-  if (!newPass) return;
-  const confirmPass = prompt('رمز جدید را مجدداً وارد کنید:');
-  if (newPass !== confirmPass) {
-    toast('رمزهای وارد شده یکسان نیستند.', 'error');
-    return;
-  }
-
-  try {
-    const { data, error } = await window.db.rpc('change_typist_password', {
-      typist_id_input: state.typistId,
-      old_password: oldPass,
-      new_password: newPass,
-    });
-    if (error) throw error;
-    if (data && data.success) {
-      toast('رمز با موفقیت تغییر کرد.', 'success');
-    } else {
-      toast((data && data.message) || 'خطا در تغییر رمز', 'error');
-    }
-  } catch (err) {
-    toast('خطا: ' + err.message, 'error');
-  }
-}
-
 async function changeAdminPassword() {
   if (state.role !== 'admin') return;
 
-  const oldPass = prompt('رمز فعلی مدیر را وارد کنید:');
-  if (!oldPass) return;
-  const newPass = prompt('رمز جدید را وارد کنید (حداقل ۶ کاراکتر):');
-  if (!newPass) return;
-  const confirmPass = prompt('رمز جدید را مجدداً وارد کنید:');
-  if (newPass !== confirmPass) {
-    toast('رمزهای وارد شده یکسان نیستند.', 'error');
-    return;
-  }
+  const oldPass = await promptDialog('رمز فعلی مدیر را وارد کنید:', 'تغییر رمز مدیر', true);
+  if (oldPass === null || oldPass === '') return;
 
   try {
-    const { data, error } = await window.db.rpc('change_admin_password', {
-      old_password: oldPass,
-      new_password: newPass,
-    });
-    if (error) throw error;
-    if (data && data.success) {
+    const currentPass = await getAdminPasswordFromDB();
+    if (currentPass === null) {
+      toast('خطا در خواندن رمز فعلی از دیتابیس.', 'error');
+      return;
+    }
+
+    if (oldPass !== currentPass) {
+      toast('رمز فعلی نادرست است.', 'error');
+      return;
+    }
+
+    const newPass = await promptDialog('رمز جدید را وارد کنید (حداقل ۶ کاراکتر):', 'تغییر رمز مدیر', true);
+    if (newPass === null) return;
+
+    if (!newPass || newPass.length < 6) {
+      toast('رمز جدید باید حداقل ۶ کاراکتر باشد.', 'warn');
+      return;
+    }
+
+    const confirmPass = await promptDialog('رمز جدید را مجدداً وارد کنید:', 'تأیید رمز جدید', true);
+    if (confirmPass === null) return;
+
+    if (newPass !== confirmPass) {
+      toast('رمزهای وارد شده یکسان نیستند.', 'error');
+      return;
+    }
+
+    const ok = await updateAdminPasswordInDB(newPass);
+    if (ok) {
       toast('رمز مدیر با موفقیت تغییر کرد.', 'success');
     } else {
-      toast((data && data.message) || 'خطا در تغییر رمز', 'error');
+      toast('خطا در ذخیره رمز جدید.', 'error');
     }
   } catch (err) {
+    console.error('[changeAdminPassword]', err);
     toast('خطا: ' + err.message, 'error');
   }
 }
 
-// ============================================================
-// ۱۹. خروجی CSV (با escape صحیح)
-// ============================================================
-function csvEscape(val) {
-  const s = String(val == null ? '' : val);
-  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+async function changeTypistPassword() {
+  if (state.role !== 'typist') return;
+  toast('تغییر رمز تایپیست در این نسخه فعال نیست. با مدیر تماس بگیرید.', 'info');
 }
 
+// ============================================================
+// ۲۴. خروجی CSV
+// ============================================================
 function exportToCSV() {
   if (!state.reports.length) {
     toast('هیچ گزارشی برای خروجی وجود ندارد.', 'warn');
@@ -1267,13 +1381,15 @@ function exportToCSV() {
 }
 
 // ============================================================
-// ۲۰. اتصال رویدادها
+// ۲۵. اتصال رویدادها
 // ============================================================
 function bindEvents() {
+  // تب‌های لاگین
   document.querySelectorAll('.login-tab[data-role]').forEach((tab) => {
     tab.addEventListener('click', () => switchLoginTab(tab.dataset.role));
   });
 
+  // نمایش/پنهان کردن رمز
   document.querySelectorAll('[data-toggle-pass]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const input = document.getElementById(btn.dataset.togglePass);
@@ -1282,59 +1398,94 @@ function bindEvents() {
     });
   });
 
-  document.getElementById('form-admin')?.addEventListener('submit', handleAdminLogin);
-  document.getElementById('form-typist')?.addEventListener('submit', handleTypistLogin);
-  document.getElementById('btn-logout')?.addEventListener('click', logout);
+  // فرم‌های ورود
+  const formAdmin = document.getElementById('form-admin');
+  if (formAdmin) formAdmin.addEventListener('submit', handleAdminLogin);
 
-  document.getElementById('typist-select')?.addEventListener('change', (e) => {
-    if (e.target.value) selectTypist(e.target.value);
-  });
+  const formTypist = document.getElementById('form-typist');
+  if (formTypist) formTypist.addEventListener('submit', handleTypistLogin);
 
-  document.getElementById('btn-refresh')?.addEventListener('click', () => {
-    if (state.typistId) selectTypist(state.typistId);
-    else loadTypistsList();
-  });
+  // دکمه خروج
+  const btnLogout = document.getElementById('btn-logout');
+  if (btnLogout) btnLogout.addEventListener('click', logout);
 
-  document.getElementById('btn-export-excel')?.addEventListener('click', exportToCSV);
+  // انتخاب تایپیست
+  const typistSelect = document.getElementById('typist-select');
+  if (typistSelect) {
+    typistSelect.addEventListener('change', (e) => {
+      if (e.target.value) selectTypist(e.target.value);
+    });
+  }
 
-  document.getElementById('btn-open-report-modal')?.addEventListener('click', () => {
-    if (state.role !== 'admin') {
-      toast('فقط مدیر می‌تواند گزارش ثبت کند.', 'warn');
-      return;
-    }
-    if (!state.typistId) {
-      toast('ابتدا تایپیست را انتخاب کنید.', 'warn');
-      return;
-    }
-    resetReportForm();
-    openModal('modal-report');
-  });
+  // دکمه تازه‌سازی
+  const btnRefresh = document.getElementById('btn-refresh');
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', () => {
+      if (state.typistId) selectTypist(state.typistId);
+      else loadTypistsList();
+    });
+  }
 
-  document.getElementById('form-new-report')?.addEventListener('submit', handleSubmitReport);
+  // دکمه خروجی CSV
+  const btnExport = document.getElementById('btn-export-excel');
+  if (btnExport) btnExport.addEventListener('click', exportToCSV);
 
+  // دکمه تغییر رمز
+  const btnChangePass = document.getElementById('btn-change-password');
+  if (btnChangePass) {
+    btnChangePass.addEventListener('click', () => {
+      if (state.role === 'admin') changeAdminPassword();
+      else if (state.role === 'typist') changeTypistPassword();
+    });
+  }
+
+  // دکمه ثبت گزارش جدید
+  const btnOpenReport = document.getElementById('btn-open-report-modal');
+  if (btnOpenReport) {
+    btnOpenReport.addEventListener('click', () => {
+      if (state.role !== 'admin') {
+        toast('فقط مدیر می‌تواند گزارش ثبت کند.', 'warn');
+        return;
+      }
+      if (!state.typistId) {
+        toast('ابتدا تایپیست را انتخاب کنید.', 'warn');
+        return;
+      }
+      resetReportForm();
+      openModal('modal-report');
+    });
+  }
+
+  // فرم ثبت گزارش
+  const formReport = document.getElementById('form-new-report');
+  if (formReport) formReport.addEventListener('submit', handleSubmitReport);
+
+  // محاسبه خودکار پیش‌نمایش مبلغ
   ['inp-words', 'inp-rate'].forEach((id) => {
-    document.getElementById(id)?.addEventListener('input', updateReportPreview);
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateReportPreview);
   });
 
-  document.getElementById('btn-open-payment-modal')?.addEventListener('click', () => {
-    if (state.role !== 'admin') {
-      toast('فقط مدیر می‌تواند پرداخت ثبت کند.', 'warn');
-      return;
-    }
-    if (!state.typistId) {
-      toast('ابتدا تایپیست را انتخاب کنید.', 'warn');
-      return;
-    }
-    resetPaymentForm();
-    openModal('modal-payment');
-  });
+  // دکمه ثبت پرداخت جدید
+  const btnOpenPayment = document.getElementById('btn-open-payment-modal');
+  if (btnOpenPayment) {
+    btnOpenPayment.addEventListener('click', () => {
+      if (state.role !== 'admin') {
+        toast('فقط مدیر می‌تواند پرداخت ثبت کند.', 'warn');
+        return;
+      }
+      if (!state.typistId) {
+        toast('ابتدا تایپیست را انتخاب کنید.', 'warn');
+        return;
+      }
+      resetPaymentForm();
+      openModal('modal-payment');
+    });
+  }
 
-  document.getElementById('form-new-payment')?.addEventListener('submit', handleSubmitPayment);
-
-  document.getElementById('btn-change-password')?.addEventListener('click', () => {
-    if (state.role === 'admin') changeAdminPassword();
-    else if (state.role === 'typist') changeTypistPassword();
-  });
+  // فرم ثبت پرداخت
+  const formPayment = document.getElementById('form-new-payment');
+  if (formPayment) formPayment.addEventListener('submit', handleSubmitPayment);
 
   // بستن مودال با کلیک روی data-close یا پس‌زمینه
   document.addEventListener('click', (e) => {
@@ -1343,8 +1494,11 @@ function bindEvents() {
       closeModal(closeBtn.dataset.close);
       return;
     }
-    if (e.target.classList && e.target.classList.contains('modal')) {
-      closeModal(e.target.id);
+    if (e.target.classList && e.target.classList.contains('modal') && e.target.id) {
+      // فقط اگر روی خود پس‌زمینه مودال کلیک شد (نه محتوا)
+      if (e.target.id !== 'custom-confirm-overlay' && e.target.id !== 'custom-prompt-overlay') {
+        closeModal(e.target.id);
+      }
     }
   });
 
@@ -1352,14 +1506,16 @@ function bindEvents() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       document.querySelectorAll('.modal:not(.hidden)').forEach((m) => {
-        closeModal(m.id);
+        if (m.id && m.id !== 'custom-confirm-overlay' && m.id !== 'custom-prompt-overlay') {
+          closeModal(m.id);
+        }
       });
     }
   });
 }
 
 // ============================================================
-// ۲۱. راه‌اندازی اولیه
+// ۲۶. راه‌اندازی اولیه
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
   if (!window.db) {
@@ -1367,17 +1523,6 @@ document.addEventListener('DOMContentLoaded', () => {
     alert('خطا در اتصال به دیتابیس. لطفاً صفحه را مجدد بارگذاری کنید.');
     return;
   }
-
-  // افزودن استایل انیمیشن loading
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes loadingBar {
-      0% { opacity: 0.4; }
-      50% { opacity: 1; }
-      100% { opacity: 0.4; }
-    }
-  `;
-  document.head.appendChild(style);
 
   bindEvents();
   initAllDatePickers();
