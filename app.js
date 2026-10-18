@@ -35,7 +35,7 @@ let currentTypistUser = null;
 let selectedTypistIdForAdmin = null;
 
 // ==========================================================================
-// ۲. توابع کمکی: ارقام فارسی، پاکسازی عدد (ریشه‌کن شدن کامل NaN) و تقویم
+// ۲. توابع کمکی: ارقام فارسی، پاکسازی عدد و تقویم
 // ==========================================================================
 function safeNumber(val) {
     if (val === null || val === undefined) return 0;
@@ -62,7 +62,7 @@ function sanitizeCell(text) {
     }
     return clean;
 }
-// تبدیل اعداد فارسی و عربی به ارقام انگلیسی
+
 function fixNumbers(str) {
     if (!str) return '';
     const persianNumbers = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
@@ -74,7 +74,6 @@ function fixNumbers(str) {
     return output;
 }
 
-// فعال‌سازی تقویم پاپ‌آپ شمسی
 function initPersianDatepickers() {
     if (window.$ && $.fn && $.fn.persianDatepicker) {
         $('.pdate-field').persianDatepicker({
@@ -242,7 +241,7 @@ window.typistLogout = function() {
 };
 
 // ==========================================================================
-// ۴. بخش تایپیست: ثبت و مشاهده گزارش کارکرد (کاملاً هماهنگ با جدول و تاریخ)
+// ۴. بخش تایپیست: ثبت و مشاهده گزارش کارکرد
 // ==========================================================================
 window.loadTypistSelfReports = async function() {
     if (!currentTypistUser) return;
@@ -372,7 +371,7 @@ window.submitNewReport = async function() {
 };
 
 // ==========================================================================
-// ۵. بخش پنل مدیریت: رندر کارت‌ها و مشاهده کارکردها با تاریخ
+// ۵. بخش پنل مدیریت: رندر کارت‌ها و مدیریت گزارش‌ها
 // ==========================================================================
 window.loadTypistsCards = async function() {
     const grid = document.getElementById('typistsCardsGrid');
@@ -542,7 +541,7 @@ window.deleteReport = async function(reportId) {
 };
 
 // ==========================================================================
-// ۶. تسویه حساب تجمیعی هوشمند با تاریخ دقیق شمسی
+// ۶. تسویه حساب تجمیعی هوشمند
 // ==========================================================================
 window.runSettlement = async function() {
     if (!selectedTypistIdForAdmin) {
@@ -614,7 +613,6 @@ window.runSettlement = async function() {
 
         if (!confirm(confirmMsg)) return;
 
-        // به‌روزرسانی گزارش‌ها
         const { error: settleErr } = await client
             .from('typist_reports')
             .update({ is_settled: true })
@@ -622,7 +620,6 @@ window.runSettlement = async function() {
 
         if (settleErr) throw settleErr;
 
-        // درج در سوابق پرداخت با تاریخ شمسی
         const todayFa = (window.persianDate) ? new persianDate().format('YYYY/MM/DD') : new Intl.DateTimeFormat('fa-IR').format(new Date());
         await client.from('payments').insert([{
             typist_id: typist.id,
@@ -647,7 +644,7 @@ window.runSettlement = async function() {
 };
 
 // ==========================================================================
-// ۷. خروجی اکسل استاندارد بانکی (۵ ستون با ایمن‌سازی فرمول و UTF-8 BOM)
+// ۷. خروجی اکسل استاندارد بانکی
 // ==========================================================================
 window.exportSettleExcel = async function() {
     const client = getDbClient();
@@ -791,24 +788,23 @@ window.saveTypistRecord = async function() {
 };
 
 // ==========================================================================
-// ۹. اجرای برنامه در هنگام بارگذاری صفحه
+// ۹. اجرای برنامه در هنگام بارگذاری صفحه (تکمیل شده)
 // ==========================================================================
 function startTypistApp() {
     initPersianDatepickers();
-
-    let adminLogged = false;
+    
     try {
-        adminLogged = sessionStorage.getItem('admin_logged') === 'true';
-    } catch (e) {}
-
-    if (adminLogged) {
-        window.setAdminState(true);
-        window.loadTypistsCards();
+        if (sessionStorage.getItem('admin_logged') === 'true') {
+            window.setAdminState(true);
+            window.loadTypistsCards();
+        } else {
+            window.setAdminState(false);
+        }
+    } catch (e) {
+        window.setAdminState(false);
     }
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', startTypistApp);
-} else {
+document.addEventListener('DOMContentLoaded', () => {
     startTypistApp();
-}
+});
