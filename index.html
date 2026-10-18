@@ -6,7 +6,7 @@
     <title>سامانه مدیریت کارکرد و حقوق تایپیست‌ها</title>
     <!-- Vazirmatn Font -->
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -81,7 +81,7 @@
                     </button>
                 </div>
 
-                <form id="login-form" onsubmit="window.handleLogin(event)" class="p-6 space-x-0 space-y-4">
+                <form id="login-form" onsubmit="window.handleLogin(event)" class="p-6 space-y-4">
                     <div id="typist-id-container" class="hidden">
                         <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">کد ملی یا شماره همراه</label>
                         <input type="text" id="login-identifier" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none text-left dir-ltr" placeholder="مثال: 09123456789">
@@ -157,7 +157,7 @@
                         </tr>
                     </thead>
                     <tbody id="typists-table-body" class="divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                        <!-- Rendered dynamically -->
+                        <!-- Dynamic -->
                     </tbody>
                 </table>
             </div>
@@ -211,7 +211,7 @@
                             <th class="p-3 text-center">نرخ صفحه</th>
                             <th class="p-3 text-center">مبلغ کل (تومان)</th>
                             <th class="p-3 text-center">تاریخ تحویل (شمسی)</th>
-                            <th class="p-3 text-center">مهلت تحویل</th>
+                            <th class="p-3 text-center">وضعیت</th>
                             <th class="p-3 text-center">عملیات</th>
                         </tr>
                     </thead>
@@ -274,7 +274,7 @@
                             <th class="p-3">عنوان کار</th>
                             <th class="p-3 text-center">تعداد صفحه</th>
                             <th class="p-3 text-center">تاریخ تحویل</th>
-                            <th class="p-3 text-center">وضعیت مهلت</th>
+                            <th class="p-3 text-center">وضعیت</th>
                         </tr>
                     </thead>
                     <tbody id="typist-self-reports-body" class="divide-y divide-gray-200 dark:divide-gray-700 text-sm">
@@ -364,7 +364,7 @@
                 <div>
                     <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">تاریخ تحویل (شمسی)</label>
                     <div class="flex gap-2">
-                        <input type="text" id="report-delivery-date" readonly required class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dir-ltr" placeholder="1402/12/01">
+                        <input type="text" id="report-delivery-date" readonly required class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dir-ltr" placeholder="1403/12/01">
                         <button type="button" onclick="window.openDatePicker('report-delivery-date')" class="px-3 py-2 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 rounded-lg text-sm font-bold">📅 تقویم</button>
                     </div>
                 </div>
@@ -471,7 +471,7 @@
         </div>
     </div>
 
-    <!-- Supabase JS Client -->
+    <!-- Supabase JS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Main Application Logic -->
     <script src="app.js"></script>
