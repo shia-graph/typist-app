@@ -80,8 +80,8 @@
         
         <!-- Login Tabs -->
         <div class="flex border-b border-slate-200 dark:border-slate-700 mb-6">
-          <button id="tab-login-admin" class="flex-1 py-3 text-center font-semibold text-blue-600 border-b-2 border-blue-600 transition">مدیر سیستم</button>
-          <button id="tab-login-typist" class="flex-1 py-3 text-center font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 border-b-2 border-transparent transition">تایپیست</button>
+          <button id="tab-login-admin" type="button" class="flex-1 py-3 text-center font-semibold text-blue-600 border-b-2 border-blue-600 transition">مدیر سیستم</button>
+          <button id="tab-login-typist" type="button" class="flex-1 py-3 text-center font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 border-b-2 border-transparent transition">تایپیست</button>
         </div>
 
         <!-- Admin Login Form -->
@@ -90,7 +90,7 @@
             <label class="block text-sm font-medium mb-1">رمز عبور مدیر (پیش‌فرض: admin123)</label>
             <input type="password" id="admin-password" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="رمز عبور مدیر..." />
           </div>
-          <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-500/30">ورود به عنوان مدیر</button>
+          <button type="submit" id="btn-submit-admin" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-500/30">ورود به عنوان مدیر</button>
         </form>
 
         <!-- Typist Login Form -->
@@ -103,10 +103,10 @@
             <label class="block text-sm font-medium mb-1">رمز عبور (پیش‌فرض ۴ رقم آخر موبایل)</label>
             <input type="password" id="typist-password" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="مثال: 3421" />
           </div>
-          <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-500/30">ورود تایپیست</button>
+          <button type="submit" id="btn-submit-typist" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-500/30">ورود تایپیست</button>
         </form>
 
-        <div id="login-error" class="hidden mt-4 p-3 bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 text-sm rounded-xl text-center"></div>
+        <div id="login-error" class="hidden mt-4 p-3 bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 text-sm rounded-xl text-center font-semibold"></div>
       </div>
     </div>
 
