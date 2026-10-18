@@ -1,17 +1,23 @@
 // ==========================================================================
-// ۱. تنظیمات اتصال و تعریف کلاینت دیتابیس Supabase
+// ۱. تنظیمات اتصال و تعریف کلاینت دیتابیس Supabase بدون وابستگی به Storage
 // ==========================================================================
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
-// تابع دریافت یا ایجاد مطمئن کلاینت جهت جلوگیری از خطای اتصال
 function getDbClient() {
     if (window.db && typeof window.db.from === 'function') {
         return window.db;
     }
     const supabaseLib = window.supabase || (typeof supabase !== 'undefined' ? supabase : null);
     if (supabaseLib && typeof supabaseLib.createClient === 'function') {
-        const client = supabaseLib.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // ایجاد کلاینت با مسدودسازی وابستگی به localStorage تا بلاک نشود
+        const client = supabaseLib.createClient(SUPABASE_URL, SUPABASE_KEY, {
+            auth: {
+                persistSession: false,
+                autoRefreshToken: false,
+                detectSessionInUrl: false
+            }
+        });
         window.db = client;
         window.client = client;
         window.supabaseClient = client;
@@ -19,6 +25,7 @@ function getDbClient() {
     }
     return null;
 }
+
 
 // تلاش اولیه برای مقداردهی
 let db = getDbClient();
@@ -755,24 +762,27 @@ window.saveTypistRecord = async function() {
 };
 
 // ==========================================================================
-// ۹. راه‌اندازی قطعی پس از بارگذاری صفحه
+// ۹. راه‌اندازی و باز کردن نمایش صفحه
 // ==========================================================================
-function initAppView() {
+function startTypistApp() {
     initPersianDatepickers();
-
-    const adminSess = sessionStorage.getItem('admin_logged') || 
-                      sessionStorage.getItem('admin_logged_in') || 
-                      localStorage.getItem('admin_logged');
 
     const typistEntry = document.getElementById('typistEntrySection');
     const adminDash = document.getElementById('adminDashboardSection');
     const typistDash = document.getElementById('typistDashboardSection');
 
-    if (adminSess === 'true') {
+    // چک کردن لاگین ادمین
+    let adminLogged = false;
+    try {
+        adminLogged = sessionStorage.getItem('admin_logged') === 'true' || localStorage.getItem('admin_logged') === 'true';
+    } catch (e) {
+        // اگر مرورگر استوریج را مسدود کرده بود خطا ندهد
+    }
+
+    if (adminLogged) {
         window.setAdminState(true);
         window.loadTypistsCards();
     } else {
-        // حتماً مطمئن شو بخش ورود تایپیست مخفی نباشد
         if (typistEntry) typistEntry.classList.remove('hidden');
         if (adminDash) adminDash.classList.add('hidden');
         if (typistDash) typistDash.classList.add('hidden');
@@ -781,7 +791,7 @@ function initAppView() {
 }
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAppView);
+    document.addEventListener('DOMContentLoaded', startTypistApp);
 } else {
-    initAppView();
+    startTypistApp();
 }
