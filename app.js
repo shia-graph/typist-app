@@ -4,13 +4,15 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 
 // توکن اصلی anon را در صورت نیاز اینجا بروز کنید
-const SUPABASE_KEY = 'GAPGPTMASKTOKENu3atco2zwqqX0X';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
 // ایجاد کلاینت متصل به سوپابیس
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 window.db = db;
 window.client = db;
 window.supabaseClient = db;     
+
+  
 
 // متغیرهای وضعیت
 let currentAdminLoggedIn = false;
