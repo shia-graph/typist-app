@@ -1,23 +1,31 @@
 /**
- * ✍️ سامانه مدیریت تایپیست‌ها - نسخه ایمن ۱۰۰٪ ضد خطا
+ * ✍️ سامانه مدیریت تایپیست‌ها - نسخه ۳.۰ (مخصوص موبایل و شبکه ایران)
  */
 
-// Supabase Configuration
+// Global Config
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyMzg2NjYsImV4cCI6MjA1NjgxNDY2Nn0.2O5_N4MSpPBygOnT2XN65O9C4Y7I47b8s6R3H6R3g7U';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Global Client Init
+let supabase = null;
+try {
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+} catch (e) {
+  console.error('Supabase Init Error:', e);
+}
 
 // Global Application State
-let currentUser = null; // { role: 'admin'|'typist', data: {...} }
-let activeLoginTab = 'typist'; // 'admin' or 'typist'
+let currentUser = null;
+let activeLoginTab = 'typist';
 let allTypists = [];
 let currentTypistDetail = null;
 let currentTargetInputIdForDate = null;
 let currentReports = [];
 let currentPayments = [];
 
-// Safe DOM Getters & Modifiers
+// Safe DOM Helper Functions
 function getEl(id) {
   return document.getElementById(id);
 }
@@ -68,93 +76,13 @@ function showToast(icon, title) {
       timer: 3000,
       timerProgressBar: true
     });
-  }
-}
-
-// App Initialization
-document.addEventListener('DOMContentLoaded', () => {
-  initTheme();
-  initDatepickerDropdowns();
-  switchLoginTab('typist');
-  checkSavedSession();
-  console.log('🚀 Typist Payroll App initialized safely.');
-});
-
-// Theme Management
-function initTheme() {
-  const savedTheme = localStorage.getItem('theme');
-  const themeIcon = getEl('theme-icon');
-  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.documentElement.classList.add('dark');
-    if (themeIcon) themeIcon.textContent = '☀️';
   } else {
-    document.documentElement.classList.remove('dark');
-    if (themeIcon) themeIcon.textContent = '🌙';
+    alert(title);
   }
 }
 
-window.toggleDarkMode = function() {
-  const isDark = document.documentElement.classList.toggle('dark');
-  localStorage.setItem('theme', isDark ? 'dark' : 'light');
-  const themeIcon = getEl('theme-icon');
-  if (themeIcon) themeIcon.textContent = isDark ? '☀️' : '🌙';
-};
-
-// Shamsi Datepicker Logic
-function initDatepickerDropdowns() {
-  const daySelect = getEl('dp-day');
-  const yearSelect = getEl('dp-year');
-
-  if (daySelect) {
-    daySelect.innerHTML = '';
-    for (let i = 1; i <= 31; i++) {
-      const val = i < 10 ? '0' + i : String(i);
-      daySelect.innerHTML += `<option value="${val}">${val}</option>`;
-    }
-  }
-
-  if (yearSelect) {
-    yearSelect.innerHTML = '';
-    for (let y = 1402; y <= 1410; y++) {
-      yearSelect.innerHTML += `<option value="${y}" ${y === 1403 ? 'selected' : ''}>${y}</option>`;
-    }
-  }
-}
-
-window.openShamsiDatepicker = function(inputId) {
-  currentTargetInputIdForDate = inputId;
-  const inputEl = getEl(inputId);
-  const existingVal = inputEl ? inputEl.value : '';
-  if (existingVal && existingVal.includes('/')) {
-    const parts = existingVal.split('/');
-    if (parts.length === 3) {
-      if (getEl('dp-year')) getEl('dp-year').value = parts[0];
-      if (getEl('dp-month')) getEl('dp-month').value = parts[1];
-      if (getEl('dp-day')) getEl('dp-day').value = parts[2];
-    }
-  }
-  safeShow('modal-datepicker');
-};
-
-window.confirmShamsiDate = function() {
-  const y = getEl('dp-year') ? getEl('dp-year').value : '1403';
-  const m = getEl('dp-month') ? getEl('dp-month').value : '01';
-  const d = getEl('dp-day') ? getEl('dp-day').value : '01';
-  const dateStr = `${y}/${m}/${d}`;
-  if (currentTargetInputIdForDate) {
-    const targetInput = getEl(currentTargetInputIdForDate);
-    if (targetInput) targetInput.value = dateStr;
-  }
-  closeModal('modal-datepicker');
-};
-
-// Modal Helper Functions
-window.closeModal = function(modalId) {
-  safeHide(modalId);
-};
-
-// Login Tab Switching (100% Safe with Zero Null Risk)
-window.switchLoginTab = function(tab) {
+// Global Window Function Declarations (Hoisted for Instant Touch Availability)
+function switchLoginTab(tab) {
   activeLoginTab = tab;
   const tabAdmin = getEl('tab-login-admin');
   const tabTypist = getEl('tab-login-typist');
@@ -174,11 +102,20 @@ window.switchLoginTab = function(tab) {
     safeSetText('label-identifier', 'کد ملی یا شماره همراه');
     safeShow('typist-pass-hint');
   }
-};
+}
 
-// Login Action
-window.handleLogin = async function(e) {
+async function handleLogin(e) {
   if (e && e.preventDefault) e.preventDefault();
+
+  if (!supabase) {
+    if (window.supabase && typeof window.supabase.createClient === 'function') {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } else {
+      Swal.fire('خطا در اتصال', 'اتصال شبکه کند است یا کتابخانه‌ها لود نشده‌اند. لطفاً چند ثانیه صبر کرده و فیلترشکن را بررسی کنید.', 'error');
+      return;
+    }
+  }
+
   const passEl = getEl('input-password');
   const password = passEl ? toEnglishDigits(passEl.value).trim() : '';
   
@@ -212,7 +149,85 @@ window.handleLogin = async function(e) {
     showToast('success', `خوش آمدید، ${data.typist.first_name} ${data.typist.last_name}`);
     renderLayout();
   }
-};
+}
+
+function handleLogout() {
+  currentUser = null;
+  currentTypistDetail = null;
+  localStorage.removeItem('session');
+  renderLayout();
+  showToast('info', 'با موفقیت خارج شدید');
+}
+
+function toggleDarkMode() {
+  const isDark = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  const themeIcon = getEl('theme-icon');
+  if (themeIcon) themeIcon.textContent = isDark ? '☀️' : '🌙';
+}
+
+function initTheme() {
+  const savedTheme = localStorage.getItem('theme');
+  const themeIcon = getEl('theme-icon');
+  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark');
+    if (themeIcon) themeIcon.textContent = '☀️';
+  } else {
+    document.documentElement.classList.remove('dark');
+    if (themeIcon) themeIcon.textContent = '🌙';
+  }
+}
+
+function initDatepickerDropdowns() {
+  const daySelect = getEl('dp-day');
+  const yearSelect = getEl('dp-year');
+
+  if (daySelect) {
+    daySelect.innerHTML = '';
+    for (let i = 1; i <= 31; i++) {
+      const val = i < 10 ? '0' + i : String(i);
+      daySelect.innerHTML += `<option value="${val}">${val}</option>`;
+    }
+  }
+
+  if (yearSelect) {
+    yearSelect.innerHTML = '';
+    for (let y = 1402; y <= 1410; y++) {
+      yearSelect.innerHTML += `<option value="${y}" ${y === 1403 ? 'selected' : ''}>${y}</option>`;
+    }
+  }
+}
+
+function openShamsiDatepicker(inputId) {
+  currentTargetInputIdForDate = inputId;
+  const inputEl = getEl(inputId);
+  const existingVal = inputEl ? inputEl.value : '';
+  if (existingVal && existingVal.includes('/')) {
+    const parts = existingVal.split('/');
+    if (parts.length === 3) {
+      if (getEl('dp-year')) getEl('dp-year').value = parts[0];
+      if (getEl('dp-month')) getEl('dp-month').value = parts[1];
+      if (getEl('dp-day')) getEl('dp-day').value = parts[2];
+    }
+  }
+  safeShow('modal-datepicker');
+}
+
+function confirmShamsiDate() {
+  const y = getEl('dp-year') ? getEl('dp-year').value : '1403';
+  const m = getEl('dp-month') ? getEl('dp-month').value : '01';
+  const d = getEl('dp-day') ? getEl('dp-day').value : '01';
+  const dateStr = `${y}/${m}/${d}`;
+  if (currentTargetInputIdForDate) {
+    const targetInput = getEl(currentTargetInputIdForDate);
+    if (targetInput) targetInput.value = dateStr;
+  }
+  closeModal('modal-datepicker');
+}
+
+function closeModal(modalId) {
+  safeHide(modalId);
+}
 
 function checkSavedSession() {
   const saved = localStorage.getItem('session');
@@ -229,15 +244,6 @@ function checkSavedSession() {
   }
 }
 
-window.handleLogout = function() {
-  currentUser = null;
-  currentTypistDetail = null;
-  localStorage.removeItem('session');
-  renderLayout();
-  showToast('info', 'با موفقیت خارج شدید');
-};
-
-// Render Screen according to Role
 function renderLayout() {
   safeHide('view-login');
   safeHide('view-admin-dashboard');
@@ -271,8 +277,8 @@ function renderLayout() {
   }
 }
 
-// ADMIN DASHBOARD LOGIC
 async function loadAdminDashboard() {
+  if (!supabase) return;
   const { data, error } = await supabase.rpc('get_dashboard_summary');
   if (error || !data || !data.success) {
     showToast('error', 'خطا در بارگیری اطلاعات داشبورد');
@@ -329,8 +335,8 @@ function renderTypistsTable(typists) {
       </td>
       <td class="p-4 text-center">
         <div class="flex items-center justify-center gap-2">
-          <button onclick="openTypistDetail('${t.id}')" class="px-2.5 py-1.5 bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-300 rounded-lg text-xs font-medium hover:bg-brand-100 transition">مشاهده جزئیات</button>
-          <button onclick="openEditTypistModal('${t.id}')" class="p-1.5 bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300 rounded-lg text-xs hover:bg-amber-100 transition" title="ویرایش">✏️</button>
+          <button type="button" onclick="openTypistDetail('${t.id}')" class="px-2.5 py-1.5 bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-300 rounded-lg text-xs font-medium hover:bg-brand-100 transition">مشاهده جزئیات</button>
+          <button type="button" onclick="openEditTypistModal('${t.id}')" class="p-1.5 bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300 rounded-lg text-xs hover:bg-amber-100 transition" title="ویرایش">✏️</button>
         </div>
       </td>
     `;
@@ -338,7 +344,7 @@ function renderTypistsTable(typists) {
   });
 }
 
-window.filterTypistsTable = function() {
+function filterTypistsTable() {
   const searchEl = getEl('admin-search');
   const query = searchEl ? toEnglishDigits(searchEl.value).toLowerCase() : '';
   const filtered = allTypists.filter(t => 
@@ -348,15 +354,15 @@ window.filterTypistsTable = function() {
     (t.phone && t.phone.includes(query))
   );
   renderTypistsTable(filtered);
-};
+}
 
-window.toggleSelectAllTypists = function(master) {
+function toggleSelectAllTypists(master) {
   const checkboxes = document.querySelectorAll('.typist-checkbox');
   checkboxes.forEach(cb => cb.checked = master.checked);
-};
+}
 
-// Open Typist Detail View
-window.openTypistDetail = async function(typistId) {
+async function openTypistDetail(typistId) {
+  if (!supabase) return;
   const { data, error } = await supabase.rpc('get_typist_detail', { p_typist_id: typistId });
   if (error || !data || !data.success) {
     Swal.fire('خطا', data?.message || 'مشکلی در دریافت جزئیات تایپیست رخ داد', 'error');
@@ -365,14 +371,13 @@ window.openTypistDetail = async function(typistId) {
 
   currentTypistDetail = data;
   renderLayout();
-};
+}
 
-window.showAdminDashboard = function() {
+function showAdminDashboard() {
   currentTypistDetail = null;
   renderLayout();
-};
+}
 
-// RENDER ADMIN TYPIST DETAIL VIEW
 function renderAdminTypistDetailView() {
   if (!currentTypistDetail || !currentTypistDetail.typist) return;
 
@@ -394,7 +399,6 @@ function renderAdminTypistDetailView() {
   const smsBtn = getEl('detail-btn-sms');
   if (smsBtn) smsBtn.href = `sms:${t.phone}`;
 
-  // Calculate Aggregates
   const totalWork = currentReports.reduce((acc, r) => acc + (Number(r.total_price) || 0), 0);
   const totalPaid = currentPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
   const balance = totalWork - totalPaid;
@@ -403,7 +407,6 @@ function renderAdminTypistDetailView() {
   safeSetText('detail-total-paid', `${formatMoney(totalPaid)} تومان`);
   safeSetText('detail-total-balance', `${formatMoney(balance)} تومان`);
 
-  // Render Work Reports Table
   const repTbody = getEl('detail-reports-tbody');
   if (repTbody) {
     repTbody.innerHTML = '';
@@ -426,8 +429,8 @@ function renderAdminTypistDetailView() {
           </td>
           <td class="p-3 text-center">
             <div class="flex items-center justify-center gap-1">
-              <button onclick="openEditReportModal('${r.id}')" class="p-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded hover:bg-amber-100" title="ویرایش">✏️</button>
-              <button onclick="deleteReport('${r.id}')" class="p-1.5 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 rounded hover:bg-rose-100" title="حذف">🗑️</button>
+              <button type="button" onclick="openEditReportModal('${r.id}')" class="p-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded hover:bg-amber-100" title="ویرایش">✏️</button>
+              <button type="button" onclick="deleteReport('${r.id}')" class="p-1.5 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 rounded hover:bg-rose-100" title="حذف">🗑️</button>
             </div>
           </td>
         `;
@@ -436,7 +439,6 @@ function renderAdminTypistDetailView() {
     }
   }
 
-  // Render Payments Table
   const payTbody = getEl('detail-payments-tbody');
   if (payTbody) {
     payTbody.innerHTML = '';
@@ -452,8 +454,8 @@ function renderAdminTypistDetailView() {
           <td class="p-3 text-slate-600 dark:text-slate-400">${p.description || '-'}</td>
           <td class="p-3 text-center">
             <div class="flex items-center justify-center gap-1">
-              <button onclick="openEditPaymentModal('${p.id}')" class="p-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded hover:bg-amber-100" title="ویرایش">✏️</button>
-              <button onclick="deletePayment('${p.id}')" class="p-1.5 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 rounded hover:bg-rose-100" title="حذف">🗑️</button>
+              <button type="button" onclick="openEditPaymentModal('${p.id}')" class="p-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded hover:bg-amber-100" title="ویرایش">✏️</button>
+              <button type="button" onclick="deletePayment('${p.id}')" class="p-1.5 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 rounded hover:bg-rose-100" title="حذف">🗑️</button>
             </div>
           </td>
         `;
@@ -463,9 +465,8 @@ function renderAdminTypistDetailView() {
   }
 }
 
-// TYPIST SELF DASHBOARD LOGIC
 async function loadTypistSelfDashboard() {
-  if (!currentUser || currentUser.role !== 'typist') return;
+  if (!currentUser || currentUser.role !== 'typist' || !supabase) return;
 
   const typistId = currentUser.data.id;
   const { data, error } = await supabase.rpc('get_typist_detail', { p_typist_id: typistId });
@@ -488,7 +489,6 @@ async function loadTypistSelfDashboard() {
   safeSetText('typist-self-total-paid', `${formatMoney(totalPaid)} تومان`);
   safeSetText('typist-self-total-balance', `${formatMoney(balance)} تومان`);
 
-  // Render Self Reports Table
   const tbody = getEl('typist-self-reports-tbody');
   if (tbody) {
     tbody.innerHTML = '';
@@ -510,8 +510,8 @@ async function loadTypistSelfDashboard() {
           </td>
           <td class="p-3 text-center">
             <div class="flex items-center justify-center gap-1">
-              <button onclick="openEditReportModal('${r.id}')" class="p-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded hover:bg-amber-100" title="ویرایش">✏️</button>
-              <button onclick="deleteReport('${r.id}')" class="p-1.5 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 rounded hover:bg-rose-100" title="حذف">🗑️</button>
+              <button type="button" onclick="openEditReportModal('${r.id}')" class="p-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded hover:bg-amber-100" title="ویرایش">✏️</button>
+              <button type="button" onclick="deleteReport('${r.id}')" class="p-1.5 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 rounded hover:bg-rose-100" title="حذف">🗑️</button>
             </div>
           </td>
         `;
@@ -521,8 +521,7 @@ async function loadTypistSelfDashboard() {
   }
 }
 
-// TYPIST CRUD (Admin View & Edit Profile)
-window.openAddTypistModal = function() {
+function openAddTypistModal() {
   safeSetText('modal-typist-title', 'ثبت تایپیست جدید');
   if (getEl('form-typist-id')) getEl('form-typist-id').value = '';
   if (getEl('form-typist-first-name')) getEl('form-typist-first-name').value = '';
@@ -535,9 +534,9 @@ window.openAddTypistModal = function() {
   if (getEl('form-typist-iban')) getEl('form-typist-iban').value = '';
 
   safeShow('modal-typist');
-};
+}
 
-window.openEditTypistModal = function(id) {
+function openEditTypistModal(id) {
   const t = allTypists.find(x => x.id === id);
   if (!t) return;
 
@@ -553,16 +552,18 @@ window.openEditTypistModal = function(id) {
   if (getEl('form-typist-iban')) getEl('form-typist-iban').value = t.iban || '';
 
   safeShow('modal-typist');
-};
+}
 
-window.openEditTypistFromDetail = function() {
+function openEditTypistFromDetail() {
   if (currentTypistDetail && currentTypistDetail.typist) {
     openEditTypistModal(currentTypistDetail.typist.id);
   }
-};
+}
 
-window.saveTypist = async function(e) {
+async function saveTypist(e) {
   if (e && e.preventDefault) e.preventDefault();
+  if (!supabase) return;
+
   const id = getEl('form-typist-id')?.value || null;
   const firstName = getEl('form-typist-first-name')?.value.trim() || '';
   const lastName = getEl('form-typist-last-name')?.value.trim() || '';
@@ -598,10 +599,9 @@ window.saveTypist = async function(e) {
   } else {
     loadAdminDashboard();
   }
-};
+}
 
-// TYPIST SELF-PROFILE EDIT
-window.openSelfProfileModal = function() {
+function openSelfProfileModal() {
   if (!currentUser || currentUser.role !== 'typist') return;
   const t = currentUser.data;
 
@@ -613,10 +613,12 @@ window.openSelfProfileModal = function() {
   if (getEl('self-iban')) getEl('self-iban').value = t.iban || '';
 
   safeShow('modal-self-profile');
-};
+}
 
-window.saveSelfProfile = async function(e) {
+async function saveSelfProfile(e) {
   if (e && e.preventDefault) e.preventDefault();
+  if (!supabase) return;
+
   const t = currentUser.data;
   const firstName = getEl('self-first-name')?.value.trim() || '';
   const lastName = getEl('self-last-name')?.value.trim() || '';
@@ -648,10 +650,9 @@ window.saveSelfProfile = async function(e) {
   closeModal('modal-self-profile');
   showToast('success', 'اطلاعات شما با موفقیت به روز شد');
   loadTypistSelfDashboard();
-};
+}
 
-// REPORT CRUD (ADD & EDIT)
-window.openAddReportModal = function() {
+function openAddReportModal() {
   if (getEl('report-title')) getEl('report-title').value = '';
   if (getEl('report-page-count')) getEl('report-page-count').value = '';
   if (getEl('report-delivery-date')) getEl('report-delivery-date').value = '';
@@ -664,10 +665,12 @@ window.openAddReportModal = function() {
   }
 
   safeShow('modal-report');
-};
+}
 
-window.saveReport = async function(e) {
+async function saveReport(e) {
   if (e && e.preventDefault) e.preventDefault();
+  if (!supabase) return;
+
   const title = getEl('report-title')?.value.trim() || '';
   const pageCount = Number(toEnglishDigits(getEl('report-page-count')?.value || '0'));
   const deliveryDate = getEl('report-delivery-date')?.value.trim() || '';
@@ -701,9 +704,9 @@ window.saveReport = async function(e) {
   } else {
     loadTypistSelfDashboard();
   }
-};
+}
 
-window.openEditReportModal = function(reportId) {
+function openEditReportModal(reportId) {
   const r = currentReports.find(x => x.id === reportId);
   if (!r) return;
 
@@ -720,10 +723,12 @@ window.openEditReportModal = function(reportId) {
   }
 
   safeShow('modal-edit-report');
-};
+}
 
-window.saveEditReport = async function(e) {
+async function saveEditReport(e) {
   if (e && e.preventDefault) e.preventDefault();
+  if (!supabase) return;
+
   const reportId = getEl('edit-report-id')?.value;
   const title = getEl('edit-report-title')?.value.trim() || '';
   const pageCount = Number(toEnglishDigits(getEl('edit-report-page-count')?.value || '0'));
@@ -756,9 +761,11 @@ window.saveEditReport = async function(e) {
   } else {
     loadTypistSelfDashboard();
   }
-};
+}
 
-window.deleteReport = async function(reportId) {
+async function deleteReport(reportId) {
+  if (!supabase) return;
+
   const confirm = await Swal.fire({
     title: 'آیا از حذف این گزارش مطمئن هستید؟',
     text: 'این عملیات قابل بازگشت نیست',
@@ -782,10 +789,9 @@ window.deleteReport = async function(reportId) {
   } else {
     loadTypistSelfDashboard();
   }
-};
+}
 
-// PAYMENT CRUD (ADD & EDIT)
-window.openAddPaymentModal = function() {
+function openAddPaymentModal() {
   safeSetText('modal-payment-title', 'ثبت پرداخت جدید');
   if (getEl('payment-id')) getEl('payment-id').value = '';
   if (getEl('payment-amount')) getEl('payment-amount').value = '';
@@ -793,9 +799,9 @@ window.openAddPaymentModal = function() {
   if (getEl('payment-description')) getEl('payment-description').value = '';
 
   safeShow('modal-payment');
-};
+}
 
-window.openEditPaymentModal = function(paymentId) {
+function openEditPaymentModal(paymentId) {
   const p = currentPayments.find(x => x.id === paymentId);
   if (!p) return;
 
@@ -806,10 +812,12 @@ window.openEditPaymentModal = function(paymentId) {
   if (getEl('payment-description')) getEl('payment-description').value = p.description || '';
 
   safeShow('modal-payment');
-};
+}
 
-window.savePayment = async function(e) {
+async function savePayment(e) {
   if (e && e.preventDefault) e.preventDefault();
+  if (!supabase) return;
+
   const paymentId = getEl('payment-id')?.value;
   const amount = Number(toEnglishDigits(getEl('payment-amount')?.value || '0'));
   const paymentDate = getEl('payment-date')?.value.trim() || '';
@@ -846,9 +854,11 @@ window.savePayment = async function(e) {
 
   closeModal('modal-payment');
   openTypistDetail(currentTypistDetail.typist.id);
-};
+}
 
-window.deletePayment = async function(paymentId) {
+async function deletePayment(paymentId) {
+  if (!supabase) return;
+
   const confirm = await Swal.fire({
     title: 'آیا از حذف این پرداخت مطمئن هستید؟',
     text: 'این عملیات قابل بازگشت نیست',
@@ -868,19 +878,20 @@ window.deletePayment = async function(paymentId) {
 
   showToast('success', 'پرداخت حذف شد');
   openTypistDetail(currentTypistDetail.typist.id);
-};
+}
 
-// CHANGE PASSWORD LOGIC
-window.openChangePasswordModal = function() {
+function openChangePasswordModal() {
   if (getEl('pass-current')) getEl('pass-current').value = '';
   if (getEl('pass-new')) getEl('pass-new').value = '';
   if (getEl('pass-confirm')) getEl('pass-confirm').value = '';
   
   safeShow('modal-change-password');
-};
+}
 
-window.savePasswordChange = async function(e) {
+async function savePasswordChange(e) {
   if (e && e.preventDefault) e.preventDefault();
+  if (!supabase) return;
+
   const currentPass = toEnglishDigits(getEl('pass-current')?.value || '').trim();
   const newPass = toEnglishDigits(getEl('pass-new')?.value || '').trim();
   const confirmPass = toEnglishDigits(getEl('pass-confirm')?.value || '').trim();
@@ -915,10 +926,9 @@ window.savePasswordChange = async function(e) {
 
   closeModal('modal-change-password');
   Swal.fire('موفقیت‌آمیز', 'رمز عبور شما با موفقیت تغییر کرد', 'success');
-};
+}
 
-// BANK CSV EXPORT (SELECTED TYPISTS)
-window.exportSelectedBankCSV = function() {
+function exportSelectedBankCSV() {
   const selectedCheckboxes = document.querySelectorAll('.typist-checkbox:checked');
   if (selectedCheckboxes.length === 0) {
     Swal.fire('هشدار', 'لطفاً حداقل یک تایپیست را برای خروجی فایل پایا انتخاب کنید', 'warning');
@@ -966,10 +976,9 @@ window.exportSelectedBankCSV = function() {
   link.click();
   document.body.removeChild(link);
   showToast('success', 'فایل CSV پایا بانک آماده و دانلود شد');
-};
+}
 
-// GROUP SMS TO SELECTED TYPISTS
-window.sendGroupSMS = function() {
+function sendGroupSMS() {
   const selectedCheckboxes = document.querySelectorAll('.typist-checkbox:checked');
   if (selectedCheckboxes.length === 0) {
     Swal.fire('هشدار', 'لطفاً حداقل یک تایپیست را برای ارسال پیامک انتخاب کنید', 'warning');
@@ -987,4 +996,45 @@ window.sendGroupSMS = function() {
 
   const phoneString = phones.join(',');
   window.location.href = `sms:${phoneString}?body=${encodeURIComponent('سلام، لطفاً جهت بررسی صورتحساب به سامانه مراجعه فرمایید.')}`;
-};
+}
+
+// Bind all functions explicitly to Window
+window.switchLoginTab = switchLoginTab;
+window.handleLogin = handleLogin;
+window.handleLogout = handleLogout;
+window.toggleDarkMode = toggleDarkMode;
+window.openChangePasswordModal = openChangePasswordModal;
+window.savePasswordChange = savePasswordChange;
+window.openShamsiDatepicker = openShamsiDatepicker;
+window.confirmShamsiDate = confirmShamsiDate;
+window.closeModal = closeModal;
+window.filterTypistsTable = filterTypistsTable;
+window.toggleSelectAllTypists = toggleSelectAllTypists;
+window.openTypistDetail = openTypistDetail;
+window.showAdminDashboard = showAdminDashboard;
+window.openAddTypistModal = openAddTypistModal;
+window.openEditTypistModal = openEditTypistModal;
+window.openEditTypistFromDetail = openEditTypistFromDetail;
+window.saveTypist = saveTypist;
+window.openSelfProfileModal = openSelfProfileModal;
+window.saveSelfProfile = saveSelfProfile;
+window.openAddReportModal = openAddReportModal;
+window.saveReport = saveReport;
+window.openEditReportModal = openEditReportModal;
+window.saveEditReport = saveEditReport;
+window.deleteReport = deleteReport;
+window.openAddPaymentModal = openAddPaymentModal;
+window.openEditPaymentModal = openEditPaymentModal;
+window.savePayment = savePayment;
+window.deletePayment = deletePayment;
+window.exportSelectedBankCSV = exportSelectedBankCSV;
+window.sendGroupSMS = sendGroupSMS;
+
+// App Initialization
+document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+  initDatepickerDropdowns();
+  switchLoginTab('typist');
+  checkSavedSession();
+  console.log('🚀 Typist Payroll App Mobile Ready.');
+});
