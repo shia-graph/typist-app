@@ -210,7 +210,7 @@ function switchLoginTab(tab) {
 
 async function handleAdminLogin(e) {
   e.preventDefault();
-  const pass = document.getElementById('admin-password').value;
+  const pass = document.getElementById('admin-password').value.trim();
   const errDiv = document.getElementById('login-error');
   errDiv.classList.add('hidden');
 
@@ -230,7 +230,7 @@ async function handleAdminLogin(e) {
 async function handleTypistLogin(e) {
   e.preventDefault();
   const identity = document.getElementById('typist-identity').value.trim();
-  const pass = document.getElementById('typist-password').value;
+  const pass = document.getElementById('typist-password').value.trim();
   const errDiv = document.getElementById('login-error');
   errDiv.classList.add('hidden');
 
@@ -769,8 +769,8 @@ async function deletePayment(paymentId) {
 // CHANGE PASSWORD LOGIC
 async function handleChangePassword(e) {
   e.preventDefault();
-  const currentPass = document.getElementById('modal-pass-current').value;
-  const newPass = document.getElementById('modal-pass-new').value;
+  const currentPass = document.getElementById('modal-pass-current').value.trim();
+  const newPass = document.getElementById('modal-pass-new').value.trim();
 
   try {
     if (currentUser.role === 'admin') {
