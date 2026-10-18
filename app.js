@@ -2,7 +2,7 @@
 // تنظیمات اتصال Supabase
 // ==========================================
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
-const SUPABASE_KEY = 'GAPGPTMASKTOKENoz86en1369oX0X';
+const SUPABASE_KEY = 'sb_publishable_32dg2CRsZ2Nws6qA6x8JgQ_Jgs3Ta-e';
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ==========================================
