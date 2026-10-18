@@ -702,3 +702,280 @@ async function handleSubmitReport(e) {
     // تاریخ شمسی → میلادی ISO
     const parts = shamsiStringToParts(document.getElementById('inp-date').value);
     const isoDate = parts ? shamsiToISO(parts.year, parts
+                                            // تاریخ شمسی → میلادی ISO
+    const parts = shamsiStringToParts(document.getElementById('inp-date').value);
+    const isoDate = parts ? shamsiToISO(parts.year, parts.month, parts.day) : new Date().toISOString().slice(0, 10);
+
+    const totalAmount = words * rate;
+
+    const payload = {
+      typist_id: state.typistId,
+      words,
+      pages,
+      rate,
+      rate_per_word: rate,
+      total_amount: totalAmount,
+      period,
+      period_number: period,
+      description: desc,
+      is_settled: false,
+      created_at: isoDate + 'T12:00:00.000Z',
+    };
+
+    let result;
+    if (state.editingReportId) {
+      // ویرایش
+      result = await window.db
+        .from('typist_reports')
+        .update(payload)
+        .eq('id', state.editingReportId);
+    } else {
+      // ثبت جدید
+      result = await window.db.from('typist_reports').insert([payload]);
+    }
+
+    if (result.error) throw result.error;
+
+    toast(state.editingReportId ? 'گزارش ویرایش شد.' : 'گزارش ثبت شد.', 'success');
+    closeModal('modal-report');
+    state.editingReportId = null;
+    await selectTypist(state.typistId);
+  } catch (err) {
+    console.error('[handleSubmitReport]', err);
+    toast('خطا در ذخیره گزارش: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = state.editingReportId ? 'ذخیره تغییرات' : 'ثبت در دیتابیس';
+  }
+}
+
+async function deleteReport(id) {
+  if (!confirm('آیا از حذف این گزارش مطمئن هستید؟')) return;
+  try {
+    const { error } = await window.db.from('typist_reports').delete().eq('id', id);
+    if (error) throw error;
+    toast('گزارش حذف شد.', 'success');
+    await selectTypist(state.typistId);
+  } catch (err) {
+    console.error('[deleteReport]', err);
+    toast('خطا در حذف گزارش: ' + err.message, 'error');
+  }
+}
+
+// ============================================================
+// ۱۴. ثبت / ویرایش پرداخت
+// ============================================================
+function resetPaymentForm() {
+  state.editingPaymentId = null;
+  document.getElementById('inp-pay-id').value = '';
+  document.getElementById('inp-pay-amount').value = 0;
+  document.getElementById('inp-pay-method').value = 'bank_transfer';
+  document.getElementById('inp-pay-track').value = '';
+  document.getElementById('inp-pay-desc').value = '';
+
+  const t = todayShamsi();
+  document.getElementById('inp-pay-date').value =
+    `${enToFa(t.year)}/${enToFa(String(t.month).padStart(2, '0'))}/${enToFa(String(t.day).padStart(2, '0'))}`;
+
+  document.getElementById('modal-payment-title').textContent = '➕ ثبت پرداخت جدید';
+  document.getElementById('btn-submit-payment').textContent = 'ثبت واریز';
+}
+
+function openEditPayment(id) {
+  const p = state.payments.find((x) => String(x.id) === String(id));
+  if (!p) return;
+
+  state.editingPaymentId = p.id;
+  document.getElementById('inp-pay-id').value = p.id;
+  document.getElementById('inp-pay-amount').value = SafeNum.parse(p.amount, 0);
+  document.getElementById('inp-pay-method').value = p.method || 'bank_transfer';
+  document.getElementById('inp-pay-track').value = p.tracking_code || '';
+  document.getElementById('inp-pay-desc').value = p.description || '';
+
+  document.getElementById('inp-pay-date').value = toShamsiDate(p.payment_date);
+
+  document.getElementById('modal-payment-title').textContent = '✏️ ویرایش پرداخت';
+  document.getElementById('btn-submit-payment').textContent = 'ذخیره تغییرات';
+  openModal('modal-payment');
+}
+
+async function handleSubmitPayment(e) {
+  e.preventDefault();
+  if (!state.typistId) { toast('ابتدا تایپیست را انتخاب کنید.', 'warn'); return; }
+
+  const btn = document.getElementById('btn-submit-payment');
+  btn.disabled = true;
+  btn.textContent = 'در حال ذخیره...';
+
+  try {
+    const amount = SafeNum.parse(document.getElementById('inp-pay-amount').value, 0);
+    const method = document.getElementById('inp-pay-method').value;
+    const tracking = document.getElementById('inp-pay-track').value.trim();
+    const desc = document.getElementById('inp-pay-desc').value.trim();
+
+    if (amount <= 0) {
+      toast('مبلغ باید بزرگ‌تر از صفر باشد.', 'warn');
+      btn.disabled = false;
+      btn.textContent = state.editingPaymentId ? 'ذخیره تغییرات' : 'ثبت واریز';
+      return;
+    }
+
+    const parts = shamsiStringToParts(document.getElementById('inp-pay-date').value);
+    const isoDate = parts
+      ? shamsiToISO(parts.year, parts.month, parts.day)
+      : new Date().toISOString().slice(0, 10);
+
+    const payload = {
+      person_id: state.typistId,
+      amount,
+      payment_date: isoDate + 'T12:00:00.000Z',
+      method,
+      tracking_code: tracking || null,
+      description: desc || null,
+      status: 'completed',
+    };
+
+    let result;
+    if (state.editingPaymentId) {
+      result = await window.db
+        .from('payments')
+        .update(payload)
+        .eq('id', state.editingPaymentId);
+    } else {
+      payload.created_at = new Date().toISOString();
+      result = await window.db.from('payments').insert([payload]);
+    }
+
+    if (result.error) throw result.error;
+
+    toast(state.editingPaymentId ? 'پرداخت ویرایش شد.' : 'پرداخت ثبت شد.', 'success');
+    closeModal('modal-payment');
+    state.editingPaymentId = null;
+    await selectTypist(state.typistId);
+  } catch (err) {
+    console.error('[handleSubmitPayment]', err);
+    toast('خطا در ذخیره پرداخت: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = state.editingPaymentId ? 'ذخیره تغییرات' : 'ثبت واریز';
+  }
+}
+
+async function deletePayment(id) {
+  if (!confirm('آیا از حذف این پرداخت مطمئن هستید؟')) return;
+  try {
+    const { error } = await window.db.from('payments').delete().eq('id', id);
+    if (error) throw error;
+    toast('پرداخت حذف شد.', 'success');
+    await selectTypist(state.typistId);
+  } catch (err) {
+    console.error('[deletePayment]', err);
+    toast('خطا در حذف پرداخت: ' + err.message, 'error');
+  }
+}
+
+// ============================================================
+// ۱۵. خروجی CSV
+// ============================================================
+function exportToCSV() {
+  if (!state.reports.length) {
+    toast('هیچ گزارشی برای خروجی وجود ندارد.', 'warn');
+    return;
+  }
+
+  const headers = [
+    'ردیف', 'تاریخ', 'دوره', 'صفحات', 'کلمات',
+    'نرخ هر کلمه', 'مبلغ کل', 'وضعیت', 'توضیحات',
+  ];
+
+  const rows = state.reports.map((r, i) => [
+    i + 1,
+    r.shamsi_date,
+    r.period,
+    r.pages,
+    r.words,
+    r.rate_per_word,
+    r.total_amount,
+    r.is_settled ? 'تسویه شده' : 'در انتظار',
+    `"${String(r.description || '').replace(/"/g, '""')}"`,
+  ]);
+
+  const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `گزارش_${(state.typist?.name || 'تایپیست').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ============================================================
+// ۱۶. اتصال رویدادها
+// ============================================================
+function bindEvents() {
+  // Login tabs
+  document.querySelectorAll('.login-tab[data-role]').forEach((tab) => {
+    tab.addEventListener('click', () => switchLoginTab(tab.dataset.role));
+  });
+
+  // Toggle password visibility
+  document.querySelectorAll('[data-toggle-pass]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById(btn.dataset.togglePass);
+      if (!input) return;
+      input.type = input.type === 'password' ? 'text' : 'password';
+    });
+  });
+
+  // Login forms
+  document.getElementById('form-admin')?.addEventListener('submit', handleAdminLogin);
+  document.getElementById('form-typist')?.addEventListener('submit', handleTypistLogin);
+
+  // Panel controls
+  document.getElementById('btn-logout')?.addEventListener('click', logout);
+  document.getElementById('typist-select')?.addEventListener('change', (e) => {
+    if (e.target.value) selectTypist(e.target.value);
+  });
+  document.getElementById('btn-refresh')?.addEventListener('click', () => {
+    if (state.typistId) selectTypist(state.typistId);
+    else loadTypistsList();
+  });
+  document.getElementById('btn-export-excel')?.addEventListener('click', exportToCSV);
+
+  // Report modal
+  document.getElementById('btn-open-report-modal')?.addEventListener('click', () => {
+    if (!state.typistId) { toast('ابتدا تایپیست را انتخاب کنید.', 'warn'); return; }
+    resetReportForm();
+    openModal('modal-report');
+  });
+  document.getElementById('form-new-report')?.addEventListener('submit', handleSubmitReport);
+
+  // Realtime calculation
+  ['inp-words', 'inp-rate'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('input', updateReportPreview);
+  });
+
+  // Payment modal
+  document.getElementById('btn-open-payment-modal')?.addEventListener('click', () => {
+    if (!state.typistId) { toast('ابتدا تایپیست را انتخاب کنید.', 'warn'); return; }
+    resetPaymentForm();
+    openModal('modal-payment');
+  });
+  document.getElementById('form-new-payment')?.addEventListener('submit', handleSubmitPayment);
+}
+
+// ============================================================
+// ۱۷. راه‌اندازی اولیه
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  if (!window.db) {
+    console.error('اتصال به دیتابیس برقرار نشد.');
+    return;
+  }
+  bindEvents();
+  initAllDatePickers();
+});
