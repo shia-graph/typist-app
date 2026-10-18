@@ -755,14 +755,33 @@ window.saveTypistRecord = async function() {
 };
 
 // ==========================================================================
-// ۹. راه‌اندازی پس از بارگذاری DOM و حفظ نشست ورود
+// ۹. راه‌اندازی قطعی پس از بارگذاری صفحه
 // ==========================================================================
-document.addEventListener('DOMContentLoaded', () => {
+function initAppView() {
     initPersianDatepickers();
-    const adminSess = sessionStorage.getItem('admin_logged') || sessionStorage.getItem('admin_logged_in') || localStorage.getItem('admin_logged');
+
+    const adminSess = sessionStorage.getItem('admin_logged') || 
+                      sessionStorage.getItem('admin_logged_in') || 
+                      localStorage.getItem('admin_logged');
+
+    const typistEntry = document.getElementById('typistEntrySection');
+    const adminDash = document.getElementById('adminDashboardSection');
+    const typistDash = document.getElementById('typistDashboardSection');
+
     if (adminSess === 'true') {
         window.setAdminState(true);
         window.loadTypistsCards();
+    } else {
+        // حتماً مطمئن شو بخش ورود تایپیست مخفی نباشد
+        if (typistEntry) typistEntry.classList.remove('hidden');
+        if (adminDash) adminDash.classList.add('hidden');
+        if (typistDash) typistDash.classList.add('hidden');
     }
     console.log('سامانه مدیریت تایپیست‌ها آماده به کار است.');
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAppView);
+} else {
+    initAppView();
+}
