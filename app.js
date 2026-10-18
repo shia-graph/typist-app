@@ -2,17 +2,16 @@
 // ۱. تنظیمات اتصال و تعریف کلاینت دیتابیس Supabase
 // ==========================================================================
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
+const SUPABASE_KEY = 'GAPGPTMASKTOKENflp885hy79bX0X';
 
-// تابع دریافت یا ساخت کلاینت مطمئن
-function getDb() {
-    if (window.db && window.db.from) return window.db;
-    
-    const clientCreator = (window.supabase && window.supabase.createClient) 
-                          || (typeof supabase !== 'undefined' && supabase.createClient);
-                          
-    if (clientCreator) {
-        const client = clientCreator(SUPABASE_URL, SUPABASE_KEY);
+// تابع دریافت یا ایجاد مطمئن کلاینت جهت جلوگیری از خطای اتصال
+function getDbClient() {
+    if (window.db && typeof window.db.from === 'function') {
+        return window.db;
+    }
+    const supabaseLib = window.supabase || (typeof supabase !== 'undefined' ? supabase : null);
+    if (supabaseLib && typeof supabaseLib.createClient === 'function') {
+        const client = supabaseLib.createClient(SUPABASE_URL, SUPABASE_KEY);
         window.db = client;
         window.client = client;
         window.supabaseClient = client;
@@ -21,10 +20,11 @@ function getDb() {
     return null;
 }
 
-// مقداردهی اولیه
-const db = getDb();
-window.getDb = getDb;
-
+// تلاش اولیه برای مقداردهی
+let db = getDbClient();
+window.db = db;
+window.client = db;
+window.supabaseClient = db;
 
 // متغیرهای وضعیت
 let currentAdminLoggedIn = false;
@@ -32,11 +32,10 @@ let currentTypistUser = null;
 let selectedTypistIdForAdmin = null;
 
 // ==========================================================================
-// ۲. توابع عمومی و تبدیل امن مقادیر (حل ریشه‌ای مشکل ارقام فارسی و NaN)
+// ۲. توابع عمومی و تبدیل امن مقادیر (حل قطعی مقادیر NaN و ارقام فارسی)
 // ==========================================================================
 function safeNumber(val) {
     if (val === null || val === undefined) return 0;
-    // تبدیل هوشمند ارقام فارسی و عربی به انگلیسی و حذف فاصله‌ها و ویرگول‌ها
     const enVal = String(val)
         .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
         .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
@@ -53,7 +52,7 @@ function formatToman(val) {
 window.formatToman = formatToman;
 
 function initPersianDatepickers() {
-    if (window.$ && $.fn.persianDatepicker) {
+    if (window.$ && $.fn && $.fn.persianDatepicker) {
         $('.pdate-field').persianDatepicker({
             format: 'YYYY/MM/DD',
             autoClose: true,
@@ -67,7 +66,7 @@ function initPersianDatepickers() {
 window.initPersianDatepickers = initPersianDatepickers;
 
 // ==========================================================================
-// ۳. احراز هویت تایپیست و ادمین (تعریف مستقیم روی window)
+// ۳. احراز هویت تایپیست و ادمین
 // ==========================================================================
 window.openAdminLoginModal = function() {
     const modal = document.getElementById('adminLoginModal');
@@ -94,14 +93,13 @@ window.submitAdminLogin = async function() {
         return;
     }
 
-    const client = window.db || db;
+    const client = getDbClient();
     if (!client) {
-        alert('خطای اتصال به دیتابیس.');
+        alert('کتابخانه Supabase هنوز لود نشده است!\nلطفاً مطمئن شوید تگ <script src="https://unpkg.com/@supabase/supabase-js@2"></script> در فایل HTML شما قرار دارد.');
         return;
     }
 
     try {
-        // بررسی کاملاً امن سمت سرور بدون نشت رمز
         const { data: isCorrect, error } = await client.rpc('check_admin_pass', {
             entered_pass: enteredPassword
         });
@@ -113,7 +111,6 @@ window.submitAdminLogin = async function() {
         }
 
         if (isCorrect === true) {
-            // یکسان‌سازی کلید نشست تا ادمین بی‌معطلی لود شود
             sessionStorage.setItem('admin_logged', 'true');
             sessionStorage.setItem('admin_logged_in', 'true');
             localStorage.setItem('admin_logged', 'true');
@@ -173,8 +170,14 @@ window.handleTypistLogin = async function() {
         return;
     }
 
+    const client = getDbClient();
+    if (!client) {
+        alert('خطای اتصال به دیتابیس.');
+        return;
+    }
+
     try {
-        const { data, error } = await db
+        const { data, error } = await client
             .from('typists')
             .select('*')
             .eq('national_code', nationalCode)
@@ -222,8 +225,11 @@ window.loadTypistSelfReports = async function() {
     if (!tBody) return;
     tBody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-gray-400">در حال دریافت داده‌ها...</td></tr>';
 
+    const client = getDbClient();
+    if (!client) return;
+
     try {
-        const { data, error } = await db
+        const { data, error } = await client
             .from('typist_reports')
             .select('*')
             .eq('typist_id', currentTypistUser.id)
@@ -282,6 +288,12 @@ window.submitNewReport = async function() {
         return;
     }
 
+    const client = getDbClient();
+    if (!client) {
+        alert('خطای اتصال به دیتابیس.');
+        return;
+    }
+
     const rate = safeNumber(currentTypistUser.rate_per_word);
     const calculatedTotal = words * rate;
 
@@ -300,7 +312,7 @@ window.submitNewReport = async function() {
 
         if (courseTitle) payload.course_title = courseTitle;
 
-        const { error } = await db.from('typist_reports').insert([payload]);
+        const { error } = await client.from('typist_reports').insert([payload]);
 
         if (error) throw error;
 
@@ -323,8 +335,14 @@ window.loadTypistsCards = async function() {
     if (!grid) return;
     grid.innerHTML = '<div class="col-span-full text-center py-8 text-gray-500">در حال واکشی اطلاعات...</div>';
 
+    const client = getDbClient();
+    if (!client) {
+        grid.innerHTML = '<div class="col-span-full text-center py-8 text-red-500">خطای دسترسی به دیتابیس</div>';
+        return;
+    }
+
     try {
-        const { data: typists, error } = await db
+        const { data: typists, error } = await client
             .from('typists')
             .select('*')
             .order('created_at', { ascending: false });
@@ -336,7 +354,7 @@ window.loadTypistsCards = async function() {
             return;
         }
 
-        const { data: unsettledReports } = await db
+        const { data: unsettledReports } = await client
             .from('typist_reports')
             .select('typist_id, words, pages')
             .eq('is_settled', false);
@@ -403,7 +421,10 @@ window.selectTypistForReview = async function(typistId) {
         box.scrollIntoView({ behavior: 'smooth' });
     }
 
-    const { data: typist } = await db.from('typists').select('*').eq('id', typistId).single();
+    const client = getDbClient();
+    if (!client) return;
+
+    const { data: typist } = await client.from('typists').select('*').eq('id', typistId).single();
     if (typist) {
         document.getElementById('selectedTypistHeading').textContent = `گزارش‌های کارکرد: ${typist.name}`;
         document.getElementById('selectedTypistSubText').textContent = `نرخ هر کلمه: ${formatToman(typist.rate_per_word)} تومان | شماره شبا: ${typist.shaba || '-'}`;
@@ -417,8 +438,11 @@ window.loadAdminReportsTable = async function(typistId) {
     if (!tBody) return;
     tBody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-gray-400">در حال بارگذاری...</td></tr>';
 
+    const client = getDbClient();
+    if (!client) return;
+
     try {
-        const { data: reports, error } = await db
+        const { data: reports, error } = await client
             .from('typist_reports')
             .select('*')
             .eq('typist_id', typistId)
@@ -462,8 +486,11 @@ window.loadAdminReportsTable = async function(typistId) {
 
 window.deleteReport = async function(reportId) {
     if (!confirm('آیا از حذف این گزارش مطمئن هستید؟')) return;
+    const client = getDbClient();
+    if (!client) return;
+
     try {
-        await db.from('typist_reports').delete().eq('id', reportId);
+        await client.from('typist_reports').delete().eq('id', reportId);
         window.loadAdminReportsTable(selectedTypistIdForAdmin);
         window.loadTypistsCards();
     } catch (e) {
@@ -480,8 +507,14 @@ window.runSettlement = async function() {
         return;
     }
 
+    const client = getDbClient();
+    if (!client) {
+        alert('خطای اتصال به دیتابیس.');
+        return;
+    }
+
     try {
-        const { data: typist, error: tErr } = await db
+        const { data: typist, error: tErr } = await client
             .from('typists')
             .select('*')
             .eq('id', selectedTypistIdForAdmin)
@@ -498,7 +531,7 @@ window.runSettlement = async function() {
             return;
         }
 
-        const { data: pendingReports, error: rErr } = await db
+        const { data: pendingReports, error: rErr } = await client
             .from('typist_reports')
             .select('*')
             .eq('typist_id', selectedTypistIdForAdmin)
@@ -542,7 +575,7 @@ window.runSettlement = async function() {
 
         if (!confirm(promptText)) return;
 
-        const { error: settleErr } = await db
+        const { error: settleErr } = await client
             .from('typist_reports')
             .update({ is_settled: true })
             .in('id', reportIds);
@@ -550,7 +583,7 @@ window.runSettlement = async function() {
         if (settleErr) throw settleErr;
 
         const todayFa = (window.persianDate) ? new persianDate().format('YYYY/MM/DD') : new Date().toLocaleDateString('fa-IR');
-        await db.from('payments').insert([{
+        await client.from('payments').insert([{
             typist_id: typist.id,
             typist_name: typist.name,
             national_code: typist.national_code,
@@ -577,8 +610,14 @@ window.runSettlement = async function() {
 // ۷. خروجی اکسل دقیق طبق ۵ ستون الزامی با UTF-8 BOM
 // ==========================================================================
 window.exportSettleExcel = async function() {
+    const client = getDbClient();
+    if (!client) {
+        alert('خطای اتصال به دیتابیس.');
+        return;
+    }
+
     try {
-        const { data: payments, error } = await db
+        const { data: payments, error } = await client
             .from('payments')
             .select('*')
             .order('created_at', { ascending: false });
@@ -620,7 +659,7 @@ window.exportSettleExcel = async function() {
 };
 
 // ==========================================================================
-// ۸. ثبت و ویرایش تایپیست و تعریف پروژه جدید
+// ۸. ثبت و ویرایش مشخصات تایپیست
 // ==========================================================================
 window.openNewTypistModal = function() {
     document.getElementById('typistModalTitle').textContent = 'ثبت تایپیست جدید';
@@ -637,8 +676,11 @@ window.openNewTypistModal = function() {
 };
 
 window.openEditTypistModal = async function(typistId) {
+    const client = getDbClient();
+    if (!client) return;
+
     try {
-        const { data: t, error } = await db.from('typists').select('*').eq('id', typistId).single();
+        const { data: t, error } = await client.from('typists').select('*').eq('id', typistId).single();
         if (error || !t) throw error;
 
         document.getElementById('typistModalTitle').textContent = `ویرایش تایپیست: ${t.name}`;
@@ -666,7 +708,7 @@ window.saveTypistRecord = async function() {
     const editId = document.getElementById('editTypistId').value;
     const name = document.getElementById('mName').value.trim();
     const nationalCode = document.getElementById('mNationalCode').value.trim();
-    const phone = document.getElementById('phone').value.trim();
+    const phone = document.getElementById('mPhone').value.trim();
     const shaba = document.getElementById('mShaba').value.trim();
     const rate = safeNumber(document.getElementById('mRate').value);
     const startDate = document.getElementById('mStartDate').value.trim();
@@ -674,6 +716,12 @@ window.saveTypistRecord = async function() {
 
     if (!name || !nationalCode || !phone) {
         alert('نام، کد ملی و شماره همراه الزامی است.');
+        return;
+    }
+
+    const client = getDbClient();
+    if (!client) {
+        alert('خطای دسترسی به دیتابیس.');
         return;
     }
 
@@ -689,12 +737,12 @@ window.saveTypistRecord = async function() {
 
     try {
         if (editId) {
-            const { error } = await db.from('typists').update(payload).eq('id', editId);
+            const { error } = await client.from('typists').update(payload).eq('id', editId);
             if (error) throw error;
             alert('مشخصات تایپیست با موفقیت ویرایش شد.');
         } else {
             payload.created_at = new Date().toISOString();
-            const { error } = await db.from('typists').insert([payload]);
+            const { error } = await client.from('typists').insert([payload]);
             if (error) throw error;
             alert('تایپیست جدید با موفقیت ثبت شد.');
         }
@@ -707,7 +755,7 @@ window.saveTypistRecord = async function() {
 };
 
 // ==========================================================================
-// ۹. راه‌اندازی پس از بارگذاری DOM و حفظ ورود مدیر
+// ۹. راه‌اندازی پس از بارگذاری DOM و حفظ نشست ورود
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
     initPersianDatepickers();
