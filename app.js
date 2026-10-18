@@ -5,16 +5,22 @@ const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
 
+
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Global Application State
 let currentUser = null; // { role: 'admin'|'typist', data: {...} }
 let activeLoginTab = 'typist'; // 'admin' or 'typist'
 let allTypists = [];
-let currentTypistDetail = null; // Currently open typist detail data
+let currentTypistDetail = null;
 let currentTargetInputIdForDate = null;
 let currentReports = [];
 let currentPayments = [];
+
+// Safe DOM Getter
+function getEl(id) {
+  return document.getElementById(id);
+}
 
 // Convert Persian/Arabic digits to English
 function toEnglishDigits(str) {
@@ -47,101 +53,117 @@ function showToast(icon, title) {
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initDatepickerDropdowns();
+  switchLoginTab('typist');
   checkSavedSession();
+  console.log('🚀 Typist Payroll App initialized successfully.');
 });
 
 // Theme Management
 function initTheme() {
   const savedTheme = localStorage.getItem('theme');
+  const themeIcon = getEl('theme-icon');
   if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark');
-    document.getElementById('theme-icon').textContent = '☀️';
+    if (themeIcon) themeIcon.textContent = '☀️';
   } else {
     document.documentElement.classList.remove('dark');
-    document.getElementById('theme-icon').textContent = '🌙';
+    if (themeIcon) themeIcon.textContent = '🌙';
   }
 }
 
 window.toggleDarkMode = function() {
   const isDark = document.documentElement.classList.toggle('dark');
   localStorage.setItem('theme', isDark ? 'dark' : 'light');
-  document.getElementById('theme-icon').textContent = isDark ? '☀️' : '🌙';
+  const themeIcon = getEl('theme-icon');
+  if (themeIcon) themeIcon.textContent = isDark ? '☀️' : '🌙';
 };
 
 // Shamsi Datepicker Logic
 function initDatepickerDropdowns() {
-  const daySelect = document.getElementById('dp-day');
-  const yearSelect = document.getElementById('dp-year');
+  const daySelect = getEl('dp-day');
+  const yearSelect = getEl('dp-year');
 
-  daySelect.innerHTML = '';
-  for (let i = 1; i <= 31; i++) {
-    const val = i < 10 ? '0' + i : String(i);
-    daySelect.innerHTML += `<option value="${val}">${val}</option>`;
+  if (daySelect) {
+    daySelect.innerHTML = '';
+    for (let i = 1; i <= 31; i++) {
+      const val = i < 10 ? '0' + i : String(i);
+      daySelect.innerHTML += `<option value="${val}">${val}</option>`;
+    }
   }
 
-  yearSelect.innerHTML = '';
-  for (let y = 1402; y <= 1410; y++) {
-    yearSelect.innerHTML += `<option value="${y}" ${y === 1403 ? 'selected' : ''}>${y}</option>`;
+  if (yearSelect) {
+    yearSelect.innerHTML = '';
+    for (let y = 1402; y <= 1410; y++) {
+      yearSelect.innerHTML += `<option value="${y}" ${y === 1403 ? 'selected' : ''}>${y}</option>`;
+    }
   }
 }
 
 window.openShamsiDatepicker = function(inputId) {
   currentTargetInputIdForDate = inputId;
-  const existingVal = document.getElementById(inputId).value;
+  const inputEl = getEl(inputId);
+  const existingVal = inputEl ? inputEl.value : '';
   if (existingVal && existingVal.includes('/')) {
     const parts = existingVal.split('/');
     if (parts.length === 3) {
-      document.getElementById('dp-year').value = parts[0];
-      document.getElementById('dp-month').value = parts[1];
-      document.getElementById('dp-day').value = parts[2];
+      if (getEl('dp-year')) getEl('dp-year').value = parts[0];
+      if (getEl('dp-month')) getEl('dp-month').value = parts[1];
+      if (getEl('dp-day')) getEl('dp-day').value = parts[2];
     }
   }
-  document.getElementById('modal-datepicker').classList.remove('hidden');
+  const modal = getEl('modal-datepicker');
+  if (modal) modal.classList.remove('hidden');
 };
 
 window.confirmShamsiDate = function() {
-  const y = document.getElementById('dp-year').value;
-  const m = document.getElementById('dp-month').value;
-  const d = document.getElementById('dp-day').value;
+  const y = getEl('dp-year') ? getEl('dp-year').value : '1403';
+  const m = getEl('dp-month') ? getEl('dp-month').value : '01';
+  const d = getEl('dp-day') ? getEl('dp-day').value : '01';
   const dateStr = `${y}/${m}/${d}`;
   if (currentTargetInputIdForDate) {
-    document.getElementById(currentTargetInputIdForDate).value = dateStr;
+    const targetInput = getEl(currentTargetInputIdForDate);
+    if (targetInput) targetInput.value = dateStr;
   }
   closeModal('modal-datepicker');
 };
 
 // Modal Helper Functions
 window.closeModal = function(modalId) {
-  document.getElementById(modalId).classList.add('hidden');
+  const el = getEl(modalId);
+  if (el) el.classList.add('hidden');
 };
 
-// Login Tab Switching
+// Login Tab Switching (Fully Safe with Null Checks)
 window.switchLoginTab = function(tab) {
   activeLoginTab = tab;
-  const tabAdmin = document.getElementById('tab-login-admin');
-  const tabTypist = document.getElementById('tab-login-typist');
-  const labelId = document.getElementById('label-identifier');
-  const hintPass = document.getElementById('typist-pass-hint');
-  const fieldId = document.getElementById('field-identifier');
+  const tabAdmin = getEl('tab-login-admin');
+  const tabTypist = getEl('tab-login-typist');
+  const labelId = getEl('label-identifier');
+  const hintPass = getEl('typist-pass-hint');
+  const fieldId = getEl('field-identifier');
+
+  const activeClass = 'flex-1 py-2 text-sm font-medium rounded-lg transition bg-white dark:bg-slate-700 text-brand-600 dark:text-white shadow-sm';
+  const inactiveClass = 'flex-1 py-2 text-sm font-medium rounded-lg transition text-slate-700 dark:text-slate-300';
 
   if (tab === 'admin') {
-    tabAdmin.className = 'flex-1 py-2 text-sm font-medium rounded-lg transition bg-white dark:bg-slate-700 text-brand-600 dark:text-white shadow-sm';
-    tabTypist.className = 'flex-1 py-2 text-sm font-medium rounded-lg transition text-slate-700 dark:text-slate-300';
-    fieldId.classList.add('hidden');
-    hintPass.classList.add('hidden');
+    if (tabAdmin) tabAdmin.className = activeClass;
+    if (tabTypist) tabTypist.className = inactiveClass;
+    if (fieldId) fieldId.classList.add('hidden');
+    if (hintPass) hintPass.classList.add('hidden');
   } else {
-    tabTypist.className = 'flex-1 py-2 text-sm font-medium rounded-lg transition bg-white dark:bg-slate-700 text-brand-600 dark:text-white shadow-sm';
-    tabAdmin.className = 'flex-1 py-2 text-sm font-medium rounded-lg transition text-slate-700 dark:text-slate-300';
-    fieldId.classList.remove('hidden');
-    labelId.textContent = 'کد ملی یا شماره همراه';
-    hintPass.classList.remove('hidden');
+    if (tabTypist) tabTypist.className = activeClass;
+    if (tabAdmin) tabAdmin.className = inactiveClass;
+    if (fieldId) fieldId.classList.remove('hidden');
+    if (labelId) labelId.textContent = 'کد ملی یا شماره همراه';
+    if (hintPass) hintPass.classList.remove('hidden');
   }
 };
 
 // Login Action
 window.handleLogin = async function(e) {
   e.preventDefault();
-  const password = toEnglishDigits(document.getElementById('input-password').value).trim();
+  const passEl = getEl('input-password');
+  const password = passEl ? toEnglishDigits(passEl.value).trim() : '';
   
   if (activeLoginTab === 'admin') {
     const { data, error } = await supabase.rpc('verify_admin_password', { p_password: password });
@@ -154,7 +176,8 @@ window.handleLogin = async function(e) {
     showToast('success', 'خوش آمدید، مدیر سیستم');
     renderLayout();
   } else {
-    const identifier = toEnglishDigits(document.getElementById('input-identifier').value).trim();
+    const idEl = getEl('input-identifier');
+    const identifier = idEl ? toEnglishDigits(idEl.value).trim() : '';
     if (!identifier) {
       Swal.fire('هشدار', 'لطفاً کد ملی یا شماره همراه خود را وارد کنید', 'warning');
       return;
@@ -199,42 +222,42 @@ window.handleLogout = function() {
 
 // Render Screen according to Role
 function renderLayout() {
-  const viewLogin = document.getElementById('view-login');
-  const viewAdminDashboard = document.getElementById('view-admin-dashboard');
-  const viewAdminTypistDetail = document.getElementById('view-admin-typist-detail');
-  const viewTypistDashboard = document.getElementById('view-typist-dashboard');
+  const viewLogin = getEl('view-login');
+  const viewAdminDashboard = getEl('view-admin-dashboard');
+  const viewAdminTypistDetail = getEl('view-admin-typist-detail');
+  const viewTypistDashboard = getEl('view-typist-dashboard');
 
-  const btnLogout = document.getElementById('btn-logout');
-  const btnChangePass = document.getElementById('btn-change-pass');
-  const userRoleBadge = document.getElementById('user-role-badge');
+  const btnLogout = getEl('btn-logout');
+  const btnChangePass = getEl('btn-change-pass');
+  const userRoleBadge = getEl('user-role-badge');
 
-  viewLogin.classList.add('hidden');
-  viewAdminDashboard.classList.add('hidden');
-  viewAdminTypistDetail.classList.add('hidden');
-  viewTypistDashboard.classList.add('hidden');
+  if (viewLogin) viewLogin.classList.add('hidden');
+  if (viewAdminDashboard) viewAdminDashboard.classList.add('hidden');
+  if (viewAdminTypistDetail) viewAdminTypistDetail.classList.add('hidden');
+  if (viewTypistDashboard) viewTypistDashboard.classList.add('hidden');
 
   if (!currentUser) {
-    viewLogin.classList.remove('hidden');
-    btnLogout.classList.add('hidden');
-    btnChangePass.classList.add('hidden');
-    userRoleBadge.classList.add('hidden');
+    if (viewLogin) viewLogin.classList.remove('hidden');
+    if (btnLogout) btnLogout.classList.add('hidden');
+    if (btnChangePass) btnChangePass.classList.add('hidden');
+    if (userRoleBadge) userRoleBadge.classList.add('hidden');
   } else {
-    btnLogout.classList.remove('hidden');
-    btnChangePass.classList.remove('hidden');
-    userRoleBadge.classList.remove('hidden');
+    if (btnLogout) btnLogout.classList.remove('hidden');
+    if (btnChangePass) btnChangePass.classList.remove('hidden');
+    if (userRoleBadge) userRoleBadge.classList.remove('hidden');
 
     if (currentUser.role === 'admin') {
-      userRoleBadge.textContent = 'مدیر سیستم';
+      if (userRoleBadge) userRoleBadge.textContent = 'مدیر سیستم';
       if (currentTypistDetail) {
-        viewAdminTypistDetail.classList.remove('hidden');
+        if (viewAdminTypistDetail) viewAdminTypistDetail.classList.remove('hidden');
         renderAdminTypistDetailView();
       } else {
-        viewAdminDashboard.classList.remove('hidden');
+        if (viewAdminDashboard) viewAdminDashboard.classList.remove('hidden');
         loadAdminDashboard();
       }
     } else {
-      userRoleBadge.textContent = 'تایپیست';
-      viewTypistDashboard.classList.remove('hidden');
+      if (userRoleBadge) userRoleBadge.textContent = 'تایپیست';
+      if (viewTypistDashboard) viewTypistDashboard.classList.remove('hidden');
       loadTypistSelfDashboard();
     }
   }
@@ -250,16 +273,17 @@ async function loadAdminDashboard() {
 
   allTypists = data.typists || [];
   
-  document.getElementById('stat-total-typists').textContent = formatMoney(data.summary.total_typists);
-  document.getElementById('stat-total-work').innerHTML = `${formatMoney(data.summary.total_work_price)} <span class="text-xs font-normal">تومان</span>`;
-  document.getElementById('stat-total-paid').innerHTML = `${formatMoney(data.summary.total_payments)} <span class="text-xs font-normal">تومان</span>`;
-  document.getElementById('stat-total-debt').innerHTML = `${formatMoney(data.summary.remaining_balance)} <span class="text-xs font-normal">تومان</span>`;
+  if (getEl('stat-total-typists')) getEl('stat-total-typists').textContent = formatMoney(data.summary.total_typists);
+  if (getEl('stat-total-work')) getEl('stat-total-work').innerHTML = `${formatMoney(data.summary.total_work_price)} <span class="text-xs font-normal">تومان</span>`;
+  if (getEl('stat-total-paid')) getEl('stat-total-paid').innerHTML = `${formatMoney(data.summary.total_payments)} <span class="text-xs font-normal">تومان</span>`;
+  if (getEl('stat-total-debt')) getEl('stat-total-debt').innerHTML = `${formatMoney(data.summary.remaining_balance)} <span class="text-xs font-normal">تومان</span>`;
 
   renderTypistsTable(allTypists);
 }
 
 function renderTypistsTable(typists) {
-  const tbody = document.getElementById('admin-typists-tbody');
+  const tbody = getEl('admin-typists-tbody');
+  if (!tbody) return;
   tbody.innerHTML = '';
 
   if (!typists || typists.length === 0) {
@@ -307,10 +331,11 @@ function renderTypistsTable(typists) {
 }
 
 window.filterTypistsTable = function() {
-  const query = toEnglishDigits(document.getElementById('admin-search').value).toLowerCase();
+  const searchEl = getEl('admin-search');
+  const query = searchEl ? toEnglishDigits(searchEl.value).toLowerCase() : '';
   const filtered = allTypists.filter(t => 
-    t.first_name.toLowerCase().includes(query) ||
-    t.last_name.toLowerCase().includes(query) ||
+    (t.first_name && t.first_name.toLowerCase().includes(query)) ||
+    (t.last_name && t.last_name.toLowerCase().includes(query)) ||
     (t.national_id && t.national_id.includes(query)) ||
     (t.phone && t.phone.includes(query))
   );
@@ -347,79 +372,83 @@ function renderAdminTypistDetailView() {
   currentReports = currentTypistDetail.reports || [];
   currentPayments = currentTypistDetail.payments || [];
 
-  document.getElementById('detail-typist-name').textContent = `${t.first_name} ${t.last_name}`;
-  document.getElementById('detail-typist-national').textContent = t.national_id || '-';
-  document.getElementById('detail-typist-father').textContent = t.father_name || '-';
-  document.getElementById('detail-typist-phone').textContent = t.phone || '-';
-  document.getElementById('detail-typist-card').textContent = t.card_number || '-';
-  document.getElementById('detail-typist-iban').textContent = t.iban ? `IR-${t.iban}` : 'IR-';
-  document.getElementById('detail-typist-rate').textContent = `${formatMoney(t.rate_per_page)} تومان`;
+  if (getEl('detail-typist-name')) getEl('detail-typist-name').textContent = `${t.first_name} ${t.last_name}`;
+  if (getEl('detail-typist-national')) getEl('detail-typist-national').textContent = t.national_id || '-';
+  if (getEl('detail-typist-father')) getEl('detail-typist-father').textContent = t.father_name || '-';
+  if (getEl('detail-typist-phone')) getEl('detail-typist-phone').textContent = t.phone || '-';
+  if (getEl('detail-typist-card')) getEl('detail-typist-card').textContent = t.card_number || '-';
+  if (getEl('detail-typist-iban')) getEl('detail-typist-iban').textContent = t.iban ? `IR-${t.iban}` : 'IR-';
+  if (getEl('detail-typist-rate')) getEl('detail-typist-rate').textContent = `${formatMoney(t.rate_per_page)} تومان`;
 
-  document.getElementById('detail-btn-call').href = `tel:${t.phone}`;
-  document.getElementById('detail-btn-sms').href = `sms:${t.phone}`;
+  if (getEl('detail-btn-call')) getEl('detail-btn-call').href = `tel:${t.phone}`;
+  if (getEl('detail-btn-sms')) getEl('detail-btn-sms').href = `sms:${t.phone}`;
 
   // Calculate Aggregates
   const totalWork = currentReports.reduce((acc, r) => acc + (Number(r.total_price) || 0), 0);
   const totalPaid = currentPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
   const balance = totalWork - totalPaid;
 
-  document.getElementById('detail-total-work').textContent = `${formatMoney(totalWork)} تومان`;
-  document.getElementById('detail-total-paid').textContent = `${formatMoney(totalPaid)} تومان`;
-  document.getElementById('detail-total-balance').textContent = `${formatMoney(balance)} تومان`;
+  if (getEl('detail-total-work')) getEl('detail-total-work').textContent = `${formatMoney(totalWork)} تومان`;
+  if (getEl('detail-total-paid')) getEl('detail-total-paid').textContent = `${formatMoney(totalPaid)} تومان`;
+  if (getEl('detail-total-balance')) getEl('detail-total-balance').textContent = `${formatMoney(balance)} تومان`;
 
   // Render Work Reports Table
-  const repTbody = document.getElementById('detail-reports-tbody');
-  repTbody.innerHTML = '';
-  if (currentReports.length === 0) {
-    repTbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400">هیچ گزارش کاری ثبت نشده است</td></tr>`;
-  } else {
-    currentReports.forEach(r => {
-      const tr = document.createElement('tr');
-      tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800/50 transition';
-      tr.innerHTML = `
-        <td class="p-3 font-medium text-slate-900 dark:text-white">${r.title}</td>
-        <td class="p-3 font-mono">${formatMoney(r.page_count)}</td>
-        <td class="p-3 text-slate-600 dark:text-slate-400">${formatMoney(r.rate_per_page)} تومان</td>
-        <td class="p-3 font-semibold text-brand-600 dark:text-brand-400">${formatMoney(r.total_price)} تومان</td>
-        <td class="p-3 font-mono text-slate-600 dark:text-slate-400">${r.delivery_date || '-'}</td>
-        <td class="p-3">
-          <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-            ${r.status || 'تایید شده'}
-          </span>
-        </td>
-        <td class="p-3 text-center">
-          <div class="flex items-center justify-center gap-1">
-            <button onclick="openEditReportModal('${r.id}')" class="p-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded hover:bg-amber-100" title="ویرایش">✏️</button>
-            <button onclick="deleteReport('${r.id}')" class="p-1.5 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 rounded hover:bg-rose-100" title="حذف">🗑️</button>
-          </div>
-        </td>
-      `;
-      repTbody.appendChild(tr);
-    });
+  const repTbody = getEl('detail-reports-tbody');
+  if (repTbody) {
+    repTbody.innerHTML = '';
+    if (currentReports.length === 0) {
+      repTbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400">هیچ گزارش کاری ثبت نشده است</td></tr>`;
+    } else {
+      currentReports.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800/50 transition';
+        tr.innerHTML = `
+          <td class="p-3 font-medium text-slate-900 dark:text-white">${r.title}</td>
+          <td class="p-3 font-mono">${formatMoney(r.page_count)}</td>
+          <td class="p-3 text-slate-600 dark:text-slate-400">${formatMoney(r.rate_per_page)} تومان</td>
+          <td class="p-3 font-semibold text-brand-600 dark:text-brand-400">${formatMoney(r.total_price)} تومان</td>
+          <td class="p-3 font-mono text-slate-600 dark:text-slate-400">${r.delivery_date || '-'}</td>
+          <td class="p-3">
+            <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+              ${r.status || 'تایید شده'}
+            </span>
+          </td>
+          <td class="p-3 text-center">
+            <div class="flex items-center justify-center gap-1">
+              <button onclick="openEditReportModal('${r.id}')" class="p-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded hover:bg-amber-100" title="ویرایش">✏️</button>
+              <button onclick="deleteReport('${r.id}')" class="p-1.5 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 rounded hover:bg-rose-100" title="حذف">🗑️</button>
+            </div>
+          </td>
+        `;
+        repTbody.appendChild(tr);
+      });
+    }
   }
 
   // Render Payments Table
-  const payTbody = document.getElementById('detail-payments-tbody');
-  payTbody.innerHTML = '';
-  if (currentPayments.length === 0) {
-    payTbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">هیچ پرداختی ثبت نشده است</td></tr>`;
-  } else {
-    currentPayments.forEach(p => {
-      const tr = document.createElement('tr');
-      tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800/50 transition';
-      tr.innerHTML = `
-        <td class="p-3 font-bold text-emerald-600 dark:text-emerald-400">${formatMoney(p.amount)} تومان</td>
-        <td class="p-3 font-mono text-slate-600 dark:text-slate-400">${p.payment_date}</td>
-        <td class="p-3 text-slate-600 dark:text-slate-400">${p.description || '-'}</td>
-        <td class="p-3 text-center">
-          <div class="flex items-center justify-center gap-1">
-            <button onclick="openEditPaymentModal('${p.id}')" class="p-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded hover:bg-amber-100" title="ویرایش">✏️</button>
-            <button onclick="deletePayment('${p.id}')" class="p-1.5 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 rounded hover:bg-rose-100" title="حذف">🗑️</button>
-          </div>
-        </td>
-      `;
-      payTbody.appendChild(tr);
-    });
+  const payTbody = getEl('detail-payments-tbody');
+  if (payTbody) {
+    payTbody.innerHTML = '';
+    if (currentPayments.length === 0) {
+      payTbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">هیچ پرداختی ثبت نشده است</td></tr>`;
+    } else {
+      currentPayments.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800/50 transition';
+        tr.innerHTML = `
+          <td class="p-3 font-bold text-emerald-600 dark:text-emerald-400">${formatMoney(p.amount)} تومان</td>
+          <td class="p-3 font-mono text-slate-600 dark:text-slate-400">${p.payment_date}</td>
+          <td class="p-3 text-slate-600 dark:text-slate-400">${p.description || '-'}</td>
+          <td class="p-3 text-center">
+            <div class="flex items-center justify-center gap-1">
+              <button onclick="openEditPaymentModal('${p.id}')" class="p-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded hover:bg-amber-100" title="ویرایش">✏️</button>
+              <button onclick="deletePayment('${p.id}')" class="p-1.5 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 rounded hover:bg-rose-100" title="حذف">🗑️</button>
+            </div>
+          </td>
+        `;
+        payTbody.appendChild(tr);
+      });
+    }
   }
 }
 
@@ -438,79 +467,83 @@ async function loadTypistSelfDashboard() {
   currentReports = data.reports || [];
   currentPayments = data.payments || [];
 
-  document.getElementById('typist-self-name').textContent = `${t.first_name} ${t.last_name}`;
+  if (getEl('typist-self-name')) getEl('typist-self-name').textContent = `${t.first_name} ${t.last_name}`;
 
   const totalWork = currentReports.reduce((acc, r) => acc + (Number(r.total_price) || 0), 0);
   const totalPaid = currentPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
   const balance = totalWork - totalPaid;
 
-  document.getElementById('typist-self-total-work').textContent = `${formatMoney(totalWork)} تومان`;
-  document.getElementById('typist-self-total-paid').textContent = `${formatMoney(totalPaid)} تومان`;
-  document.getElementById('typist-self-total-balance').textContent = `${formatMoney(balance)} تومان`;
+  if (getEl('typist-self-total-work')) getEl('typist-self-total-work').textContent = `${formatMoney(totalWork)} تومان`;
+  if (getEl('typist-self-total-paid')) getEl('typist-self-total-paid').textContent = `${formatMoney(totalPaid)} تومان`;
+  if (getEl('typist-self-total-balance')) getEl('typist-self-total-balance').textContent = `${formatMoney(balance)} تومان`;
 
   // Render Self Reports Table (NO RATES SHOWN)
-  const tbody = document.getElementById('typist-self-reports-tbody');
-  tbody.innerHTML = '';
+  const tbody = getEl('typist-self-reports-tbody');
+  if (tbody) {
+    tbody.innerHTML = '';
 
-  if (currentReports.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">هیچ گزارش کاری ثبت نشده است</td></tr>`;
-  } else {
-    currentReports.forEach(r => {
-      const tr = document.createElement('tr');
-      tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800/50 transition';
-      tr.innerHTML = `
-        <td class="p-3 font-medium text-slate-900 dark:text-white">${r.title}</td>
-        <td class="p-3 font-mono">${formatMoney(r.page_count)}</td>
-        <td class="p-3 font-mono text-slate-600 dark:text-slate-400">${r.delivery_date || '-'}</td>
-        <td class="p-3">
-          <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-            ${r.status || 'در انتظار تایید'}
-          </span>
-        </td>
-        <td class="p-3 text-center">
-          <div class="flex items-center justify-center gap-1">
-            <button onclick="openEditReportModal('${r.id}')" class="p-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded hover:bg-amber-100" title="ویرایش">✏️</button>
-            <button onclick="deleteReport('${r.id}')" class="p-1.5 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 rounded hover:bg-rose-100" title="حذف">🗑️</button>
-          </div>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
+    if (currentReports.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">هیچ گزارش کاری ثبت نشده است</td></tr>`;
+    } else {
+      currentReports.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800/50 transition';
+        tr.innerHTML = `
+          <td class="p-3 font-medium text-slate-900 dark:text-white">${r.title}</td>
+          <td class="p-3 font-mono">${formatMoney(r.page_count)}</td>
+          <td class="p-3 font-mono text-slate-600 dark:text-slate-400">${r.delivery_date || '-'}</td>
+          <td class="p-3">
+            <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+              ${r.status || 'در انتظار تایید'}
+            </span>
+          </td>
+          <td class="p-3 text-center">
+            <div class="flex items-center justify-center gap-1">
+              <button onclick="openEditReportModal('${r.id}')" class="p-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded hover:bg-amber-100" title="ویرایش">✏️</button>
+              <button onclick="deleteReport('${r.id}')" class="p-1.5 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 rounded hover:bg-rose-100" title="حذف">🗑️</button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
   }
 }
 
 // TYPIST CRUD (Admin View & Edit Profile)
 window.openAddTypistModal = function() {
-  document.getElementById('modal-typist-title').textContent = 'ثبت تایپیست جدید';
-  document.getElementById('form-typist-id').value = '';
-  document.getElementById('form-typist-first-name').value = '';
-  document.getElementById('form-typist-last-name').value = '';
-  document.getElementById('form-typist-father-name').value = '';
-  document.getElementById('form-typist-national-id').value = '';
-  document.getElementById('form-typist-phone').value = '';
-  document.getElementById('form-typist-rate').value = '';
-  document.getElementById('form-typist-card').value = '';
-  document.getElementById('form-typist-iban').value = '';
+  if (getEl('modal-typist-title')) getEl('modal-typist-title').textContent = 'ثبت تایپیست جدید';
+  if (getEl('form-typist-id')) getEl('form-typist-id').value = '';
+  if (getEl('form-typist-first-name')) getEl('form-typist-first-name').value = '';
+  if (getEl('form-typist-last-name')) getEl('form-typist-last-name').value = '';
+  if (getEl('form-typist-father-name')) getEl('form-typist-father-name').value = '';
+  if (getEl('form-typist-national-id')) getEl('form-typist-national-id').value = '';
+  if (getEl('form-typist-phone')) getEl('form-typist-phone').value = '';
+  if (getEl('form-typist-rate')) getEl('form-typist-rate').value = '';
+  if (getEl('form-typist-card')) getEl('form-typist-card').value = '';
+  if (getEl('form-typist-iban')) getEl('form-typist-iban').value = '';
 
-  document.getElementById('modal-typist').classList.remove('hidden');
+  const modal = getEl('modal-typist');
+  if (modal) modal.classList.remove('hidden');
 };
 
 window.openEditTypistModal = function(id) {
   const t = allTypists.find(x => x.id === id);
   if (!t) return;
 
-  document.getElementById('modal-typist-title').textContent = 'ویرایش مشخصات تایپیست';
-  document.getElementById('form-typist-id').value = t.id;
-  document.getElementById('form-typist-first-name').value = t.first_name || '';
-  document.getElementById('form-typist-last-name').value = t.last_name || '';
-  document.getElementById('form-typist-father-name').value = t.father_name || '';
-  document.getElementById('form-typist-national-id').value = t.national_id || '';
-  document.getElementById('form-typist-phone').value = t.phone || '';
-  document.getElementById('form-typist-rate').value = t.rate_per_page || 0;
-  document.getElementById('form-typist-card').value = t.card_number || '';
-  document.getElementById('form-typist-iban').value = t.iban || '';
+  if (getEl('modal-typist-title')) getEl('modal-typist-title').textContent = 'ویرایش مشخصات تایپیست';
+  if (getEl('form-typist-id')) getEl('form-typist-id').value = t.id;
+  if (getEl('form-typist-first-name')) getEl('form-typist-first-name').value = t.first_name || '';
+  if (getEl('form-typist-last-name')) getEl('form-typist-last-name').value = t.last_name || '';
+  if (getEl('form-typist-father-name')) getEl('form-typist-father-name').value = t.father_name || '';
+  if (getEl('form-typist-national-id')) getEl('form-typist-national-id').value = t.national_id || '';
+  if (getEl('form-typist-phone')) getEl('form-typist-phone').value = t.phone || '';
+  if (getEl('form-typist-rate')) getEl('form-typist-rate').value = t.rate_per_page || 0;
+  if (getEl('form-typist-card')) getEl('form-typist-card').value = t.card_number || '';
+  if (getEl('form-typist-iban')) getEl('form-typist-iban').value = t.iban || '';
 
-  document.getElementById('modal-typist').classList.remove('hidden');
+  const modal = getEl('modal-typist');
+  if (modal) modal.classList.remove('hidden');
 };
 
 window.openEditTypistFromDetail = function() {
@@ -521,15 +554,15 @@ window.openEditTypistFromDetail = function() {
 
 window.saveTypist = async function(e) {
   e.preventDefault();
-  const id = document.getElementById('form-typist-id').value || null;
-  const firstName = document.getElementById('form-typist-first-name').value.trim();
-  const lastName = document.getElementById('form-typist-last-name').value.trim();
-  const fatherName = document.getElementById('form-typist-father-name').value.trim();
-  const nationalId = toEnglishDigits(document.getElementById('form-typist-national-id').value).trim();
-  const phone = toEnglishDigits(document.getElementById('form-typist-phone').value).trim();
-  const rate = Number(toEnglishDigits(document.getElementById('form-typist-rate').value)) || 0;
-  const card = toEnglishDigits(document.getElementById('form-typist-card').value).trim();
-  const iban = toEnglishDigits(document.getElementById('form-typist-iban').value).replace('IR', '').trim();
+  const id = getEl('form-typist-id')?.value || null;
+  const firstName = getEl('form-typist-first-name')?.value.trim() || '';
+  const lastName = getEl('form-typist-last-name')?.value.trim() || '';
+  const fatherName = getEl('form-typist-father-name')?.value.trim() || '';
+  const nationalId = toEnglishDigits(getEl('form-typist-national-id')?.value || '').trim();
+  const phone = toEnglishDigits(getEl('form-typist-phone')?.value || '').trim();
+  const rate = Number(toEnglishDigits(getEl('form-typist-rate')?.value || '0')) || 0;
+  const card = toEnglishDigits(getEl('form-typist-card')?.value || '').trim();
+  const iban = toEnglishDigits(getEl('form-typist-iban')?.value || '').replace('IR', '').trim();
 
   const { data, error } = await supabase.rpc('upsert_typist', {
     p_id: id,
@@ -563,25 +596,26 @@ window.openSelfProfileModal = function() {
   if (!currentUser || currentUser.role !== 'typist') return;
   const t = currentUser.data;
 
-  document.getElementById('self-first-name').value = t.first_name || '';
-  document.getElementById('self-last-name').value = t.last_name || '';
-  document.getElementById('self-father-name').value = t.father_name || '';
-  document.getElementById('self-national-id').value = t.national_id || '';
-  document.getElementById('self-card').value = t.card_number || '';
-  document.getElementById('self-iban').value = t.iban || '';
+  if (getEl('self-first-name')) getEl('self-first-name').value = t.first_name || '';
+  if (getEl('self-last-name')) getEl('self-last-name').value = t.last_name || '';
+  if (getEl('self-father-name')) getEl('self-father-name').value = t.father_name || '';
+  if (getEl('self-national-id')) getEl('self-national-id').value = t.national_id || '';
+  if (getEl('self-card')) getEl('self-card').value = t.card_number || '';
+  if (getEl('self-iban')) getEl('self-iban').value = t.iban || '';
 
-  document.getElementById('modal-self-profile').classList.remove('hidden');
+  const modal = getEl('modal-self-profile');
+  if (modal) modal.classList.remove('hidden');
 };
 
 window.saveSelfProfile = async function(e) {
   e.preventDefault();
   const t = currentUser.data;
-  const firstName = document.getElementById('self-first-name').value.trim();
-  const lastName = document.getElementById('self-last-name').value.trim();
-  const fatherName = document.getElementById('self-father-name').value.trim();
-  const nationalId = toEnglishDigits(document.getElementById('self-national-id').value).trim();
-  const card = toEnglishDigits(document.getElementById('self-card').value).trim();
-  const iban = toEnglishDigits(document.getElementById('self-iban').value).replace('IR', '').trim();
+  const firstName = getEl('self-first-name')?.value.trim() || '';
+  const lastName = getEl('self-last-name')?.value.trim() || '';
+  const fatherName = getEl('self-father-name')?.value.trim() || '';
+  const nationalId = toEnglishDigits(getEl('self-national-id')?.value || '').trim();
+  const card = toEnglishDigits(getEl('self-card')?.value || '').trim();
+  const iban = toEnglishDigits(getEl('self-iban')?.value || '').replace('IR', '').trim();
 
   const { data, error } = await supabase.rpc('upsert_typist', {
     p_id: t.id,
@@ -610,31 +644,34 @@ window.saveSelfProfile = async function(e) {
 
 // REPORT CRUD (ADD & EDIT)
 window.openAddReportModal = function() {
-  document.getElementById('report-title').value = '';
-  document.getElementById('report-page-count').value = '';
-  document.getElementById('report-delivery-date').value = '';
-  document.getElementById('report-rate-override').value = '';
+  if (getEl('report-title')) getEl('report-title').value = '';
+  if (getEl('report-page-count')) getEl('report-page-count').value = '';
+  if (getEl('report-delivery-date')) getEl('report-delivery-date').value = '';
+  if (getEl('report-rate-override')) getEl('report-rate-override').value = '';
 
-  const adminRateContainer = document.getElementById('container-admin-report-rate');
-  if (currentUser.role === 'admin') {
-    adminRateContainer.classList.remove('hidden');
-  } else {
-    adminRateContainer.classList.add('hidden');
+  const adminRateContainer = getEl('container-admin-report-rate');
+  if (adminRateContainer) {
+    if (currentUser && currentUser.role === 'admin') {
+      adminRateContainer.classList.remove('hidden');
+    } else {
+      adminRateContainer.classList.add('hidden');
+    }
   }
 
-  document.getElementById('modal-report').classList.remove('hidden');
+  const modal = getEl('modal-report');
+  if (modal) modal.classList.remove('hidden');
 };
 
 window.saveReport = async function(e) {
   e.preventDefault();
-  const title = document.getElementById('report-title').value.trim();
-  const pageCount = Number(toEnglishDigits(document.getElementById('report-page-count').value));
-  const deliveryDate = document.getElementById('report-delivery-date').value.trim();
+  const title = getEl('report-title')?.value.trim() || '';
+  const pageCount = Number(toEnglishDigits(getEl('report-page-count')?.value || '0'));
+  const deliveryDate = getEl('report-delivery-date')?.value.trim() || '';
 
   let rateOverride = null;
-  if (currentUser.role === 'admin') {
-    const rawRate = document.getElementById('report-rate-override').value;
-    if (rawRate !== '') rateOverride = Number(toEnglishDigits(rawRate));
+  if (currentUser && currentUser.role === 'admin') {
+    const rawRate = getEl('report-rate-override')?.value;
+    if (rawRate && rawRate !== '') rateOverride = Number(toEnglishDigits(rawRate));
   }
 
   const targetTypistId = currentUser.role === 'admin' ? currentTypistDetail.typist.id : currentUser.data.id;
@@ -666,33 +703,36 @@ window.openEditReportModal = function(reportId) {
   const r = currentReports.find(x => x.id === reportId);
   if (!r) return;
 
-  document.getElementById('edit-report-id').value = r.id;
-  document.getElementById('edit-report-title').value = r.title || '';
-  document.getElementById('edit-report-page-count').value = r.page_count || '';
-  document.getElementById('edit-report-delivery-date').value = r.delivery_date || '';
+  if (getEl('edit-report-id')) getEl('edit-report-id').value = r.id;
+  if (getEl('edit-report-title')) getEl('edit-report-title').value = r.title || '';
+  if (getEl('edit-report-page-count')) getEl('edit-report-page-count').value = r.page_count || '';
+  if (getEl('edit-report-delivery-date')) getEl('edit-report-delivery-date').value = r.delivery_date || '';
 
-  const rateContainer = document.getElementById('container-edit-report-rate');
-  if (currentUser.role === 'admin') {
-    rateContainer.classList.remove('hidden');
-    document.getElementById('edit-report-rate').value = r.rate_per_page || 0;
-  } else {
-    rateContainer.classList.add('hidden');
+  const rateContainer = getEl('container-edit-report-rate');
+  if (rateContainer) {
+    if (currentUser && currentUser.role === 'admin') {
+      rateContainer.classList.remove('hidden');
+      if (getEl('edit-report-rate')) getEl('edit-report-rate').value = r.rate_per_page || 0;
+    } else {
+      rateContainer.classList.add('hidden');
+    }
   }
 
-  document.getElementById('modal-edit-report').classList.remove('hidden');
+  const modal = getEl('modal-edit-report');
+  if (modal) modal.classList.remove('hidden');
 };
 
 window.saveEditReport = async function(e) {
   e.preventDefault();
-  const reportId = document.getElementById('edit-report-id').value;
-  const title = document.getElementById('edit-report-title').value.trim();
-  const pageCount = Number(toEnglishDigits(document.getElementById('edit-report-page-count').value));
-  const deliveryDate = document.getElementById('edit-report-delivery-date').value.trim();
+  const reportId = getEl('edit-report-id')?.value;
+  const title = getEl('edit-report-title')?.value.trim() || '';
+  const pageCount = Number(toEnglishDigits(getEl('edit-report-page-count')?.value || '0'));
+  const deliveryDate = getEl('edit-report-delivery-date')?.value.trim() || '';
 
   let rateOverride = null;
-  if (currentUser.role === 'admin') {
-    const rawRate = document.getElementById('edit-report-rate').value;
-    if (rawRate !== '') rateOverride = Number(toEnglishDigits(rawRate));
+  if (currentUser && currentUser.role === 'admin') {
+    const rawRate = getEl('edit-report-rate')?.value;
+    if (rawRate && rawRate !== '') rateOverride = Number(toEnglishDigits(rawRate));
   }
 
   const { data, error } = await supabase.rpc('update_typist_report', {
@@ -746,37 +786,38 @@ window.deleteReport = async function(reportId) {
 
 // PAYMENT CRUD (ADD & EDIT)
 window.openAddPaymentModal = function() {
-  document.getElementById('modal-payment-title').textContent = 'ثبت پرداخت جدید';
-  document.getElementById('payment-id').value = '';
-  document.getElementById('payment-amount').value = '';
-  document.getElementById('payment-date').value = '';
-  document.getElementById('payment-description').value = '';
+  if (getEl('modal-payment-title')) getEl('modal-payment-title').textContent = 'ثبت پرداخت جدید';
+  if (getEl('payment-id')) getEl('payment-id').value = '';
+  if (getEl('payment-amount')) getEl('payment-amount').value = '';
+  if (getEl('payment-date')) getEl('payment-date').value = '';
+  if (getEl('payment-description')) getEl('payment-description').value = '';
 
-  document.getElementById('modal-payment').classList.remove('hidden');
+  const modal = getEl('modal-payment');
+  if (modal) modal.classList.remove('hidden');
 };
 
 window.openEditPaymentModal = function(paymentId) {
   const p = currentPayments.find(x => x.id === paymentId);
   if (!p) return;
 
-  document.getElementById('modal-payment-title').textContent = 'ویرایش پرداخت';
-  document.getElementById('payment-id').value = p.id;
-  document.getElementById('payment-amount').value = p.amount || '';
-  document.getElementById('payment-date').value = p.payment_date || '';
-  document.getElementById('payment-description').value = p.description || '';
+  if (getEl('modal-payment-title')) getEl('modal-payment-title').textContent = 'ویرایش پرداخت';
+  if (getEl('payment-id')) getEl('payment-id').value = p.id;
+  if (getEl('payment-amount')) getEl('payment-amount').value = p.amount || '';
+  if (getEl('payment-date')) getEl('payment-date').value = p.payment_date || '';
+  if (getEl('payment-description')) getEl('payment-description').value = p.description || '';
 
-  document.getElementById('modal-payment').classList.remove('hidden');
+  const modal = getEl('modal-payment');
+  if (modal) modal.classList.remove('hidden');
 };
 
 window.savePayment = async function(e) {
   e.preventDefault();
-  const paymentId = document.getElementById('payment-id').value;
-  const amount = Number(toEnglishDigits(document.getElementById('payment-amount').value));
-  const paymentDate = document.getElementById('payment-date').value.trim();
-  const description = document.getElementById('payment-description').value.trim();
+  const paymentId = getEl('payment-id')?.value;
+  const amount = Number(toEnglishDigits(getEl('payment-amount')?.value || '0'));
+  const paymentDate = getEl('payment-date')?.value.trim() || '';
+  const description = getEl('payment-description')?.value.trim() || '';
 
   if (paymentId) {
-    // Edit existing payment
     const { data, error } = await supabase.rpc('update_payment', {
       p_payment_id: paymentId,
       p_amount: amount,
@@ -790,7 +831,6 @@ window.savePayment = async function(e) {
     }
     showToast('success', 'پرداخت با موفقیت بروزرسانی شد');
   } else {
-    // Create new payment
     const targetTypistId = currentTypistDetail.typist.id;
     const { data, error } = await supabase.rpc('add_payment', {
       p_typist_id: targetTypistId,
@@ -834,17 +874,19 @@ window.deletePayment = async function(paymentId) {
 
 // CHANGE PASSWORD LOGIC
 window.openChangePasswordModal = function() {
-  document.getElementById('pass-current').value = '';
-  document.getElementById('pass-new').value = '';
-  document.getElementById('pass-confirm').value = '';
-  document.getElementById('modal-change-password').classList.remove('hidden');
+  if (getEl('pass-current')) getEl('pass-current').value = '';
+  if (getEl('pass-new')) getEl('pass-new').value = '';
+  if (getEl('pass-confirm')) getEl('pass-confirm').value = '';
+  
+  const modal = getEl('modal-change-password');
+  if (modal) modal.classList.remove('hidden');
 };
 
 window.savePasswordChange = async function(e) {
   e.preventDefault();
-  const currentPass = toEnglishDigits(document.getElementById('pass-current').value).trim();
-  const newPass = toEnglishDigits(document.getElementById('pass-new').value).trim();
-  const confirmPass = toEnglishDigits(document.getElementById('pass-confirm').value).trim();
+  const currentPass = toEnglishDigits(getEl('pass-current')?.value || '').trim();
+  const newPass = toEnglishDigits(getEl('pass-new')?.value || '').trim();
+  const confirmPass = toEnglishDigits(getEl('pass-confirm')?.value || '').trim();
 
   if (newPass !== confirmPass) {
     Swal.fire('خطا', 'رمز عبور جدید و تکرار آن یکسان نیستند', 'error');
@@ -878,7 +920,7 @@ window.savePasswordChange = async function(e) {
   Swal.fire('موفقیت‌آمیز', 'رمز عبور شما با موفقیت تغییر کرد', 'success');
 };
 
-// BANK CSV EXPORT (SELECTED TYPIISTS)
+// BANK CSV EXPORT (SELECTED TYPISTS)
 window.exportSelectedBankCSV = function() {
   const selectedCheckboxes = document.querySelectorAll('.typist-checkbox:checked');
   if (selectedCheckboxes.length === 0) {
@@ -887,7 +929,6 @@ window.exportSelectedBankCSV = function() {
   }
 
   let csvRows = [];
-  // Standard UTF-8 BOM Header for Excel
   csvRows.push(['ردیف', 'نام', 'نام خانوادگی', 'نام پدر', 'کد ملی', 'شماره تماس', 'شماره کارت', 'شماره شبا', 'مبلغ پرداختی به ریال'].join(','));
 
   let count = 1;
@@ -903,7 +944,6 @@ window.exportSelectedBankCSV = function() {
     const iban = cb.getAttribute('data-iban') || '';
     const balanceToman = Number(cb.getAttribute('data-balance')) || 0;
     
-    // Convert Toman to Rial (Toman * 10)
     const amountRial = balanceToman > 0 ? balanceToman * 10 : 0;
 
     csvRows.push([
