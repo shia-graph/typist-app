@@ -6,13 +6,13 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
+const DEFAULT_ADMIN_PASSWORD = '123456';
+
 if (!window.supabase) {
   console.error('Supabase SDK بارگذاری نشده است.');
 } else {
   window.db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
-
-const DEFAULT_ADMIN_PASSWORD = '123456';
 
 // ============================================================
 // ۲. وضعیت
@@ -31,7 +31,8 @@ const state = {
 // ۳. ابزار اعداد
 // ============================================================
 const SafeNum = {
-  parse(val, fallback = 0) {
+  parse(val, fallback) {
+    if (fallback === undefined) fallback = 0;
     if (val === null || val === undefined || val === '') return fallback;
     const cleaned = String(val)
       .replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (d) => String.fromCharCode(d.charCodeAt(0) & 0xf))
@@ -40,13 +41,14 @@ const SafeNum = {
     const num = Number(cleaned);
     return Number.isFinite(num) ? num : fallback;
   },
-  format(val, fallback = '۰') {
+  format(val, fallback) {
+    if (fallback === undefined) fallback = '۰';
     const num = this.parse(val, null);
     if (num === null) return fallback;
     return num.toLocaleString('fa-IR');
   },
   toToman(val) {
-    return `${this.format(val)} تومان`;
+    return this.format(val) + ' تومان';
   },
 };
 
@@ -70,14 +72,16 @@ function toShamsiDate(dateInput) {
   }
 }
 
-// استخراج اجزای شمسی از یک Date
 function getShamsiParts(dateObj) {
   const d = dateObj instanceof Date ? dateObj : new Date(dateObj);
   const safe = Number.isNaN(d.getTime()) ? new Date() : d;
   const parts = new Intl.DateTimeFormat('en-US-u-ca-persian', {
     year: 'numeric', month: '2-digit', day: '2-digit',
   }).formatToParts(safe);
-  const get = (t) => parts.find((p) => p.type === t)?.value;
+  const get = (t) => {
+    const found = parts.find((p) => p.type === t);
+    return found ? found.value : null;
+  };
   return {
     year: parseInt(get('year'), 10),
     month: parseInt(get('month'), 10),
@@ -85,12 +89,10 @@ function getShamsiParts(dateObj) {
   };
 }
 
-// تبدیل شمسی → میلادی (الگوریتم دقیق)
 function shamsiToGregorian(jy, jm, jd) {
   let jy2 = jy - 979;
   let jm2 = jm - 1;
   let jd2 = jd - 1;
-
   let jDayNo =
     365 * jy2 +
     Math.floor(jy2 / 33) * 8 +
@@ -98,12 +100,9 @@ function shamsiToGregorian(jy, jm, jd) {
     78 +
     jd2 +
     (jm2 < 7 ? (jm2 + 1) * 31 : (jm2 + 1) * 30 - 6);
-
   let gDayNo = jDayNo + 79;
-
   let gy = 1600 + 400 * Math.floor(gDayNo / 146097);
   gDayNo = gDayNo % 146097;
-
   let leap = true;
   if (gDayNo >= 36525) {
     gDayNo--;
@@ -112,17 +111,14 @@ function shamsiToGregorian(jy, jm, jd) {
     if (gDayNo >= 365) gDayNo++;
     else leap = false;
   }
-
   gy += 4 * Math.floor(gDayNo / 1461);
   gDayNo %= 1461;
-
   if (gDayNo >= 366) {
     leap = false;
     gDayNo--;
     gy += Math.floor(gDayNo / 365);
     gDayNo = gDayNo % 365;
   }
-
   let gd = gDayNo + 1;
   const gMonthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   let gm = 1;
@@ -134,8 +130,8 @@ function shamsiToGregorian(jy, jm, jd) {
 }
 
 function shamsiToISO(jy, jm, jd) {
-  const { gy, gm, gd } = shamsiToGregorian(jy, jm, jd);
-  return `${gy}-${String(gm).padStart(2, '0')}-${String(gd).padStart(2, '0')}`;
+  const g = shamsiToGregorian(jy, jm, jd);
+  return g.gy + '-' + String(g.gm).padStart(2, '0') + '-' + String(g.gd).padStart(2, '0');
 }
 
 function todayShamsi() {
@@ -152,9 +148,10 @@ function shamsiStringToParts(str) {
 // ============================================================
 // ۵. Toast
 // ============================================================
-function toast(msg, type = 'info') {
+function toast(msg, type) {
+  if (type === undefined) type = 'info';
   const el = document.createElement('div');
-  el.className = `toast toast-${type}`;
+  el.className = 'toast toast-' + type;
   el.textContent = msg;
   el.setAttribute('role', 'status');
   document.body.appendChild(el);
@@ -178,9 +175,11 @@ function buildDatePicker(wrap) {
   const input = wrap.querySelector('input');
   const popup = wrap.querySelector('[data-dp-popup]');
   const trigger = wrap.querySelector('.date-picker-input');
+  if (!input || !popup || !trigger) return;
 
-  let viewYear, viewMonth;
-  const selectedParts = input.value ? shamsiStringToParts(input.value) : null;
+  let selectedParts = input.value ? shamsiStringToParts(input.value) : null;
+  let viewYear;
+  let viewMonth;
 
   function refreshView() {
     if (selectedParts) {
@@ -198,28 +197,29 @@ function buildDatePicker(wrap) {
     const firstDow = getFirstDowOfMonth(viewYear, viewMonth);
     const daysInMonth = getDaysInShamsiMonth(viewYear, viewMonth);
 
-    let html = `
-      <div class="dp-header">
-        <button type="button" data-dp-nav="-1" aria-label="ماه قبل">‹</button>
-        <span class="dp-title">${DP_MONTHS[viewMonth - 1]} ${enToFa(viewYear)}</span>
-        <button type="button" data-dp-nav="1" aria-label="ماه بعد">›</button>
-      </div>
-      <div class="dp-grid">
-        ${DP_DOWS.map((d) => `<div class="dp-dow">${d}</div>`).join('')}
-    `;
+    let html =
+      '<div class="dp-header">' +
+        '<button type="button" data-dp-nav="-1" aria-label="ماه قبل">‹</button>' +
+        '<span class="dp-title">' + DP_MONTHS[viewMonth - 1] + ' ' + enToFa(viewYear) + '</span>' +
+        '<button type="button" data-dp-nav="1" aria-label="ماه بعد">›</button>' +
+      '</div>' +
+      '<div class="dp-grid">' +
+        DP_DOWS.map((d) => '<div class="dp-dow">' + d + '</div>').join('');
 
     for (let i = 0; i < firstDow; i++) {
-      html += `<button type="button" class="dp-day empty" disabled></button>`;
+      html += '<button type="button" class="dp-day empty" disabled></button>';
     }
     for (let d = 1; d <= daysInMonth; d++) {
       const isToday = t.year === viewYear && t.month === viewMonth && t.day === d;
       const isSelected =
         selectedParts && selectedParts.year === viewYear &&
         selectedParts.month === viewMonth && selectedParts.day === d;
-      html += `<button type="button" class="dp-day${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}" data-dp-day="${d}">${enToFa(d)}</button>`;
+      html += '<button type="button" class="dp-day' +
+        (isToday ? ' today' : '') +
+        (isSelected ? ' selected' : '') +
+        '" data-dp-day="' + d + '">' + enToFa(d) + '</button>';
     }
-
-    html += `</div>`;
+    html += '</div>';
     popup.innerHTML = html;
 
     popup.querySelectorAll('[data-dp-nav]').forEach((b) => {
@@ -237,7 +237,10 @@ function buildDatePicker(wrap) {
         e.stopPropagation();
         const day = +b.dataset.dpDay;
         selectedParts = { year: viewYear, month: viewMonth, day };
-        input.value = `${enToFa(viewYear)}/${enToFa(String(viewMonth).padStart(2, '0'))}/${enToFa(String(day).padStart(2, '0'))}`;
+        input.value =
+          enToFa(viewYear) + '/' +
+          enToFa(String(viewMonth).padStart(2, '0')) + '/' +
+          enToFa(String(day).padStart(2, '0'));
         input.dispatchEvent(new Event('change', { bubbles: true }));
         popup.classList.remove('open');
         render();
@@ -250,32 +253,33 @@ function buildDatePicker(wrap) {
     render();
     popup.classList.add('open');
   }
-  function close() { popup.classList.remove('open'); }
+  function close() {
+    popup.classList.remove('open');
+  }
 
   trigger.addEventListener('click', (e) => {
     e.stopPropagation();
-    popup.classList.contains('open') ? close() : open();
+    if (popup.classList.contains('open')) close();
+    else open();
   });
 
   document.addEventListener('click', (e) => {
     if (!wrap.contains(e.target)) close();
   });
 
-  // مقدار اولیه
   if (!input.value) {
     const t = todayShamsi();
-    input.value = `${enToFa(t.year)}/${enToFa(String(t.month).padStart(2, '0'))}/${enToFa(String(t.day).padStart(2, '0'))}`;
+    input.value =
+      enToFa(t.year) + '/' +
+      enToFa(String(t.month).padStart(2, '0')) + '/' +
+      enToFa(String(t.day).padStart(2, '0'));
   }
 }
 
 function getFirstDowOfMonth(jy, jm) {
-  // شمسی: ۱ فروردین معمولاً ...
-  // محاسبه روز هفته اول ماه: با استفاده از Intl روی تاریخ میلادی معادل
-  const { gy, gm, gd } = shamsiToGregorian(jy, jm, 1);
-  const d = new Date(gy, gm - 1, gd);
-  // 0=یکشنبه،1=دوشنبه,...
-  // ما ش=۰، ی=۱، د=۲، س=۳، چ=۴، پ=۵، ج=۶
-  const jsDow = d.getDay(); // 0=Sun
+  const g = shamsiToGregorian(jy, jm, 1);
+  const d = new Date(g.gy, g.gm - 1, g.gd);
+  const jsDow = d.getDay();
   const map = { 0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 0 };
   return map[jsDow];
 }
@@ -283,15 +287,12 @@ function getFirstDowOfMonth(jy, jm) {
 function getDaysInShamsiMonth(jy, jm) {
   if (jm <= 6) return 31;
   if (jm <= 11) return 30;
-  // اسفند: کبیسه؟
-  const { gy } = shamsiToGregorian(jy, 12, 1);
   return isLeapShamsiYear(jy) ? 30 : 29;
 }
 
 function isLeapShamsiYear(jy) {
-  // تقریب دقیق برای سال‌های ۱۳۰۰ تا ۱۵۰۰
   const cyc = jy % 33;
-  return [1, 5, 9, 13, 17, 22, 26, 30].includes(cyc);
+  return [1, 5, 9, 13, 17, 22, 26, 30].indexOf(cyc) !== -1;
 }
 
 function initAllDatePickers() {
@@ -302,36 +303,41 @@ function initAllDatePickers() {
 // ۷. لاگین
 // ============================================================
 function cleanInput(str) {
-  return String(str ?? '').trim();
+  return String(str === undefined || str === null ? '' : str).trim();
 }
 
-function showLoginAlert(msg, type = 'error') {
+function showLoginAlert(msg, type) {
+  if (type === undefined) type = 'error';
   const box = document.getElementById('login-alert');
+  if (!box) return;
   box.textContent = msg;
   box.className = 'login-alert ' + (type === 'success' ? 'success' : 'error');
 }
 
 function hideLoginAlert() {
-  document.getElementById('login-alert').className = 'login-alert hidden';
+  const box = document.getElementById('login-alert');
+  if (box) box.className = 'login-alert hidden';
 }
 
 function setLoading(btn, loading, defaultLabel) {
   btn.disabled = loading;
   btn.innerHTML = loading
     ? '<span class="spinner"></span> در حال بررسی...'
-    : `<span>${defaultLabel}</span>`;
+    : '<span>' + defaultLabel + '</span>';
 }
 
 function switchLoginTab(role) {
   const isAdmin = role === 'admin';
-  const tabs = { admin: document.getElementById('tab-admin'), typist: document.getElementById('tab-typist') };
-  const forms = { admin: document.getElementById('form-admin'), typist: document.getElementById('form-typist') };
+  const tabAdmin = document.getElementById('tab-admin');
+  const tabTypist = document.getElementById('tab-typist');
+  const formAdmin = document.getElementById('form-admin');
+  const formTypist = document.getElementById('form-typist');
+  if (!tabAdmin || !tabTypist || !formAdmin || !formTypist) return;
 
-  Object.entries(tabs).forEach(([k, el]) => {
-    el.classList.toggle('active', k === role);
-  });
-  forms.admin.classList.toggle('hidden', !isAdmin);
-  forms.typist.classList.toggle('hidden', isAdmin);
+  tabAdmin.classList.toggle('active', isAdmin);
+  tabTypist.classList.toggle('active', !isAdmin);
+  formAdmin.classList.toggle('hidden', !isAdmin);
+  formTypist.classList.toggle('hidden', isAdmin);
   hideLoginAlert();
 }
 
@@ -344,14 +350,14 @@ async function handleAdminLogin(e) {
   setLoading(btn, true, 'ورود به پنل مدیریت');
 
   try {
-    const { data, error } = await window.db
+    const res = await window.db
       .from('app_settings')
       .select('value')
       .eq('key', 'admin_password')
       .maybeSingle();
 
-    if (error) throw error;
-    const validPassword = data?.value ?? DEFAULT_ADMIN_PASSWORD;
+    if (res.error) throw res.error;
+    const validPassword = res.data && res.data.value ? res.data.value : DEFAULT_ADMIN_PASSWORD;
 
     if (pass === validPassword) {
       showLoginAlert('ورود موفق! در حال انتقال...', 'success');
@@ -370,7 +376,8 @@ async function handleAdminLogin(e) {
 async function handleTypistLogin(e) {
   e.preventDefault();
   const btn = document.getElementById('btn-typist-submit');
-  const id = cleanInput(document.getElementById('typist-identifier').value).replace(/[۰-۹]/g, (d) => d.charCodeAt(0) - 0x06F0);
+  const id = cleanInput(document.getElementById('typist-identifier').value)
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06F0));
 
   if (!/^09\d{9}$/.test(id) && !/^\d{10}$/.test(id)) {
     showLoginAlert('کد ملی یا شماره همراه معتبر وارد کنید.');
@@ -380,17 +387,17 @@ async function handleTypistLogin(e) {
   setLoading(btn, true, 'ورود به پرتال تایپیست');
 
   try {
-    const { data, error } = await window.db
+    const res = await window.db
       .from('typists')
       .select('id, name, phone, national_id, national_code')
-      .or(`phone.eq.${id},national_id.eq.${id},national_code.eq.${id}`)
+      .or('phone.eq.' + id + ',national_id.eq.' + id + ',national_code.eq.' + id)
       .maybeSingle();
 
-    if (error) throw error;
+    if (res.error) throw res.error;
 
-    if (data) {
-      showLoginAlert(`خوش آمدید، ${data.name}!`, 'success');
-      setTimeout(() => enterPanel('typist', data.id), 600);
+    if (res.data) {
+      showLoginAlert('خوش آمدید، ' + res.data.name + '!', 'success');
+      setTimeout(() => enterPanel('typist', res.data.id), 600);
     } else {
       showLoginAlert('کاربری با این مشخصات یافت نشد!');
     }
@@ -407,24 +414,22 @@ async function handleTypistLogin(e) {
 // ============================================================
 function enterPanel(role, typistId) {
   state.role = role;
-
   document.getElementById('login-screen').classList.add('hidden');
-  const panel = document.getElementById('panel-screen');
-  panel.classList.add('visible');
+  document.getElementById('panel-screen').classList.add('visible');
 
   const userInfo = document.getElementById('user-info');
   userInfo.textContent = role === 'admin' ? 'نقش: مدیر سامانه' : 'نقش: تایپیست';
 
   if (role === 'typist' && typistId) {
     state.typistId = typistId;
-    // مخفی کردن انتخابگر تایپیست برای تایپیست
-    document.getElementById('typist-select').style.display = 'none';
-    document.getElementById('btn-refresh').style.display = 'none';
+    const sel = document.getElementById('typist-select');
+    const refresh = document.getElementById('btn-refresh');
+    if (sel) sel.style.display = 'none';
+    if (refresh) refresh.style.display = 'none';
     selectTypist(typistId);
   } else {
     loadTypistsList();
   }
-
   initAllDatePickers();
 }
 
@@ -447,21 +452,26 @@ function logout() {
 // ============================================================
 async function loadTypistsList() {
   const select = document.getElementById('typist-select');
+  if (!select) return;
   try {
-    const { data, error } = await window.db
+    const res = await window.db
       .from('typists')
       .select('id, name')
       .order('name', { ascending: true });
 
-    if (error) throw error;
+    if (res.error) throw res.error;
+    const data = res.data || [];
 
-    if (!data || data.length === 0) {
+    if (data.length === 0) {
       select.innerHTML = '<option value="">هیچ تایپیستی وجود ندارد</option>';
       return;
     }
 
-    select.innerHTML = '<option value="">-- انتخاب تایپیست --</option>' +
-      data.map((t) => `<option value="${t.id}">${t.name || 'بدون نام'}</option>`).join('');
+    let html = '<option value="">-- انتخاب تایپیست --</option>';
+    data.forEach((t) => {
+      html += '<option value="' + t.id + '">' + (t.name || 'بدون نام') + '</option>';
+    });
+    select.innerHTML = html;
 
     select.value = data[0].id;
     selectTypist(data[0].id);
@@ -479,9 +489,9 @@ async function selectTypist(typistId) {
   state.typistId = typistId;
 
   try {
-    const { data: typist, error: tErr } = await window.db
-      .from('typists').select('*').eq('id', typistId).single();
-    if (tErr) throw tErr;
+    const tRes = await window.db.from('typists').select('*').eq('id', typistId).single();
+    if (tRes.error) throw tRes.error;
+    const typist = tRes.data;
     state.typist = typist;
 
     document.getElementById('profile-name').textContent = typist.name || 'نامشخص';
@@ -489,21 +499,25 @@ async function selectTypist(typistId) {
       typist.national_id || typist.national_code || '---';
     document.getElementById('profile-phone').textContent = typist.phone || '---';
 
-    const rate = typist.rate_per_word ?? typist.default_word_rate ?? 0;
+    const rate = typist.rate_per_word || typist.default_word_rate || 0;
     document.getElementById('profile-default-rate').textContent = SafeNum.toToman(rate);
     document.getElementById('inp-rate').value = rate;
 
-    const { data: reports, error: rErr } = await window.db
-      .from('typist_reports').select('*').eq('typist_id', typistId)
+    const rRes = await window.db
+      .from('typist_reports')
+      .select('*')
+      .eq('typist_id', typistId)
       .order('created_at', { ascending: false });
-    if (rErr) throw rErr;
-    state.reports = (reports || []).map((r) => normalizeReport(r, typist));
+    if (rRes.error) throw rRes.error;
+    state.reports = (rRes.data || []).map((r) => normalizeReport(r, typist));
 
-    const { data: payments, error: pErr } = await window.db
-      .from('payments').select('*').eq('person_id', typistId)
+    const pRes = await window.db
+      .from('payments')
+      .select('*')
+      .eq('person_id', typistId)
       .order('payment_date', { ascending: false });
-    if (pErr) throw pErr;
-    state.payments = payments || [];
+    if (pRes.error) throw pRes.error;
+    state.payments = pRes.data || [];
 
     renderReports();
     renderPayments();
@@ -514,17 +528,19 @@ async function selectTypist(typistId) {
   }
 }
 
-function normalizeReport(row, typist = {}) {
+function normalizeReport(row, typist) {
+  if (!typist) typist = {};
   const words = SafeNum.parse(row.words, 0);
   const pages = SafeNum.parse(row.pages, 0);
-  const rate = SafeNum.parse(row.rate_per_word ?? row.rate ?? typist.rate_per_word ?? 0, 0);
+  const rate = SafeNum.parse(row.rate_per_word || row.rate || typist.rate_per_word || 0, 0);
   let total = SafeNum.parse(row.total_amount, 0);
   if (!total && words && rate) total = words * rate;
   return {
     id: row.id,
     typist_id: row.typist_id,
-    period: row.period ?? row.period_number ?? 1,
-    words, pages,
+    period: row.period || row.period_number || 1,
+    words: words,
+    pages: pages,
     rate_per_word: rate,
     total_amount: total,
     description: row.description || 'بدون توضیحات',
@@ -539,32 +555,37 @@ function normalizeReport(row, typist = {}) {
 // ============================================================
 function renderReports() {
   const tbody = document.getElementById('typist-reports-tbody');
-  document.getElementById('reports-count-badge').textContent = `${SafeNum.format(state.reports.length)} ردیف`;
+  const badge = document.getElementById('reports-count-badge');
+  if (badge) badge.textContent = SafeNum.format(state.reports.length) + ' ردیف';
 
   if (!state.reports.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="10">هیچ گزارشی ثبت نشده است.</td></tr>`;
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="10">هیچ گزارشی ثبت نشده است.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = state.reports.map((r, i) => `
-    <tr>
-      <td style="color:#94a3b8;font-family:monospace;">${SafeNum.format(i + 1)}</td>
-      <td style="font-weight:600;white-space:nowrap;">${r.shamsi_date}</td>
-      <td><span class="pill pill-indigo">دوره ${SafeNum.format(r.period)}</span></td>
-      <td>${SafeNum.format(r.pages)}</td>
-      <td style="font-weight:800;color:#4338ca;">${SafeNum.format(r.words)}</td>
-      <td>${SafeNum.format(r.rate_per_word)}</td>
-      <td class="amount">${SafeNum.toToman(r.total_amount)}</td>
-      <td>${r.is_settled ? '<span class="pill pill-green">تسویه شده</span>' : '<span class="pill pill-amber">در انتظار</span>'}</td>
-      <td class="desc-cell" title="${r.description}">${r.description}</td>
-      <td>
-        <div class="row" style="justify-content:center;">
-          <button class="btn btn-outline btn-sm" data-edit-report="${r.id}">✏️</button>
-          <button class="btn btn-danger btn-sm" data-delete-report="${r.id}">🗑</button>
-        </div>
-      </td>
-    </tr>
-  `).join('');
+  let html = '';
+  state.reports.forEach((r, i) => {
+    html += '<tr>' +
+      '<td style="color:#94a3b8;font-family:monospace;">' + SafeNum.format(i + 1) + '</td>' +
+      '<td style="font-weight:600;white-space:nowrap;">' + r.shamsi_date + '</td>' +
+      '<td><span class="pill pill-indigo">دوره ' + SafeNum.format(r.period) + '</span></td>' +
+      '<td>' + SafeNum.format(r.pages) + '</td>' +
+      '<td style="font-weight:800;color:#4338ca;">' + SafeNum.format(r.words) + '</td>' +
+      '<td>' + SafeNum.format(r.rate_per_word) + '</td>' +
+      '<td class="amount">' + SafeNum.toToman(r.total_amount) + '</td>' +
+      '<td>' + (r.is_settled
+        ? '<span class="pill pill-green">تسویه شده</span>'
+        : '<span class="pill pill-amber">در انتظار</span>') + '</td>' +
+      '<td class="desc-cell" title="' + r.description + '">' + r.description + '</td>' +
+      '<td>' +
+        '<div class="row" style="justify-content:center;">' +
+          '<button class="btn btn-outline btn-sm" data-edit-report="' + r.id + '">✏️</button>' +
+          '<button class="btn btn-danger btn-sm" data-delete-report="' + r.id + '">🗑</button>' +
+        '</div>' +
+      '</td>' +
+    '</tr>';
+  });
+  tbody.innerHTML = html;
 
   tbody.querySelectorAll('[data-edit-report]').forEach((b) => {
     b.addEventListener('click', () => openEditReport(b.dataset.editReport));
@@ -578,26 +599,28 @@ function renderPayments() {
   const tbody = document.getElementById('payments-tbody');
 
   if (!state.payments.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">هیچ پرداختی ثبت نشده است.</td></tr>`;
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">هیچ پرداختی ثبت نشده است.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = state.payments.map((p, i) => `
-    <tr>
-      <td style="color:#94a3b8;font-family:monospace;">${SafeNum.format(i + 1)}</td>
-      <td style="font-weight:600;">${toShamsiDate(p.payment_date)}</td>
-      <td class="amount">${SafeNum.toToman(p.amount)}</td>
-      <td>${p.method || '---'}</td>
-      <td style="font-family:monospace;font-size:.75rem;color:#64748b;">${p.tracking_code || '---'}</td>
-      <td class="desc-cell">${p.description || '---'}</td>
-      <td>
-        <div class="row" style="justify-content:center;">
-          <button class="btn btn-outline btn-sm" data-edit-payment="${p.id}">✏️</button>
-          <button class="btn btn-danger btn-sm" data-delete-payment="${p.id}">🗑</button>
-        </div>
-      </td>
-    </tr>
-  `).join('');
+  let html = '';
+  state.payments.forEach((p, i) => {
+    html += '<tr>' +
+      '<td style="color:#94a3b8;font-family:monospace;">' + SafeNum.format(i + 1) + '</td>' +
+      '<td style="font-weight:600;">' + toShamsiDate(p.payment_date) + '</td>' +
+      '<td class="amount">' + SafeNum.toToman(p.amount) + '</td>' +
+      '<td>' + (p.method || '---') + '</td>' +
+      '<td style="font-family:monospace;font-size:.75rem;color:#64748b;">' + (p.tracking_code || '---') + '</td>' +
+      '<td class="desc-cell">' + (p.description || '---') + '</td>' +
+      '<td>' +
+        '<div class="row" style="justify-content:center;">' +
+          '<button class="btn btn-outline btn-sm" data-edit-payment="' + p.id + '">✏️</button>' +
+          '<button class="btn btn-danger btn-sm" data-delete-payment="' + p.id + '">🗑</button>' +
+        '</div>' +
+      '</td>' +
+    '</tr>';
+  });
+  tbody.innerHTML = html;
 
   tbody.querySelectorAll('[data-edit-payment]').forEach((b) => {
     b.addEventListener('click', () => openEditPayment(b.dataset.editPayment));
@@ -608,14 +631,22 @@ function renderPayments() {
 }
 
 function renderSummary() {
-  const totalWords = state.reports.reduce((s, r) => s + r.words, 0);
-  const totalPages = state.reports.reduce((s, r) => s + r.pages, 0);
-  const totalPayable = state.reports.reduce((s, r) => s + r.total_amount, 0);
-  const totalPaid = state.payments.reduce((s, p) => s + SafeNum.parse(p.amount, 0), 0);
+  let totalWords = 0;
+  let totalPages = 0;
+  let totalPayable = 0;
+  state.reports.forEach((r) => {
+    totalWords += r.words;
+    totalPages += r.pages;
+    totalPayable += r.total_amount;
+  });
+  let totalPaid = 0;
+  state.payments.forEach((p) => {
+    totalPaid += SafeNum.parse(p.amount, 0);
+  });
   const remaining = totalPayable - totalPaid;
 
-  document.getElementById('sum-total-words').textContent = `${SafeNum.format(totalWords)} کلمه`;
-  document.getElementById('sum-total-pages').textContent = `${SafeNum.format(totalPages)} صفحه`;
+  document.getElementById('sum-total-words').textContent = SafeNum.format(totalWords) + ' کلمه';
+  document.getElementById('sum-total-pages').textContent = SafeNum.format(totalPages) + ' صفحه';
   document.getElementById('sum-total-payable').textContent = SafeNum.toToman(totalPayable);
   document.getElementById('sum-total-paid').textContent = SafeNum.toToman(totalPaid);
 
@@ -628,10 +659,12 @@ function renderSummary() {
 // ۱۲. مودال‌ها
 // ============================================================
 function openModal(id) {
-  document.getElementById(id)?.classList.remove('hidden');
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('hidden');
 }
 function closeModal(id) {
-  document.getElementById(id)?.classList.add('hidden');
+  const el = document.getElementById(id);
+  if (el) el.classList.add('hidden');
 }
 
 document.addEventListener('click', (e) => {
@@ -650,11 +683,13 @@ function resetReportForm() {
   document.getElementById('inp-period').value = 1;
   document.getElementById('inp-pages').value = 0;
   document.getElementById('inp-words').value = 0;
-  document.getElementById('inp-rate').value = state.typist?.rate_per_word ?? 0;
+  document.getElementById('inp-rate').value = (state.typist && state.typist.rate_per_word) || 0;
   document.getElementById('inp-desc').value = '';
   const t = todayShamsi();
   document.getElementById('inp-date').value =
-    `${enToFa(t.year)}/${enToFa(String(t.month).padStart(2, '0'))}/${enToFa(String(t.day).padStart(2, '0'))}`;
+    enToFa(t.year) + '/' +
+    enToFa(String(t.month).padStart(2, '0')) + '/' +
+    enToFa(String(t.day).padStart(2, '0'));
   document.getElementById('modal-report-title').textContent = '➕ ثبت گزارش جدید';
   document.getElementById('btn-submit-report').textContent = 'ثبت در دیتابیس';
   updateReportPreview();
@@ -676,7 +711,8 @@ function openEditReport(id) {
   document.getElementById('inp-pages').value = r.pages;
   document.getElementById('inp-words').value = r.words;
   document.getElementById('inp-rate').value = r.rate_per_word;
-  document.getElementById('inp-desc').value = r.description === 'بدون توضیحات' ? '' : r.description;
+  document.getElementById('inp-desc').value =
+    r.description === 'بدون توضیحات' ? '' : r.description;
   document.getElementById('inp-date').value = r.shamsi_date;
   document.getElementById('modal-report-title').textContent = '✏️ ویرایش گزارش';
   document.getElementById('btn-submit-report').textContent = 'ذخیره تغییرات';
@@ -699,23 +735,21 @@ async function handleSubmitReport(e) {
     const period = SafeNum.parse(document.getElementById('inp-period').value, 1);
     const desc = document.getElementById('inp-desc').value.trim();
 
-    // تاریخ شمسی → میلادی ISO
     const parts = shamsiStringToParts(document.getElementById('inp-date').value);
-    const isoDate = parts ? shamsiToISO(parts.year, parts
-                                            // تاریخ شمسی → میلادی ISO
-    const parts = shamsiStringToParts(document.getElementById('inp-date').value);
-    const isoDate = parts ? shamsiToISO(parts.year, parts.month, parts.day) : new Date().toISOString().slice(0, 10);
+    const isoDate = parts
+      ? shamsiToISO(parts.year, parts.month, parts.day)
+      : new Date().toISOString().slice(0, 10);
 
     const totalAmount = words * rate;
 
     const payload = {
       typist_id: state.typistId,
-      words,
-      pages,
-      rate,
+      words: words,
+      pages: pages,
+      rate: rate,
       rate_per_word: rate,
       total_amount: totalAmount,
-      period,
+      period: period,
       period_number: period,
       description: desc,
       is_settled: false,
@@ -724,13 +758,11 @@ async function handleSubmitReport(e) {
 
     let result;
     if (state.editingReportId) {
-      // ویرایش
       result = await window.db
         .from('typist_reports')
         .update(payload)
         .eq('id', state.editingReportId);
     } else {
-      // ثبت جدید
       result = await window.db.from('typist_reports').insert([payload]);
     }
 
@@ -752,8 +784,8 @@ async function handleSubmitReport(e) {
 async function deleteReport(id) {
   if (!confirm('آیا از حذف این گزارش مطمئن هستید؟')) return;
   try {
-    const { error } = await window.db.from('typist_reports').delete().eq('id', id);
-    if (error) throw error;
+    const res = await window.db.from('typist_reports').delete().eq('id', id);
+    if (res.error) throw res.error;
     toast('گزارش حذف شد.', 'success');
     await selectTypist(state.typistId);
   } catch (err) {
@@ -772,11 +804,11 @@ function resetPaymentForm() {
   document.getElementById('inp-pay-method').value = 'bank_transfer';
   document.getElementById('inp-pay-track').value = '';
   document.getElementById('inp-pay-desc').value = '';
-
   const t = todayShamsi();
   document.getElementById('inp-pay-date').value =
-    `${enToFa(t.year)}/${enToFa(String(t.month).padStart(2, '0'))}/${enToFa(String(t.day).padStart(2, '0'))}`;
-
+    enToFa(t.year) + '/' +
+    enToFa(String(t.month).padStart(2, '0')) + '/' +
+    enToFa(String(t.day).padStart(2, '0'));
   document.getElementById('modal-payment-title').textContent = '➕ ثبت پرداخت جدید';
   document.getElementById('btn-submit-payment').textContent = 'ثبت واریز';
 }
@@ -791,9 +823,7 @@ function openEditPayment(id) {
   document.getElementById('inp-pay-method').value = p.method || 'bank_transfer';
   document.getElementById('inp-pay-track').value = p.tracking_code || '';
   document.getElementById('inp-pay-desc').value = p.description || '';
-
   document.getElementById('inp-pay-date').value = toShamsiDate(p.payment_date);
-
   document.getElementById('modal-payment-title').textContent = '✏️ ویرایش پرداخت';
   document.getElementById('btn-submit-payment').textContent = 'ذخیره تغییرات';
   openModal('modal-payment');
@@ -827,9 +857,9 @@ async function handleSubmitPayment(e) {
 
     const payload = {
       person_id: state.typistId,
-      amount,
+      amount: amount,
       payment_date: isoDate + 'T12:00:00.000Z',
-      method,
+      method: method,
       tracking_code: tracking || null,
       description: desc || null,
       status: 'completed',
@@ -864,8 +894,8 @@ async function handleSubmitPayment(e) {
 async function deletePayment(id) {
   if (!confirm('آیا از حذف این پرداخت مطمئن هستید؟')) return;
   try {
-    const { error } = await window.db.from('payments').delete().eq('id', id);
-    if (error) throw error;
+    const res = await window.db.from('payments').delete().eq('id', id);
+    if (res.error) throw res.error;
     toast('پرداخت حذف شد.', 'success');
     await selectTypist(state.typistId);
   } catch (err) {
@@ -897,7 +927,7 @@ function exportToCSV() {
     r.rate_per_word,
     r.total_amount,
     r.is_settled ? 'تسویه شده' : 'در انتظار',
-    `"${String(r.description || '').replace(/"/g, '""')}"`,
+    '"' + String(r.description || '').replace(/"/g, '""') + '"',
   ]);
 
   const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
@@ -905,8 +935,9 @@ function exportToCSV() {
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement('a');
+  const tname = (state.typist && state.typist.name) || 'تایپیست';
   a.href = url;
-  a.download = `گزارش_${(state.typist?.name || 'تایپیست').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = 'گزارش_' + tname.replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -917,12 +948,10 @@ function exportToCSV() {
 // ۱۶. اتصال رویدادها
 // ============================================================
 function bindEvents() {
-  // Login tabs
   document.querySelectorAll('.login-tab[data-role]').forEach((tab) => {
     tab.addEventListener('click', () => switchLoginTab(tab.dataset.role));
   });
 
-  // Toggle password visibility
   document.querySelectorAll('[data-toggle-pass]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const input = document.getElementById(btn.dataset.togglePass);
@@ -931,41 +960,61 @@ function bindEvents() {
     });
   });
 
-  // Login forms
-  document.getElementById('form-admin')?.addEventListener('submit', handleAdminLogin);
-  document.getElementById('form-typist')?.addEventListener('submit', handleTypistLogin);
+  const formAdmin = document.getElementById('form-admin');
+  if (formAdmin) formAdmin.addEventListener('submit', handleAdminLogin);
 
-  // Panel controls
-  document.getElementById('btn-logout')?.addEventListener('click', logout);
-  document.getElementById('typist-select')?.addEventListener('change', (e) => {
-    if (e.target.value) selectTypist(e.target.value);
-  });
-  document.getElementById('btn-refresh')?.addEventListener('click', () => {
-    if (state.typistId) selectTypist(state.typistId);
-    else loadTypistsList();
-  });
-  document.getElementById('btn-export-excel')?.addEventListener('click', exportToCSV);
+  const formTypist = document.getElementById('form-typist');
+  if (formTypist) formTypist.addEventListener('submit', handleTypistLogin);
 
-  // Report modal
-  document.getElementById('btn-open-report-modal')?.addEventListener('click', () => {
-    if (!state.typistId) { toast('ابتدا تایپیست را انتخاب کنید.', 'warn'); return; }
-    resetReportForm();
-    openModal('modal-report');
-  });
-  document.getElementById('form-new-report')?.addEventListener('submit', handleSubmitReport);
+  const btnLogout = document.getElementById('btn-logout');
+  if (btnLogout) btnLogout.addEventListener('click', logout);
 
-  // Realtime calculation
+  const typistSelect = document.getElementById('typist-select');
+  if (typistSelect) {
+    typistSelect.addEventListener('change', (e) => {
+      if (e.target.value) selectTypist(e.target.value);
+    });
+  }
+
+  const btnRefresh = document.getElementById('btn-refresh');
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', () => {
+      if (state.typistId) selectTypist(state.typistId);
+      else loadTypistsList();
+    });
+  }
+
+  const btnExport = document.getElementById('btn-export-excel');
+  if (btnExport) btnExport.addEventListener('click', exportToCSV);
+
+  const btnOpenReport = document.getElementById('btn-open-report-modal');
+  if (btnOpenReport) {
+    btnOpenReport.addEventListener('click', () => {
+      if (!state.typistId) { toast('ابتدا تایپیست را انتخاب کنید.', 'warn'); return; }
+      resetReportForm();
+      openModal('modal-report');
+    });
+  }
+
+  const formReport = document.getElementById('form-new-report');
+  if (formReport) formReport.addEventListener('submit', handleSubmitReport);
+
   ['inp-words', 'inp-rate'].forEach((id) => {
-    document.getElementById(id)?.addEventListener('input', updateReportPreview);
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateReportPreview);
   });
 
-  // Payment modal
-  document.getElementById('btn-open-payment-modal')?.addEventListener('click', () => {
-    if (!state.typistId) { toast('ابتدا تایپیست را انتخاب کنید.', 'warn'); return; }
-    resetPaymentForm();
-    openModal('modal-payment');
-  });
-  document.getElementById('form-new-payment')?.addEventListener('submit', handleSubmitPayment);
+  const btnOpenPayment = document.getElementById('btn-open-payment-modal');
+  if (btnOpenPayment) {
+    btnOpenPayment.addEventListener('click', () => {
+      if (!state.typistId) { toast('ابتدا تایپیست را انتخاب کنید.', 'warn'); return; }
+      resetPaymentForm();
+      openModal('modal-payment');
+    });
+  }
+
+  const formPayment = document.getElementById('form-new-payment');
+  if (formPayment) formPayment.addEventListener('submit', handleSubmitPayment);
 }
 
 // ============================================================
