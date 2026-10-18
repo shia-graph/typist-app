@@ -263,11 +263,20 @@ window.handleAdminLogin = async function() {
             .from('app_settings')
             .select('value')
             .eq('key', 'admin_password')
-            .single();
+            .maybeSingle();
 
-        if (error) throw error;
-        
-        if (data && data.value === inputPass.trim()) {
+        if (error) {
+            console.error('Supabase error:', error);
+            alert('خطای پایگاه داده: ' + error.message);
+            return;
+        }
+
+        if (!data || !data.value) {
+            alert('خطا: رکورد admin_password در جدول app_settings یافت نشد. لطفاً در دیتابیس مقداردهی کنید.');
+            return;
+        }
+
+        if (data.value.toString().trim() === inputPass.trim()) {
             isAdmin = true;
             currentTypist = null;
             showAdminDashboard();
@@ -275,10 +284,11 @@ window.handleAdminLogin = async function() {
             alert('رمز عبور مدیر اشتباه است!');
         }
     } catch (err) {
-        console.error('خطا در بررسی رمز مدیر:', err);
-        alert('خطای اتصال به سرور در اعتبارسنجی مدیر.');
+        console.error('خطا در ورود مدیر:', err);
+        alert('خطای برنامه: ' + (err.message || 'نامشخص'));
     }
 };
+
 
 window.logout = function() {
     currentTypist = null;
