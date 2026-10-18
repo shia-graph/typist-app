@@ -10,6 +10,8 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 window.db = db;
 window.client = db;
+window.supabaseClient = db;     
+
 
 // متغیرهای وضعیت
 let currentAdminLoggedIn = false;
@@ -59,6 +61,8 @@ window.closeAdminLoginModal = function() {
     const input = document.getElementById('adminPasswordInput');
     if (input) input.value = '';
 };
+
+
 window.submitAdminLogin = async function() {
     const passwordInput = document.getElementById('adminPasswordInput');
     const enteredPassword = passwordInput ? passwordInput.value.trim() : '';
@@ -68,33 +72,24 @@ window.submitAdminLogin = async function() {
         return;
     }
 
-    // شناسایی خودکار کلاینت سوپابیس از تمام متغیرهای ممکن در محیط مرورگر
-    let client = null;
-    if (typeof window.supabaseClient !== 'undefined' && window.supabaseClient) {
-        client = window.supabaseClient;
-    } else if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-        client = supabaseClient;
-    } else if (typeof window.supabase !== 'undefined' && typeof window.supabase.from === 'function') {
-        client = window.supabase;
-    } else if (typeof supabase !== 'undefined' && typeof supabase.from === 'function') {
-        client = supabase;
-    }
+    // استفاده مستقیم از کلاینتی که در بالای فایل ساختید (window.db)
+    const client = window.db || window.supabaseClient || window.client || (typeof db !== 'undefined' ? db : null);
 
     if (!client) {
-        console.error('کلاینت Supabase پیدا نشد. لطفاً تعریف window.supabaseClient را در بالای app.js بررسی کنید.');
-        alert('خطای فنی: اتصال به سرویس‌دهنده برقرار نیست.');
+        console.error('کلاینت دیتابیس (db) یافت نشد.');
+        alert('خطای فنی: اتصال به سرور دیتابیس برقرار نیست.');
         return;
     }
 
     try {
-        // اعتبارسنجی ۱۰۰٪ امن در سمت سرور (بدون فاش شدن رمز عبور در مرورگر)
+        // اعتبارسنجی ۱۰۰٪ امن در سرور بدون هیچ‌گونه نشت رمز به مرورگر
         const { data: isCorrect, error } = await client.rpc('check_admin_pass', {
             entered_pass: enteredPassword
         });
 
         if (error) {
-            console.error('خطای بازگشتی از دیتابیس:', error);
-            alert('خطای سرور: ' + (error.message || 'عدم دسترسی به سامانه اعتبارسنجی'));
+            console.error('خطای بازگشتی از سرور:', error);
+            alert('خطای سرور در بررسی رمز: ' + (error.message || 'نامشخص'));
             return;
         }
 
@@ -110,10 +105,11 @@ window.submitAdminLogin = async function() {
         }
 
     } catch (err) {
-        console.error('متن دقیق خطا:', err);
-        alert('خطای اتصال: ' + (err.message || 'ناشناخته'));
+        console.error('خطای پیش‌بینی نشده:', err);
+        alert('خطا در ارتباط با سرور: ' + (err.message || ''));
     }
 };
+
 
 
 window.setAdminState = function(isAdmin) {
