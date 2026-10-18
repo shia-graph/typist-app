@@ -61,38 +61,44 @@ window.closeAdminLoginModal = function() {
 };
 
 window.submitAdminLogin = async function() {
-    const pwdInput = document.getElementById('adminPasswordInput');
-    const pwd = pwdInput ? pwdInput.value.trim() : '';
+    const passwordInput = document.getElementById('adminPasswordInput');
+    const enteredPassword = passwordInput ? passwordInput.value.trim() : '';
 
-    if (!pwd) {
+    if (!enteredPassword) {
         alert('لطفاً رمز عبور را وارد کنید.');
         return;
     }
 
     try {
-        const { data, error } = await db
-            .from('app_settings')
-            .select('value')
-            .eq('key', 'admin_password')
-            .single();
+        // صدا زدن تابع امن سرور سوپابیس (RPC)
+        // هیچ رمزی از دیتابیس به مرورگر دانلود نمی‌شود!
+        const { data: isValid, error } = await supabaseClient
+            .rpc('verify_admin_password', { input_password: enteredPassword });
 
-        if (error || !data) {
-            alert('خطای اتصال به سرور در اعتبارسنجی مدیر. لطفاً از وجود کلید admin_password در جدول app_settings مطمئن شوید.');
+        if (error) {
+            console.error('خطای سرور در بررسی رمز:', error);
+            alert('خطا در برقراری ارتباط با پایگاه‌داده.');
             return;
         }
 
-        if (String(data.value).trim() === pwd) {
-            window.closeAdminLoginModal();
-            sessionStorage.setItem('admin_logged', 'true');
-            window.setAdminState(true);
-            window.loadTypistsCards();
+        if (isValid === true) {
+            // ورود موفقیت‌آمیز
+            sessionStorage.setItem('admin_authenticated', 'true');
+            if (typeof window.closeAdminLoginModal === 'function') {
+                window.closeAdminLoginModal();
+            }
+            // رفرش یا انتقال به پنل ادمین
+            window.location.reload();
         } else {
-            alert('رمز عبور وارد شده نادرست است.');
+            alert('رمز عبور وارد شده اشتباه است.');
+            if (passwordInput) passwordInput.value = '';
         }
     } catch (err) {
-        alert('خطا در اعتبارسنجی: ' + (err.message || err));
+        console.error('خطا:', err);
+        alert('خطای غیرمنتظره در اعتبارسنجی ورود.');
     }
 };
+
 
 window.setAdminState = function(isAdmin) {
     currentAdminLoggedIn = isAdmin;
