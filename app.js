@@ -9,7 +9,7 @@ console.log("🚀 Typist Payroll App initialized successfully.");
 // 1. Supabase Configuration & Initialization
 // ==========================================
 const SUPABASE_URL = 'https://zgkhixllsmutjldszjls.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpna2hpeGxsc211dGpsZHN6amxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxNzE3MTksImV4cCI6MjA1NTc0NzcxOX0.99zW5E_g3pZ3c2jE0m9pYt-hW46cZ14Z52-G6XyN88Y';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
 window.supabaseClient = null;
 
