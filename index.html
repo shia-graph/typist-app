@@ -30,7 +30,6 @@
             font-size: 0.875rem;
             white-space: nowrap;
         }
-        /* سفارشی‌سازی اسکرول‌بار */
         ::-webkit-scrollbar {
             width: 6px;
             height: 6px;
@@ -92,7 +91,6 @@
 
         <!-- ویجت خلاصه تسویه حساب جاری -->
         <div class="bg-gradient-to-br from-indigo-600 via-indigo-700 to-blue-800 p-6 rounded-2xl text-white shadow-xl lg:col-span-2 flex flex-col justify-between relative overflow-hidden">
-            <!-- المان تزئینی پس‌زمینه -->
             <div class="absolute -left-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
 
             <div class="flex flex-wrap justify-between items-center gap-4 z-10">
@@ -115,7 +113,7 @@
         </div>
     </section>
 
-    <!-- فرم افزودن / ثبت گزارش کارکرد -->
+    <!-- فرم ثبت گزارش کارکرد -->
     <section class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
         <h3 class="text-sm font-extrabold text-slate-800 mb-4 flex items-center gap-2">
             <span class="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs">➕</span> 
@@ -138,7 +136,6 @@
                 <label class="block text-xs font-semibold text-slate-600 mb-1.5">تاریخ گزارش</label>
                 <div class="relative">
                     <input type="text" id="formDate" readonly placeholder="انتخاب تاریخ" onclick="toggleDatePicker()" class="w-full border border-slate-200 rounded-xl p-2.5 text-sm text-center cursor-pointer bg-slate-50 font-medium hover:bg-slate-100 transition">
-                    <!-- کانتینر تقویم شناور کامپکت -->
                     <div id="simpleDatePicker" class="datepicker-dropdown p-3.5 hidden top-12 right-0">
                         <div class="flex justify-between items-center mb-2 pb-2 border-b text-xs font-bold text-slate-700">
                             <span>انتخاب تاریخ شمسی</span>
@@ -204,10 +201,28 @@
 
 <script>
 // ==========================================================================
-// تنظیمات اتصال Supabase
+// ۱. توابع کمکی تبدیل ایمن اعداد (پایان قطعی باگ‌های NaN)
+// ==========================================================================
+function fixNumbers(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/[۰-۹]/g, d => d.charCodeAt(0) - 1776)
+        .replace(/[٠-٩]/g, d => d.charCodeAt(0) - 1632)
+        .trim();
+}
+
+function safeNumber(val, defaultVal = 0) {
+    if (val === null || val === undefined || val === '') return defaultVal;
+    const cleaned = fixNumbers(val).replace(/,/g, '');
+    const num = Number(cleaned);
+    return isNaN(num) ? defaultVal : num;
+}
+
+// ==========================================================================
+// ۲. تنظیمات اتصال به Supabase
 // ==========================================================================
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
-const SUPABASE_KEY = 'GAPGPTMASKTOKENebcv1hnp2aX0X';
+const SUPABASE_KEY = 'GAPGPTMASKTOKENemupyvknojnX0X';
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     auth: {
@@ -219,11 +234,8 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, 
 
 let currentTypistId = null;
 let currentReports = [];
-let currentTypistRate = 15; // پیش‌فرض
+let currentTypistRate = 15;
 
-// ==========================================================================
-// بارگذاری اولیه
-// ==========================================================================
 document.addEventListener("DOMContentLoaded", () => {
     loadTypistsList();
     setDefaultDate();
@@ -235,7 +247,7 @@ function setDefaultDate() {
 }
 
 // ==========================================================================
-// بارگذاری لیست تایپیست‌ها
+// ۳. خواندن تایپیست‌ها
 // ==========================================================================
 async function loadTypistsList() {
     try {
@@ -249,14 +261,14 @@ async function loadTypistsList() {
         const select = document.getElementById('typistSelect');
         select.innerHTML = '<option value="">-- انتخاب کنید --</option>';
 
-        data.forEach(t => {
+        (data || []).forEach(t => {
             const opt = document.createElement('option');
             opt.value = t.id;
             opt.textContent = t.name;
             select.appendChild(opt);
         });
 
-        if (data.length > 0) {
+        if (data && data.length > 0) {
             select.value = data[0].id;
             loadSelectedTypistData();
         }
@@ -267,7 +279,7 @@ async function loadTypistsList() {
 }
 
 // ==========================================================================
-// خواندن کارکردهای تایپیست انتخابی
+// ۴. لود داده‌های تایپیست و گزارش‌ها
 // ==========================================================================
 async function loadSelectedTypistData() {
     const typistId = document.getElementById('typistSelect').value;
@@ -285,9 +297,9 @@ async function loadSelectedTypistData() {
         if (!tErr && typist) {
             document.getElementById('typistMeta').classList.remove('hidden');
             document.getElementById('metaName').textContent = typist.name || '-';
-            currentTypistRate = Number(typist.rate_per_word) || Number(typist.rate) || 15;
-            document.getElementById('metaRate').textContent = `${currentTypistRate.toLocaleString()} تومان`;
-            document.getElementById('metaSheba').textContent = typist.sheba || typist.iban || '-';
+            currentTypistRate = safeNumber(typist.rate_per_word ?? typist.rate, 15);
+            document.getElementById('metaRate').textContent = `${currentTypistRate.toLocaleString('fa-IR')} تومان`;
+            document.getElementById('metaSheba').textContent = typist.shaba || typist.sheba || typist.iban || '-';
         }
     } catch (e) {
         console.warn("عدم امکان خواندن متادیتای تایپیست:", e);
@@ -311,7 +323,7 @@ async function loadSelectedTypistData() {
 }
 
 // ==========================================================================
-// رندر کردن جدول
+// ۵. رندر جدول با فیلتر دقیق مقادیر (ضد NaN)
 // ==========================================================================
 function renderReportsTable(reports) {
     const tbody = document.getElementById('reportsTableBody');
@@ -330,23 +342,25 @@ function renderReportsTable(reports) {
 
     reports.forEach((row, index) => {
         let formattedDate = '-';
-        if (row.created_at) {
+        const dateVal = row.report_date || row.created_at;
+        if (dateVal) {
             try {
                 formattedDate = new Intl.DateTimeFormat('fa-IR-u-nu-latn', {
                     year: 'numeric', month: '2-digit', day: '2-digit'
-                }).format(new Date(row.created_at));
+                }).format(new Date(dateVal));
             } catch (e) {
-                formattedDate = row.created_at.substring(0, 10);
+                formattedDate = String(dateVal).substring(0, 10);
             }
         }
 
-        const pages = Number(row.pages) || 0;
-        const words = Number(row.words) || 0;
-        const period = row.period ?? row.period_number ?? '-';
+        const pages = safeNumber(row.pages ?? row.page_count, 0);
+        const words = safeNumber(row.words ?? row.word_count, 0);
+        const period = fixNumbers(row.period ?? row.period_number ?? '-') || '-';
         
-        let amount = Number(row.total_amount) || 0;
+        let amount = safeNumber(row.total_amount ?? row.amount, 0);
         if (amount === 0 && words > 0) {
-            amount = words * (Number(row.rate) || currentTypistRate);
+            const appliedRate = safeNumber(row.rate ?? row.rate_per_word, currentTypistRate);
+            amount = words * appliedRate;
         }
 
         const isSettled = row.is_settled === true;
@@ -364,9 +378,9 @@ function renderReportsTable(reports) {
             <td class="table-cell-custom text-slate-400 font-mono text-xs">${index + 1}</td>
             <td class="table-cell-custom font-mono text-xs text-slate-600">${formattedDate}</td>
             <td class="table-cell-custom font-bold text-slate-800">${period}</td>
-            <td class="table-cell-custom font-semibold text-indigo-600 font-mono">${pages}</td>
-            <td class="table-cell-custom font-mono text-slate-600">${words.toLocaleString()}</td>
-            <td class="table-cell-custom font-mono font-bold text-emerald-700">${amount.toLocaleString()}</td>
+            <td class="table-cell-custom font-semibold text-indigo-600 font-mono">${pages.toLocaleString('fa-IR')}</td>
+            <td class="table-cell-custom font-mono text-slate-600">${words.toLocaleString('fa-IR')}</td>
+            <td class="table-cell-custom font-mono font-bold text-emerald-700">${amount.toLocaleString('fa-IR')}</td>
             <td class="table-cell-custom text-xs text-slate-500 max-w-xs truncate" title="${row.description || ''}">${row.description || '-'}</td>
             <td class="table-cell-custom">
                 ${isSettled 
@@ -385,14 +399,14 @@ function renderReportsTable(reports) {
 }
 
 function updateSummaryWidget(unsettledTotal, pages, words, count) {
-    document.getElementById('unsettledTotal').textContent = unsettledTotal.toLocaleString();
-    document.getElementById('summaryPages').textContent = pages.toLocaleString();
-    document.getElementById('summaryWords').textContent = words.toLocaleString();
-    document.getElementById('summaryPendingCount').textContent = count.toLocaleString();
+    document.getElementById('unsettledTotal').textContent = unsettledTotal.toLocaleString('fa-IR');
+    document.getElementById('summaryPages').textContent = pages.toLocaleString('fa-IR');
+    document.getElementById('summaryWords').textContent = words.toLocaleString('fa-IR');
+    document.getElementById('summaryPendingCount').textContent = count.toLocaleString('fa-IR');
 }
 
 // ==========================================================================
-// ثبت گزارش جدید
+// ۶. ثبت گزارش جدید (با فیلدبندی سازگار)
 // ==========================================================================
 async function handleReportSubmit(e) {
     e.preventDefault();
@@ -401,30 +415,45 @@ async function handleReportSubmit(e) {
         return;
     }
 
-    const period = parseInt(document.getElementById('formPeriod').value, 10);
-    const pages = parseInt(document.getElementById('formPages').value, 10);
-    const words = parseInt(document.getElementById('formWords').value, 10);
+    const period = safeNumber(document.getElementById('formPeriod').value, 1);
+    const pages = safeNumber(document.getElementById('formPages').value, 0);
+    const words = safeNumber(document.getElementById('formWords').value, 0);
     const description = document.getElementById('formDescription').value.trim();
     const totalAmount = words * currentTypistRate;
 
+    // ثبت به صورت سازگار با اسکیماهای مختلف دیتابیس
     const payload = {
         typist_id: currentTypistId,
         period: period,
-        period_number: period,
         pages: pages,
         words: words,
         rate: currentTypistRate,
-        rate_per_word: currentTypistRate,
         total_amount: totalAmount,
         description: description,
-        is_settled: false,
-        is_late: false,
-        delay_days: 0
+        is_settled: false
     };
 
     try {
         const { error } = await supabaseClient.from('typist_reports').insert([payload]);
-        if (error) throw error;
+        if (error) {
+            // فالبک برای حالتی که نام ستون‌ها period_number یا rate_per_word است
+            if (error.message && error.message.includes("Could not find")) {
+                const fallbackPayload = {
+                    typist_id: currentTypistId,
+                    period_number: period,
+                    page_count: pages,
+                    word_count: words,
+                    rate_per_word: currentTypistRate,
+                    total_amount: totalAmount,
+                    description: description,
+                    is_settled: false
+                };
+                const { error: err2 } = await supabaseClient.from('typist_reports').insert([fallbackPayload]);
+                if (err2) throw err2;
+            } else {
+                throw error;
+            }
+        }
 
         document.getElementById('formPages').value = '';
         document.getElementById('formWords').value = '';
@@ -437,7 +466,7 @@ async function handleReportSubmit(e) {
 }
 
 // ==========================================================================
-// حذف گزارش
+// ۷. حذف گزارش
 // ==========================================================================
 async function deleteReport(reportId) {
     if (!confirm("آیا از حذف این ردیف کارکرد اطمینان دارید؟")) return;
@@ -456,7 +485,7 @@ async function deleteReport(reportId) {
 }
 
 // ==========================================================================
-// تسویه حساب قطعی
+// ۸. تسویه حساب قطعی
 // ==========================================================================
 async function processSettlement() {
     const pendingReports = currentReports.filter(r => !r.is_settled);
@@ -483,7 +512,7 @@ async function processSettlement() {
 }
 
 // ==========================================================================
-// مدیریت تقویم کوچک و شناور
+// ۹. مدیریت تقویم
 // ==========================================================================
 function toggleDatePicker() {
     const el = document.getElementById('simpleDatePicker');
@@ -504,8 +533,17 @@ function selectQuickDate(daysAgo) {
 }
 
 // ==========================================================================
-// خروجی اکسل استاندارد با UTF-8 BOM
+// ۱۰. خروجی استاندارد اکسل (ضد Formula Injection)
 // ==========================================================================
+function sanitizeForCsv(val) {
+    if (!val) return '';
+    let str = String(val).replace(/[\t\n\r]/g, ' ').trim();
+    if (str.startsWith('=') || str.startsWith('+') || str.startsWith('-') || str.startsWith('@')) {
+        str = "'" + str;
+    }
+    return `"${str}"`;
+}
+
 function exportToCleanExcel() {
     if (!currentReports || currentReports.length === 0) {
         alert("داده‌ای برای خروجی اکسل وجود ندارد.");
@@ -514,16 +552,15 @@ function exportToCleanExcel() {
 
     const headers = ["ردیف", "تاریخ", "جلسه/دوره", "صفحات", "کلمات", "مبلغ (تومان)", "توضیحات", "وضعیت"];
     const rows = currentReports.map((r, i) => {
-        const dateStr = r.created_at ? r.created_at.substring(0, 10) : '-';
-        const cleanDesc = (r.description || '').replace(/[\t\n\r]/g, ' ');
+        const dateStr = r.report_date || (r.created_at ? r.created_at.substring(0, 10) : '-');
         return [
             i + 1,
             `\t${dateStr}`,
             r.period || r.period_number || 1,
-            r.pages || 0,
-            r.words || 0,
-            r.total_amount || 0,
-            `"${cleanDesc}"`,
+            safeNumber(r.pages ?? r.page_count, 0),
+            safeNumber(r.words ?? r.word_count, 0),
+            safeNumber(r.total_amount ?? r.amount, 0),
+            sanitizeForCsv(r.description),
             r.is_settled ? "تسویه شده" : "تسویه نشده"
         ].join("\t");
     });
@@ -544,6 +581,7 @@ function logout() {
     }
 }
 
+// مقید کردن قطعی به window برای جلوگیری از Scope Error
 window.loadSelectedTypistData = loadSelectedTypistData;
 window.handleReportSubmit = handleReportSubmit;
 window.deleteReport = deleteReport;
