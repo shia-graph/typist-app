@@ -3,366 +3,274 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>سامانه مدیریت کارکرد و تسویه تایپیست‌ها</title>
-    <!-- بوت‌استرپ ۵ راست‌چین -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
-    <!-- آیکون‌های بوت‌استرپ -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <!-- فونت ساحل یا وزیرمتن -->
-    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
-
+    <title>سامانه مدیریت کارکرد و گزارش تایپیست‌ها</title>
+    <!-- Tailwind CSS جهت ظاهر مدرن و واکنش‌گرا -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body {
-            font-family: 'Vazirmatn', Tahoma, sans-serif;
-            background-color: #f4f6f9;
-            color: #333;
-        }
-        .card {
-            border-radius: 12px;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-            border: none;
-            margin-bottom: 20px;
-        }
-        .header-bg {
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            color: white;
-            padding: 24px 0;
-            margin-bottom: 25px;
-            border-bottom-left-radius: 20px;
-            border-bottom-right-radius: 20px;
-        }
-        .timeline-container {
-            background: #ffffff;
-            border-radius: 10px;
-            padding: 15px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
-        .progress {
-            height: 18px;
-            border-radius: 10px;
-            background-color: #e9ecef;
-        }
-        .badge-status {
-            font-size: 0.85rem;
-            padding: 6px 12px;
-            border-radius: 20px;
-        }
-        /* بهینه‌سازی واکنش‌گرا: کارت‌ها در موبایل، جدول در دسکتاپ */
-        @media (max-width: 768px) {
-            .desktop-table-view {
-                display: none !important;
-            }
-            .mobile-card-view {
-                display: block !important;
-            }
-        }
-        @media (min-width: 769px) {
-            .desktop-table-view {
-                display: table !important;
-            }
-            .mobile-card-view {
-                display: none !important;
-            }
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;600;700;800&display=swap');
+        body { font-family: 'Vazirmatn', sans-serif; }
     </style>
 </head>
-<body>
+<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col justify-between">
 
-    <!-- هدر سایت -->
-    <header class="header-bg text-center shadow-sm">
-        <div class="container">
-            <h3 class="fw-bold mb-1"><i class="bi bi-keyboard me-2"></i> سامانه مدیریت کارکرد و گزارش تایپیست‌ها</h3>
-            <p class="small opacity-75 mb-0">گزارش‌گیری دوره‌ای ۱۰ روزه و تسویه حساب مالی</p>
+    <!-- نوار بالای صفحه (هدر) -->
+    <header class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">📝</span>
+                <div>
+                    <h1 class="text-base md:text-lg font-bold text-gray-800">سامانه مدیریت کارکرد و گزارش تایپیست‌ها</h1>
+                    <p class="text-xs text-gray-500">گزارش‌گیری دوره‌ای ۱۰ روزه و تسویه حساب مالی</p>
+                </div>
+            </div>
+            <div>
+                <button onclick="window.handleAdminLogin()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs md:text-sm rounded-lg font-medium transition-colors border border-gray-300 flex items-center gap-1.5">
+                    <span>🔐</span>
+                    <span>ورود مدیریت</span>
+                </button>
+            </div>
         </div>
     </header>
 
-    <div class="container pb-5">
+    <!-- بخش اصلی صفحه (Main Content) -->
+    <main class="max-w-7xl mx-auto px-4 py-6 w-full flex-grow">
 
-        <!-- نوار وضعیت ورود و خروج -->
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <div id="currentUserBadge" class="fw-bold text-secondary">
-                <i class="bi bi-person-circle"></i> وضعیت: در انتظار ورود...
-            </div>
-            <div>
-                <button id="btnSwitchRole" class="btn btn-outline-primary btn-sm" onclick="showLoginModal()">
-                    <i class="bi bi-box-arrow-in-right"></i> ورود به سامانه
-                </button>
-                <button id="btnLogout" class="btn btn-danger btn-sm d-none" onclick="logout()">
-                    <i class="bi bi-power"></i> خروج
-                </button>
-            </div>
-        </div>
-
-        <!-- ======================= پنل تایپیست ======================= -->
-        <div id="typistSection" class="d-none">
-            <!-- تایم‌لاین ۱۰ روزه دوره‌ جاری -->
-            <div class="card timeline-container mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="fw-bold"><i class="bi bi-stopwatch text-primary"></i> تایم‌لاین دوره ۱۰ روزه فعال: <span id="currentPeriodDisplay" class="text-primary">دوره ۱</span></span>
-                    <span id="periodBadgeStatus" class="badge bg-secondary badge-status">محاسبه وضعیت...</span>
+        <!-- ======================================================== -->
+        <!-- ۱. بخش ورود تایپیست (در همان صفحه اول مستقیماً در دسترس) -->
+        <!-- ======================================================== -->
+        <section id="loginSection" class="max-w-md mx-auto my-10">
+            <div class="bg-white p-6 md:p-8 rounded-2xl shadow-md border border-gray-100 text-center">
+                <div class="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
+                    👤
                 </div>
-                <div class="progress mb-2">
-                    <div id="periodProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;">۰٪</div>
-                </div>
-                <div class="d-flex justify-content-between text-muted small">
-                    <span id="periodStartDate">شروع دوره: -</span>
-                    <span id="periodDaysLeft">روزهای سپری شده: ۰ از ۱۰ روز</span>
-                    <span id="periodEndDate">مهلت ثبت: -</span>
-                </div>
-            </div>
+                <h2 class="text-xl font-extrabold text-gray-800 mb-2">ورود تایپیست</h2>
+                <p class="text-xs text-gray-500 mb-6">جهت ثبت کارکرد دوره و مشاهده وضعیت تسویه، اطلاعات خود را وارد کنید.</p>
 
-            <!-- مشخصات و دکمه ثبت گزارش -->
-            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                <h5 class="fw-bold mb-0 text-secondary"><i class="bi bi-journal-text me-1"></i> سوابق کارکرد شما</h5>
-                <button class="btn btn-success shadow-sm" onclick="openSubmitReportModal()">
-                    <i class="bi bi-plus-circle me-1"></i> ثبت گزارش کارکرد ۱۰ روزه
-                </button>
-            </div>
-
-            <!-- جدول دسکتاپ کارکرد تایپیست -->
-            <div class="card overflow-hidden">
-                <table class="table table-hover align-middle mb-0 desktop-table-view text-center">
-                    <thead class="table-light">
-                        <tr>
-                            <th>دوره</th>
-                            <th>تعداد صفحات</th>
-                            <th>تعداد کلمات</th>
-                            <th>تاریخ ثبت</th>
-                            <th>وضعیت مهلت</th>
-                            <th>توضیحات</th>
-                        </tr>
-                    </thead>
-                    <tbody id="typistReportsTableBody">
-                        <tr><td colspan="6" class="text-muted py-4">در حال بارگذاری اطلاعات...</td></tr>
-                    </tbody>
-                </table>
-
-                <!-- نمایش کارتی کارکرد در موبایل -->
-                <div id="typistReportsCardsMobile" class="mobile-card-view p-3">
-                    <!-- کارت‌ها با JS اضافه می‌شوند -->
-                </div>
-            </div>
-        </div>
-
-        <!-- ======================= پنل مدیریت ======================= -->
-        <div id="adminSection" class="d-none">
-            
-            <!-- داشبورد دکمه‌ها و اکشن‌های مدیر -->
-            <div class="card p-3 mb-4">
-                <div class="row g-2 align-items-center">
-                    <div class="col-md-4">
-                        <h5 class="fw-bold text-primary mb-0"><i class="bi bi-shield-lock-fill me-2"></i>پنل مدیریت کل</h5>
+                <div class="space-y-4 text-right">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">کد ملی</label>
+                        <input type="text" id="loginNationalCode" placeholder="مثال: 0921234567" 
+                               class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-center font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm">
                     </div>
-                    <div class="col-md-8 text-md-end d-flex gap-2 justify-content-md-end flex-wrap">
-                        <button class="btn btn-primary" onclick="openAdminSubmitModal()">
-                            <i class="bi bi-pencil-square me-1"></i> ثبت گزارش دستی توسط مدیر
-                        </button>
-                        <button class="btn btn-outline-success" onclick="exportExcelStandard()">
-                            <i class="bi bi-file-earmark-excel-fill me-1"></i> خروجی اکسل بانک (۵ ستونه)
-                        </button>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">شماره تلفن همراه</label>
+                        <input type="tel" id="loginPhone" placeholder="مثال: 09123456789" 
+                               class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-center font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm">
                     </div>
-                </div>
-            </div>
-
-            <!-- تب‌های مدیریت: ۱. کارکردها ۲. لیست تایپیست‌ها و تسویه -->
-            <ul class="nav nav-pills mb-3" id="adminTabs" role="tablist">
-                <li class="nav-item">
-                    <button class="nav-link active fw-bold" id="tab-reports-btn" data-bs-toggle="pill" data-bs-target="#tab-reports">
-                        <i class="bi bi-list-check me-1"></i> تمام کارکردهای ثبت‌شده
-                    </button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link fw-bold" id="tab-typists-btn" data-bs-toggle="pill" data-bs-target="#tab-typists">
-                        <i class="bi bi-people-fill me-1"></i> لیست تایپیست‌ها و وضعیت تسویه
-                    </button>
-                </li>
-            </ul>
-
-            <div class="tab-content" id="adminTabsContent">
-                <!-- تب ۱: لیست همه کارکردها -->
-                <div class="tab-pane fade show active" id="tab-reports">
-                    <div class="card overflow-hidden">
-                        <table class="table table-hover align-middle mb-0 text-center desktop-table-view">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>تایپیست</th>
-                                    <th>شماره تماس</th>
-                                    <th>دوره</th>
-                                    <th>صفحات</th>
-                                    <th>کلمات</th>
-                                    <th>تاریخ ثبت</th>
-                                    <th>وضعیت تأخیر</th>
-                                    <th>توضیحات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="adminReportsTableBody">
-                                <tr><td colspan="8" class="text-muted py-4">در حال بارگذاری...</td></tr>
-                            </tbody>
-                        </table>
-                        <div id="adminReportsCardsMobile" class="mobile-card-view p-3"></div>
-                    </div>
-                </div>
-
-                <!-- تب ۲: لیست تایپیست‌ها و تسویه -->
-                <div class="tab-pane fade" id="tab-typists">
-                    <div class="card overflow-hidden">
-                        <table class="table table-hover align-middle mb-0 text-center desktop-table-view">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>نام و خانوادگی</th>
-                                    <th>کد ملی</th>
-                                    <th>شماره تماس</th>
-                                    <th>شماره شبا</th>
-                                    <th>کل صفحات</th>
-                                    <th>مبلغ قابل پرداخت (تومان)</th>
-                                    <th>عملیات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="adminTypistsTableBody">
-                                <tr><td colspan="7" class="text-muted py-4">در حال دریافت لیست تایپیست‌ها...</td></tr>
-                            </tbody>
-                        </table>
-                        <div id="adminTypistsCardsMobile" class="mobile-card-view p-3"></div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-
-    </div>
-
-    <!-- ======================= مودال‌های سیستم ======================= -->
-
-    <!-- ۱. مودال پاپ‌آپ دوره‌ای (ثبت کارکرد تایپیست) با تاریخ دقیق -->
-    <div class="modal fade" id="reportModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title fw-bold" id="reportModalTitle"><i class="bi bi-clock-history"></i> ثبت گزارش دوره ۱۰ روزه</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-info py-2 small mb-3">
-                        <i class="bi bi-info-circle-fill me-1"></i>
-                        <span>تاریخ امروز: <strong id="modalTodayDateText">-</strong></span>
-                        <br>
-                        <span id="modalPeriodNotice">این گزارش برای دوره فعال جاری ذخیره شده و پس از ثبت، دوره ۱۰ روزه جدید آغاز می‌شود.</span>
-                    </div>
-                    <form id="typistReportForm">
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">شماره دوره ۱۰ روزه:</label>
-                            <input type="number" id="repPeriod" class="form-control" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">تعداد صفحات انجام شده: <span class="text-danger">*</span></label>
-                            <input type="number" id="repPages" class="form-control" placeholder="مثال: 25" required min="1">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">تعداد کلمات (اختیاری):</label>
-                            <input type="number" id="repWords" class="form-control" placeholder="مثال: 6250">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">توضیحات و بازه صفحات:</label>
-                            <textarea id="repDescription" class="form-control" rows="2" placeholder="مثلاً: تایپ صفحات ۲۵۰ الی ۲۷۵ از فایل صوتی"></textarea>
-                        </div>
-                        <button type="button" class="btn btn-success w-100 py-2 fw-bold" onclick="submitTypistReport()">
-                            <i class="bi bi-check2-circle"></i> ثبت نهایی گزارش دوره
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ۲. مودال ثبت گزارش مستقیم توسط مدیر برای هر تایپیست -->
-    <div class="modal fade" id="adminSubmitModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-dark text-white">
-                    <h5 class="modal-title fw-bold"><i class="bi bi-person-fill-gear"></i> ثبت کارکرد دستی توسط مدیر</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">انتخاب تایپیست:</label>
-                        <select id="adminSelectTypist" class="form-select">
-                            <option value="">در حال لود تایپیست‌ها...</option>
-                        </select>
-                    </div>
-                    <div class="row">
-                        <div class="col-6 mb-3">
-                            <label class="form-label fw-bold">شماره دوره:</label>
-                            <input type="number" id="adminInputPeriod" class="form-control" value="1" min="1">
-                        </div>
-                        <div class="col-6 mb-3">
-                            <label class="form-label fw-bold">تعداد صفحات:</label>
-                            <input type="number" id="adminInputPages" class="form-control" placeholder="مثلاً 30" min="1">
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">تعداد کلمات:</label>
-                        <input type="number" id="adminInputWords" class="form-control" placeholder="اختیاری">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">توضیحات مدیر:</label>
-                        <input type="text" id="adminInputDesc" class="form-control" placeholder="مثلاً: ثبت مستقیم توسط مدیر">
-                    </div>
-                    <button type="button" class="btn btn-primary w-100 py-2 fw-bold" onclick="submitReportFromAdminPanel()">
-                        <i class="bi bi-save2"></i> ذخیره کارکرد در دیتابیس
+                    <button onclick="window.handleTypistLogin()" 
+                            class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow transition-all duration-200 text-sm mt-2">
+                        ورود به پنل کاربری 🚀
                     </button>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <!-- ۳. مودال ورود (تایپیست / مدیر) -->
-    <div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold">ورود به پنل</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+
+        <!-- ======================================================== -->
+        <!-- ۲. پنل تایپیست (پس از ورود موفق باز می‌شود) -->
+        <!-- ======================================================== -->
+        <section id="typistDashboardSection" class="hidden space-y-6">
+            <!-- نوار خوش‌آمدگویی و خروج -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+                <div>
+                    <span class="text-xs text-gray-400">تایپیست گرامی:</span>
+                    <h3 id="typistHeaderName" class="text-lg font-bold text-gray-800">همکار محترم</h3>
                 </div>
-                <div class="modal-body">
-                    <ul class="nav nav-tabs nav-fill mb-3" id="loginTypeTab">
-                        <li class="nav-item">
-                            <a class="nav-link active fw-bold" id="typistLoginTab" href="javascript:void(0)" onclick="switchLoginView('typist')">ورود تایپیست</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link fw-bold" id="adminLoginTab" href="javascript:void(0)" onclick="switchLoginView('admin')">ورود مدیریت</a>
-                        </li>
-                    </ul>
+                <button onclick="window.logout()" class="text-xs px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">
+                    خروج از حساب
+                </button>
+            </div>
 
-                    <!-- فرم ورود تایپیست -->
-                    <div id="typistLoginForm">
-                        <div class="mb-3">
-                            <label class="form-label">کد ملی:</label>
-                            <input type="text" id="loginNationalCode" class="form-control" placeholder="۱۰ رقم کد ملی">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">شماره همراه:</label>
-                            <input type="text" id="loginPhone" class="form-control" placeholder="۰۹۱۲۳۴۵۶۷۸۹">
-                        </div>
-                        <button class="btn btn-primary w-100" onclick="loginTypist()">ورود تایپیست</button>
+            <!-- باکس تایم‌لاین ۱۰ روزه -->
+            <div id="periodTimelineBox"></div>
+
+            <!-- فرم ثبت کارکرد دوره -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <h4 class="font-bold text-base text-gray-800 mb-4 pb-2 border-b">📝 ثبت کارکرد دوره جدید</h4>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">شماره دوره</label>
+                        <input type="number" id="reportPeriodInput" readonly class="w-full bg-gray-100 p-2 border rounded-lg text-center font-bold">
                     </div>
-
-                    <!-- فرم ورود مدیر -->
-                    <div id="adminLoginForm" class="d-none">
-                        <div class="mb-3">
-                            <label class="form-label">رمز عبور مدیریت:</label>
-                            <input type="password" id="adminPasswordInput" class="form-control" placeholder="رمز عبور مدیر">
-                        </div>
-                        <button class="btn btn-dark w-100" onclick="loginAdmin()">ورود به پنل مدیریت</button>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">تعداد صفحات *</label>
+                        <input type="number" id="reportPagesInput" placeholder="مثال: 25" class="w-full p-2 border rounded-lg text-center">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">تعداد کلمات (اختیاری)</label>
+                        <input type="number" id="reportWordsInput" placeholder="مثال: 6200" class="w-full p-2 border rounded-lg text-center">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">توضیحات (اختیاری)</label>
+                        <input type="text" id="reportDescInput" placeholder="مثال: اتمام جزوه شماره ۲" class="w-full p-2 border rounded-lg text-sm">
                     </div>
                 </div>
+                <div class="mt-4 text-left">
+                    <button onclick="window.submitTypistReport()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow text-sm">
+                        ثبت کارکرد ۱۰ روزه
+                    </button>
+                </div>
+            </div>
+
+            <!-- جدول سوابق کارکرد تایپیست -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <h4 class="font-bold text-base text-gray-800 mb-4 pb-2 border-b">📊 سوابق کارکردهای ثبت‌شده شما</h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 text-gray-600 text-xs border-b">
+                            <tr class="text-center">
+                                <th class="py-3">دوره</th>
+                                <th class="py-3">تعداد صفحات</th>
+                                <th class="py-3">تعداد کلمات</th>
+                                <th class="py-3">تاریخ ثبت</th>
+                                <th class="py-3">توضیحات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="typistReportsTbody">
+                            <!-- ردیف‌ها با JS لود می‌شوند -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ======================================================== -->
+        <!-- ۳. پنل مدیر (گزارش‌گیری، ثبت کارکرد دستی، تسویه، اکسل) -->
+        <!-- ======================================================== -->
+        <section id="adminDashboardSection" class="hidden space-y-6">
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-bold text-blue-900">👑 پنل مدیریت سامانه تایپیست‌ها</h3>
+                    <p class="text-xs text-gray-500">مشاهده کامل کارکردها، تسویه‌حساب و خروجی فایل بانکی</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="window.exportSettlementsToExcel()" class="text-xs px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-bold flex items-center gap-1 shadow-sm">
+                        📥 دانلود فایل اکسل تسویه (۵ ستون)
+                    </button>
+                    <button onclick="window.logout()" class="text-xs px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">
+                        خروج
+                    </button>
+                </div>
+            </div>
+
+            <!-- ثبت مستقیم کارکرد توسط مدیر -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-blue-100">
+                <h4 class="font-bold text-base text-blue-900 mb-3 flex items-center gap-2">
+                    <span>✍️</span> ثبت مستقیم کارکرد توسط مدیر (به نیابت از تایپیست)
+                </h4>
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">انتخاب تایپیست *</label>
+                        <select id="adminTypistSelect" class="w-full p-2 border rounded-lg text-sm bg-gray-50 font-medium"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">شماره دوره *</label>
+                        <input type="number" id="adminReportPeriod" value="1" class="w-full p-2 border rounded-lg text-center font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">تعداد صفحات *</label>
+                        <input type="number" id="adminReportPages" placeholder="مثال: 30" class="w-full p-2 border rounded-lg text-center font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">تعداد کلمات</label>
+                        <input type="number" id="adminReportWords" placeholder="مثال: 7500" class="w-full p-2 border rounded-lg text-center">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">توضیحات</label>
+                        <input type="text" id="adminReportDesc" placeholder="توضیح دستی مدیر" class="w-full p-2 border rounded-lg text-sm">
+                    </div>
+                </div>
+                <div class="mt-3 text-left">
+                    <button onclick="window.handleAdminDirectReportSubmit()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow">
+                        ثبت کارکرد توسط مدیر
+                    </button>
+                </div>
+            </div>
+
+            <!-- وضعیت تایپیست‌ها و دکمه‌های تسویه -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <h4 class="font-bold text-base text-gray-800 mb-4 pb-2 border-b">👥 وضعیت تایپیست‌ها و تسویه حساب</h4>
+                <div id="adminTypistsListContainer" class="space-y-3">
+                    <!-- کارت تایپیست‌ها اینجا لود می‌شود -->
+                </div>
+            </div>
+
+            <!-- جدول تمام گزارش‌های ثبت شده در سیستم -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <h4 class="font-bold text-base text-gray-800 mb-4 pb-2 border-b">📋 تمام کارکردهای ثبت‌شده</h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 text-gray-600 text-xs border-b">
+                            <tr class="text-center">
+                                <th class="py-3 text-right pr-4">تایپیست</th>
+                                <th class="py-3">دوره</th>
+                                <th class="py-3">صفحات</th>
+                                <th class="py-3">کلمات</th>
+                                <th class="py-3">تاریخ ثبت</th>
+                                <th class="py-3">وضعیت تاخیر</th>
+                                <th class="py-3">توضیحات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminAllReportsTbody">
+                            <!-- لیست گزارش‌ها اینجا لود می‌شود -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- مودال تسویه‌حساب -->
+    <div id="settlementModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 text-right">
+            <h3 class="text-base font-bold text-gray-800 mb-1">تسویه‌حساب با <span id="settlementTypistName" class="text-blue-600"></span></h3>
+            <p class="text-xs text-gray-500 mb-4">انتخاب مدل تسویه و ثبت مبلغ جهت انتقال به فایل اکسل</p>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">مدل تسویه‌حساب</label>
+                    <select id="settlementTypeSelect" class="w-full p-2.5 border rounded-xl text-sm bg-gray-50 font-medium">
+                        <option value="monthly">۱. تسویه ماهانه بر اساس کارکرد</option>
+                        <option value="full">۲. تسویه کامل و نهایی پروژه</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">مبلغ تسویه (تومان / ریال)</label>
+                    <input type="number" id="settlementAmountInput" placeholder="مثال: 1500000" class="w-full p-2.5 border rounded-xl font-mono text-center">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">توضیحات و بابت</label>
+                    <input type="text" id="settlementDescInput" placeholder="مثال: تسویه کارکرد تیرماه" class="w-full p-2.5 border rounded-xl text-sm">
+                </div>
+            </div>
+
+            <div class="flex gap-2 justify-end mt-6">
+                <button onclick="window.closeSettlementModal()" class="px-4 py-2 border rounded-xl text-gray-600 hover:bg-gray-100 text-sm">انصراف</button>
+                <button onclick="window.executeSettlement()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold">ثبت تسویه</button>
             </div>
         </div>
     </div>
 
-    <!-- اسکریپت‌های سیستمی -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=2"></script>
+    <!-- پاپ‌آپ تقویم شمسی -->
+    <div id="jalaliCalendarModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white w-full max-w-xs rounded-2xl shadow-xl p-5 text-center">
+            <div class="flex items-center justify-between mb-4 pb-2 border-b">
+                <button type="button" onclick="window.prevCalMonth()" class="p-1 text-gray-500 hover:text-black">◀</button>
+                <div id="calMonthYearTitle" class="font-bold text-gray-800 text-sm"></div>
+                <button type="button" onclick="window.nextCalMonth()" class="p-1 text-gray-500 hover:text-black">▶</button>
+            </div>
+            <div id="calDaysGrid" class="grid grid-cols-7 gap-1"></div>
+            <div class="mt-4 text-center">
+                <button type="button" onclick="window.closeJalaliCalendar()" class="text-xs text-red-500 hover:underline">بستن تقویم</button>
+            </div>
+        </div>
+    </div>
 
+    <!-- اسکریپت اصلی سامانه -->
+    <script src="app.js?v=3"></script>
 </body>
 </html>
