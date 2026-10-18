@@ -6,9 +6,10 @@
 const SUPABASE_URL = 'https://zgkhixllsmutjldszjls.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpna2hpeGxsc211dGpsZHN6amxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxNzE3MTksImV4cCI6MjA1NTc0NzcxOX0.99zW5E_g3pZ3c2jE0m9pYt-hW46cZ14Z52-G6XyN88Y';
 
-let supabase = null;
-if (window.supabase && window.supabase.createClient) {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Use supabaseClient to prevent collision with window.supabase global property
+let supabaseClient = null;
+if (window.supabase && typeof window.supabase.createClient === 'function') {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
 // --- Application State ---
@@ -290,7 +291,7 @@ function showView(viewId) {
 // --- Authentication ---
 async function handleLogin(e) {
     e.preventDefault();
-    if (!supabase) {
+    if (!supabaseClient) {
         showToast('خطا در اتصال به دیتابیس Supabase', 'error');
         return;
     }
@@ -301,7 +302,7 @@ async function handleLogin(e) {
     try {
         if (state.activeTab === 'admin') {
             const pwd = toEnglishDigits(document.getElementById('admin-password-input').value);
-            const { data, error } = await supabase.rpc('verify_admin_password', { p_password: pwd });
+            const { data, error } = await supabaseClient.rpc('verify_admin_password', { p_password: pwd });
             
             if (error) throw error;
             const res = Array.isArray(data) ? data[0] : (data || {});
@@ -322,7 +323,7 @@ async function handleLogin(e) {
                 return;
             }
             
-            const { data, error } = await supabase.rpc('verify_typist_password', {
+            const { data, error } = await supabaseClient.rpc('verify_typist_password', {
                 p_identifier: identifier,
                 p_password: pwd
             });
@@ -354,7 +355,8 @@ async function handleLogin(e) {
 function handleLogout() {
     state.currentUser = null;
     state.currentTypistId = null;
-    document.getElementById('login-form').reset();
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) loginForm.reset();
     showView('login-view');
     showToast('از سامانه خارج شدید', 'info');
 }
@@ -366,9 +368,9 @@ async function showDashboardView() {
 }
 
 async function loadDashboardData() {
-    if (!supabase) return;
+    if (!supabaseClient) return;
     try {
-        const { data, error } = await supabase.rpc('get_dashboard_summary');
+        const { data, error } = await supabaseClient.rpc('get_dashboard_summary');
         if (error) throw error;
         
         let items = data;
@@ -536,9 +538,9 @@ async function showTypistDetailView(typistId) {
 }
 
 async function loadTypistDetail(typistId) {
-    if (!supabase) return;
+    if (!supabaseClient) return;
     try {
-        const { data, error } = await supabase.rpc('get_typist_detail', { p_typist_id: typistId });
+        const { data, error } = await supabaseClient.rpc('get_typist_detail', { p_typist_id: typistId });
         if (error) throw error;
         
         const res = Array.isArray(data) ? data[0] : (data || {});
@@ -676,7 +678,7 @@ function renderPaymentsTable(payments) {
 // --- CRUD Actions ---
 async function saveTypistProfile(e) {
     if (e) e.preventDefault();
-    if (!supabase || !state.currentTypistId) return;
+    if (!supabaseClient || !state.currentTypistId) return;
     
     const payload = {
         p_id: state.currentTypistId,
@@ -692,7 +694,7 @@ async function saveTypistProfile(e) {
     };
     
     try {
-        const { data, error } = await supabase.rpc('upsert_typist', payload);
+        const { data, error } = await supabaseClient.rpc('upsert_typist', payload);
         if (error) throw error;
         
         showToast('اطلاعات پروفایل با موفقیت به‌روزرسانی شد', 'success');
@@ -717,7 +719,7 @@ function closeAddTypistModal() {
 
 async function handleAddTypistSubmit(e) {
     e.preventDefault();
-    if (!supabase) return;
+    if (!supabaseClient) return;
     
     const payload = {
         p_id: null,
@@ -733,7 +735,7 @@ async function handleAddTypistSubmit(e) {
     };
     
     try {
-        const { data, error } = await supabase.rpc('upsert_typist', payload);
+        const { data, error } = await supabaseClient.rpc('upsert_typist', payload);
         if (error) throw error;
         
         showToast('تایپیست جدید با موفقیت اضافه شد', 'success');
@@ -763,7 +765,7 @@ function closeAddReportModal() {
 
 async function handleAddReportSubmit(e) {
     e.preventDefault();
-    if (!supabase || !state.currentTypistId) return;
+    if (!supabaseClient || !state.currentTypistId) return;
     
     const pageCount = Number(toEnglishDigits(document.getElementById('report-page-count')?.value || '0'));
     const reportDate = document.getElementById('report-date-input')?.value || '';
@@ -775,7 +777,7 @@ async function handleAddReportSubmit(e) {
     }
     
     try {
-        const { data, error } = await supabase.rpc('add_typist_report', {
+        const { data, error } = await supabaseClient.rpc('add_typist_report', {
             p_typist_id: state.currentTypistId,
             p_page_count: pageCount,
             p_report_date: reportDate,
@@ -796,7 +798,7 @@ async function handleAddReportSubmit(e) {
 async function deleteReport(reportId) {
     if (!confirm('آیا از حذف این کارکرد اطمینان دارید؟')) return;
     try {
-        const { data, error } = await supabase.rpc('delete_typist_report', { p_report_id: reportId });
+        const { data, error } = await supabaseClient.rpc('delete_typist_report', { p_report_id: reportId });
         if (error) throw error;
         showToast('کارکرد حذف شد', 'info');
         loadTypistDetail(state.currentTypistId);
@@ -823,7 +825,7 @@ function closeAddPaymentModal() {
 
 async function handleAddPaymentSubmit(e) {
     e.preventDefault();
-    if (!supabase || !state.currentTypistId) return;
+    if (!supabaseClient || !state.currentTypistId) return;
     
     const amount = Number(toEnglishDigits(document.getElementById('payment-amount-input')?.value || '0'));
     const paymentDate = document.getElementById('payment-date-input')?.value || '';
@@ -835,7 +837,7 @@ async function handleAddPaymentSubmit(e) {
     }
     
     try {
-        const { data, error } = await supabase.rpc('add_payment', {
+        const { data, error } = await supabaseClient.rpc('add_payment', {
             p_typist_id: state.currentTypistId,
             p_amount: amount,
             p_payment_date: paymentDate,
@@ -856,7 +858,7 @@ async function handleAddPaymentSubmit(e) {
 async function deletePayment(paymentId) {
     if (!confirm('آیا از حذف این پرداختی اطمینان دارید؟')) return;
     try {
-        const { data, error } = await supabase.rpc('delete_payment', { p_payment_id: paymentId });
+        const { data, error } = await supabaseClient.rpc('delete_payment', { p_payment_id: paymentId });
         if (error) throw error;
         showToast('پرداختی حذف شد', 'info');
         loadTypistDetail(state.currentTypistId);
@@ -879,7 +881,7 @@ function closeChangePasswordModal() {
 
 async function handleChangePasswordSubmit(e) {
     e.preventDefault();
-    if (!supabase) return;
+    if (!supabaseClient) return;
     
     const oldPwd = toEnglishDigits(document.getElementById('old-password-input')?.value || '');
     const newPwd = toEnglishDigits(document.getElementById('new-password-input')?.value || '');
@@ -892,12 +894,12 @@ async function handleChangePasswordSubmit(e) {
     try {
         let res;
         if (state.currentUser && state.currentUser.role === 'admin') {
-            res = await supabase.rpc('change_admin_password', {
+            res = await supabaseClient.rpc('change_admin_password', {
                 p_old_password: oldPwd,
                 p_new_password: newPwd
             });
         } else if (state.currentUser) {
-            res = await supabase.rpc('change_typist_password', {
+            res = await supabaseClient.rpc('change_typist_password', {
                 p_typist_id: state.currentUser.typistId,
                 p_old_password: oldPwd,
                 p_new_password: newPwd
