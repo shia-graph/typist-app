@@ -20,19 +20,58 @@ window.closeLoginModal = function() {
 // ==========================================
 // ۲. تنظیمات اتصال به دیتابیس Supabase
 // ==========================================
-
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ایجاد کلاینت و نگاشت روی هم db و هم client برای جلوگیری از ReferenceError
+const db = (typeof supabase !== 'undefined') ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+window.db = db;
+window.client = db;
 
-// متغیرهای وضعیت جاری برنامه (State)
-let currentTypist = null;
-let isAdmin = false;
-let allTypists = [];
-let allReports = [];
-let allPayments = [];
-let calendarTargetInput = null;
+// ==========================================
+// ۳. اعتبارسنجی امن مدیر (صرفاً از پایگاه داده)
+// ==========================================
+window.handleAdminLogin = async function() {
+    if (!window.db) {
+        alert('خطای سیستمی: اتصال به سرویس‌دهنده برقرار نشده است. لطفاً صفحه را تازه‌سازی کنید.');
+        return;
+    }
+
+    const inputPass = prompt('رمز عبور مدیریت را وارد نمایید:');
+    if (!inputPass || !inputPass.trim()) return;
+
+    try {
+        // واکشی امن فقط مقدار رمز از دیتابیس
+        const { data, error } = await window.db
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'admin_password')
+            .maybeSingle();
+
+        if (error) {
+            console.error('Database Error:', error);
+            alert('خطا در دسترسی به پایگاه‌داده: ' + (error.message || 'عدم دسترسی'));
+            return;
+        }
+
+        if (!data || !data.value) {
+            alert('خطای امنیتی: رمز عبور مدیر در پایگاه‌داده پیکربندی نشده است.');
+            return;
+        }
+
+        // بررسی تطابق دقیق رمز وارد شده با دیتابیس
+        if (inputPass.trim() === data.value.toString().trim()) {
+            isAdmin = true;
+            currentTypist = null;
+            showAdminDashboard();
+        } else {
+            alert('رمز عبور مدیریت نادرست است.');
+        }
+    } catch (err) {
+        console.error('Auth Error:', err);
+        alert('خطای اتصال در برقراری ارتباط با سرور.');
+    }
+};
 
 // ==========================================
 // ۳. کتابخانه محاسبات تقویم شمسی جلالی
