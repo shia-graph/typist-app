@@ -2,922 +2,1056 @@ const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
 
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let supabase = null;
+if (window.supabase && window.supabase.createClient) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
 
-// GLOBAL STATE
-let currentUser = null; // { role: 'admin' | 'typist', id?: string, name?: string }
-let dashboardData = [];
-let currentTypistDetail = null;
-let activeDatePickerTargetInput = null;
-
-// SHAMSI CALENDAR UTILS
-const FARSI_MONTHS = [
-  'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
-  'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
-];
-
-let dpState = {
-  year: 1403,
-  month: 12
+// --- Application State ---
+const state = {
+    currentUser: null, // { role: 'admin' | 'typist', typistId: string | null, name: string }
+    currentTypistId: null,
+    typists: [],
+    reports: [],
+    payments: [],
+    searchQuery: '',
+    selectedTypistIds: new Set(),
+    activeTab: 'admin', // 'admin' | 'typist' for login tab
+    datePickerCallback: null,
+    currentPickerDate: null
 };
 
+// Helper: Convert Persian/Arabic digits to English
 function toEnglishDigits(str) {
-  if (!str) return '';
-  return str
-    .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
-    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
-}
-
-function g2j(gy, gm, gd) {
-  var g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-  var jy = (gy <= 1600) ? 0 : 979;
-  gy -= (gy <= 1600) ? 621 : 1600;
-  var gy2 = (gm > 2) ? (gy + 1) : gy;
-  var days = (365 * gy) + (parseInt((gy2 + 3) / 4)) - (parseInt((gy2 + 99) / 100)) + (parseInt((gy2 + 399) / 400)) - 80 + gd + g_d_m[gm - 1];
-  jy += 33 * (parseInt(days / 12053));
-  days %= 12053;
-  jy += 4 * (parseInt(days / 1461));
-  days %= 1461;
-  jy += parseInt((days - 1) / 365);
-  if (days > 0) days = (days - 1) % 365;
-  var jm = (days < 186) ? 1 + parseInt(days / 31) : 7 + parseInt((days - 186) / 30);
-  var jd = 1 + ((days < 186) ? (days % 31) : ((days - 186) % 30));
-  return [jy, jm, jd];
-}
-
-function getTodayShamsi() {
-  const d = new Date();
-  const [jy, jm, jd] = g2j(d.getFullYear(), d.getMonth() + 1, d.getDate());
-  const mm = String(jm).padStart(2, '0');
-  const dd = String(jd).padStart(2, '0');
-  return `${jy}/${mm}/${dd}`;
-}
-
-function parseShamsiDate(str) {
-  if (!str) return null;
-  const cleanStr = toEnglishDigits(str);
-  const parts = cleanStr.split('/');
-  if (parts.length !== 3) return null;
-  return {
-    year: parseInt(parts[0], 10),
-    month: parseInt(parts[1], 10),
-    day: parseInt(parts[2], 10)
-  };
-}
-
-function calculateDaysRemaining(shamsiDateStr) {
-  if (!shamsiDateStr) return null;
-  const parsed = parseShamsiDate(shamsiDateStr);
-  if (!parsed) return null;
-
-  const todayStr = getTodayShamsi();
-  const tParsed = parseShamsiDate(todayStr);
-
-  const targetDays = parsed.year * 365 + parsed.month * 30 + parsed.day;
-  const currentDays = tParsed.year * 365 + tParsed.month * 30 + tParsed.day;
-
-  return targetDays - currentDays;
-}
-
-function formatNumber(num) {
-  if (num === null || num === undefined) return '۰';
-  return new Intl.NumberFormat('fa-IR').format(num);
-}
-
-// INITIALIZATION
-document.addEventListener('DOMContentLoaded', () => {
-  initTheme();
-  setupEventListeners();
-  checkSession();
-});
-
-// THEME TOGGLE
-function initTheme() {
-  if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.documentElement.classList.add('dark');
-    document.getElementById('theme-toggle-light-icon').classList.remove('hidden');
-  } else {
-    document.documentElement.classList.remove('dark');
-    document.getElementById('theme-toggle-dark-icon').classList.remove('hidden');
-  }
-}
-
-document.getElementById('theme-toggle').addEventListener('click', () => {
-  const darkIcon = document.getElementById('theme-toggle-dark-icon');
-  const lightIcon = document.getElementById('theme-toggle-light-icon');
-
-  if (document.documentElement.classList.contains('dark')) {
-    document.documentElement.classList.remove('dark');
-    localStorage.setItem('color-theme', 'light');
-    darkIcon.classList.remove('hidden');
-    lightIcon.classList.add('hidden');
-  } else {
-    document.documentElement.classList.add('dark');
-    localStorage.setItem('color-theme', 'dark');
-    lightIcon.classList.remove('hidden');
-    darkIcon.classList.add('hidden');
-  }
-});
-
-// EVENT LISTENERS SETUP
-function setupEventListeners() {
-  // Login Tabs
-  document.getElementById('tab-login-admin').addEventListener('click', () => switchLoginTab('admin'));
-  document.getElementById('tab-login-typist').addEventListener('click', () => switchLoginTab('typist'));
-
-  // Login Forms
-  document.getElementById('form-login-admin').addEventListener('submit', handleAdminLogin);
-  document.getElementById('form-login-typist').addEventListener('submit', handleTypistLogin);
-
-  // Logout & Navigation
-  document.getElementById('btn-logout').addEventListener('click', handleLogout);
-  document.getElementById('btn-back-to-dashboard').addEventListener('click', showDashboardView);
-
-  // Dashboard Toolbar
-  document.getElementById('dashboard-search').addEventListener('input', renderDashboardTable);
-  document.getElementById('btn-open-add-typist').addEventListener('click', () => openTypistModal());
-  document.getElementById('btn-export-excel').addEventListener('click', exportBankCSV);
-  document.getElementById('btn-group-sms').addEventListener('click', openGroupSMSModal);
-  document.getElementById('select-all-typists').addEventListener('change', toggleSelectAllTypists);
-
-  // Detail View Buttons
-  document.getElementById('btn-open-add-report').addEventListener('click', openReportModal);
-  document.getElementById('btn-open-add-payment').addEventListener('click', openPaymentModal);
-  document.getElementById('btn-open-edit-profile').addEventListener('click', () => {
-    if (currentTypistDetail) {
-      openTypistModal(currentTypistDetail.profile);
+    if (str === null || str === undefined) return '';
+    const pMap = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+    const aMap = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    let strVal = String(str);
+    for (let i = 0; i < 10; i++) {
+        strVal = strVal.replace(new RegExp(pMap[i], 'g'), i).replace(new RegExp(aMap[i], 'g'), i);
     }
-  });
-
-  // Modals Submissions
-  document.getElementById('form-typist').addEventListener('submit', handleSaveTypist);
-  document.getElementById('form-report').addEventListener('submit', handleSaveReport);
-  document.getElementById('form-payment').addEventListener('submit', handleSavePayment);
-  document.getElementById('form-change-password').addEventListener('submit', handleChangePassword);
-  document.getElementById('btn-send-sms-confirm').addEventListener('click', sendGroupSMS);
-  document.getElementById('btn-open-change-password').addEventListener('click', () => openModal('modal-password'));
-
-  // Close Buttons on Modals
-  document.querySelectorAll('.btn-close-modal').forEach(btn => {
-    btn.addEventListener('click', closeAllModals);
-  });
-
-  // DatePicker Triggers
-  document.querySelectorAll('.btn-trigger-datepicker').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const targetId = e.currentTarget.getAttribute('data-target');
-      const targetInput = document.getElementById(targetId);
-      openDatePicker(targetInput);
-    });
-  });
-
-  // Datepicker Controls
-  document.getElementById('dp-prev-month').addEventListener('click', () => changeDPMonth(-1));
-  document.getElementById('dp-next-month').addEventListener('click', () => changeDPMonth(1));
-  document.getElementById('dp-select-month').addEventListener('change', (e) => {
-    dpState.month = parseInt(e.target.value, 10);
-    renderDatePickerGrid();
-  });
-  document.getElementById('dp-select-year').addEventListener('change', (e) => {
-    dpState.year = parseInt(e.target.value, 10);
-    renderDatePickerGrid();
-  });
-  document.getElementById('dp-btn-today').addEventListener('click', () => {
-    if (activeDatePickerTargetInput) {
-      activeDatePickerTargetInput.value = getTodayShamsi();
-    }
-    closeAllModals();
-  });
+    return strVal.trim();
 }
 
-// LOGIN / SESSION MANAGEMENT
-function switchLoginTab(tab) {
-  const adminTab = document.getElementById('tab-login-admin');
-  const typistTab = document.getElementById('tab-login-typist');
-  const adminForm = document.getElementById('form-login-admin');
-  const typistForm = document.getElementById('form-login-typist');
-  const errDiv = document.getElementById('login-error');
-  errDiv.classList.add('hidden');
-
-  if (tab === 'admin') {
-    adminTab.classList.add('text-blue-600', 'border-blue-600', 'font-semibold');
-    adminTab.classList.remove('text-slate-500', 'border-transparent');
-    typistTab.classList.remove('text-blue-600', 'border-blue-600', 'font-semibold');
-    typistTab.classList.add('text-slate-500', 'border-transparent');
-    adminForm.classList.remove('hidden');
-    typistForm.classList.add('hidden');
-  } else {
-    typistTab.classList.add('text-blue-600', 'border-blue-600', 'font-semibold');
-    typistTab.classList.remove('text-slate-500', 'border-transparent');
-    adminTab.classList.remove('text-blue-600', 'border-blue-600', 'font-semibold');
-    adminTab.classList.add('text-slate-500', 'border-transparent');
-    typistForm.classList.remove('hidden');
-    adminForm.classList.add('hidden');
-  }
-}
-
-async function handleAdminLogin(e) {
-  e.preventDefault();
-  const passInput = document.getElementById('admin-password');
-  const pass = toEnglishDigits(passInput.value.trim());
-  const errDiv = document.getElementById('login-error');
-  const btnSubmit = document.getElementById('btn-submit-admin');
-
-  errDiv.classList.add('hidden');
-  btnSubmit.disabled = true;
-  btnSubmit.textContent = 'در حال بررسی...';
-
-  try {
-    const { data, error } = await supabaseClient.rpc('verify_admin_password', { p_password: pass });
+// Helper: Toast Notifications
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    const bgColors = {
+        success: 'bg-emerald-600 dark:bg-emerald-500',
+        error: 'bg-rose-600 dark:bg-rose-500',
+        info: 'bg-indigo-600 dark:bg-indigo-500',
+        warning: 'bg-amber-600 dark:bg-amber-500'
+    };
     
-    if (error) {
-      throw new Error('خطا در ارتباط با سرور: ' + error.message);
-    }
-    if (!data) {
-      throw new Error('رمز عبور مدیر اشتباه است');
-    }
-
-    currentUser = { role: 'admin', name: 'مدیر سیستم' };
-    sessionStorage.setItem('typist_user', JSON.stringify(currentUser));
-    showAppViews();
-  } catch (err) {
-    errDiv.textContent = err.message;
-    errDiv.classList.remove('hidden');
-  } finally {
-    btnSubmit.disabled = false;
-    btnSubmit.textContent = 'ورود به عنوان مدیر';
-  }
+    toast.className = `fixed bottom-5 left-5 z-50 px-5 py-3 rounded-xl text-white font-medium shadow-2xl transition-all duration-300 transform translate-y-10 opacity-0 flex items-center gap-2 ${bgColors[type] || bgColors.info}`;
+    toast.innerHTML = `
+        <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.remove('translate-y-10', 'opacity-0');
+    }, 10);
+    
+    setTimeout(() => {
+        toast.classList.add('translate-y-10', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
 }
 
-async function handleTypistLogin(e) {
-  e.preventDefault();
-  const identity = toEnglishDigits(document.getElementById('typist-identity').value.trim());
-  const pass = toEnglishDigits(document.getElementById('typist-password').value.trim());
-  const errDiv = document.getElementById('login-error');
-  const btnSubmit = document.getElementById('btn-submit-typist');
-
-  errDiv.classList.add('hidden');
-  btnSubmit.disabled = true;
-  btnSubmit.textContent = 'در حال بررسی...';
-
-  try {
-    const { data: typistId, error } = await supabaseClient.rpc('verify_typist_password', {
-      p_identity: identity,
-      p_password: pass
-    });
-
-    if (error) {
-      throw new Error('خطا در ارتباط با سرور: ' + error.message);
+// --- Theme (Dark/Light Mode) ---
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+    } else {
+        document.documentElement.classList.remove('dark');
     }
-    if (!typistId) {
-      throw new Error('کد ملی/شماره همراه یا رمز عبور اشتباه است');
-    }
-
-    currentUser = { role: 'typist', id: typistId };
-    sessionStorage.setItem('typist_user', JSON.stringify(currentUser));
-    showAppViews();
-  } catch (err) {
-    errDiv.textContent = err.message;
-    errDiv.classList.remove('hidden');
-  } finally {
-    btnSubmit.disabled = false;
-    btnSubmit.textContent = 'ورود تایپیست';
-  }
+    updateThemeToggleUI();
 }
 
-function checkSession() {
-  const saved = sessionStorage.getItem('typist_user');
-  if (saved) {
-    currentUser = JSON.parse(saved);
-    showAppViews();
-  } else {
-    showLoginView();
-  }
+function toggleTheme() {
+    const isDark = document.documentElement.classList.toggle('dark');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    updateThemeToggleUI();
+}
+
+function updateThemeToggleUI() {
+    const isDark = document.documentElement.classList.contains('dark');
+    const icon = document.getElementById('theme-toggle-icon');
+    if (icon) {
+        icon.className = isDark ? 'fas fa-sun text-amber-400' : 'fas fa-moon text-indigo-600';
+    }
+}
+
+// --- Shamsi Date Utilities ---
+const JDN_OFFSET = 1948320.5;
+
+function isPersianLeapYear(jy) {
+    return (((((jy - (jy > 0 ? 474 : 473)) % 2820) + 474) + 38) * 682) % 2816 < 682;
+}
+
+function jalaliToGregorian(jy, jm, jd) {
+    jy = parseInt(jy); jm = parseInt(jm); jd = parseInt(jd);
+    let jy2 = jy - (jy >= 0 ? 474 : 473);
+    let julianYear = 474 + (jy2 % 2820);
+    let julianDays = jd + (jm <= 7 ? (jm - 1) * 31 : (jm - 7) * 30 + 186) + Math.floor((julianYear * 682 - 110) / 2816) + (julianYear - 1) * 365 + Math.floor(jy2 / 2820) * 1029983 + (JDN_OFFSET - 1);
+    
+    let a = julianDays + 32044;
+    let b = Math.floor((4 * a + 3) / 146097);
+    let c = a - Math.floor((146097 * b) / 4);
+    let d = Math.floor((4 * c + 3) / 1461);
+    let e = c - Math.floor((1461 * d) / 4);
+    let m = Math.floor((5 * e + 2) / 153);
+    
+    let day = e - Math.floor((153 * m + 2) / 5) + 1;
+    let month = m + 3 - 12 * Math.floor(m / 10);
+    let year = b * 100 + d - 4800 + Math.floor(m / 10);
+    
+    return new Date(year, month - 1, day);
+}
+
+function gregorianToJalali(gy, gm, gd) {
+    const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    let jy = (gy <= 1600) ? 0 : 979;
+    gy -= (gy <= 1600) ? 621 : 1600;
+    let gy2 = (gm > 2) ? (gy + 1) : gy;
+    let days = (365 * gy) + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) + Math.floor((gy2 + 399) / 400) - 80 + gd + g_d_m[gm - 1];
+    jy += 33 * Math.floor(days / 12053);
+    days %= 12053;
+    jy += 4 * Math.floor(days / 1461);
+    days %= 1461;
+    jy += Math.floor((days - 1) / 365);
+    if (days > 0) days = (days - 1) % 365;
+    let jm = (days < 186) ? 1 + Math.floor(days / 31) : 7 + Math.floor((days - 186) / 30);
+    let jd = 1 + ((days < 186) ? (days % 31) : ((days - 186) % 30));
+    return { jy, jm, jd };
+}
+
+function getTodayJalali() {
+    const today = new Date();
+    return gregorianToJalali(today.getFullYear(), today.getMonth() + 1, today.getDate());
+}
+
+function formatJalali(jObj) {
+    if (!jObj || !jObj.jy) return '';
+    const m = String(jObj.jm).padStart(2, '0');
+    const d = String(jObj.jd).padStart(2, '0');
+    return `${jObj.jy}/${m}/${d}`;
+}
+
+function parseJalali(str) {
+    if (!str || typeof str !== 'string') return null;
+    const parts = toEnglishDigits(str).split('/');
+    if (parts.length !== 3) return null;
+    const jy = parseInt(parts[0]);
+    const jm = parseInt(parts[1]);
+    const jd = parseInt(parts[2]);
+    if (isNaN(jy) || isNaN(jm) || isNaN(jd)) return null;
+    return { jy, jm, jd };
+}
+
+// Calculate days status for delivery timer badge
+function getDeliveryTimerBadge(deliveryDateStr) {
+    if (!deliveryDateStr) return `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">تعریف نشده</span>`;
+    
+    const jObj = parseJalali(deliveryDateStr);
+    if (!jObj) return `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">نامعتبر</span>`;
+    
+    const targetDate = jalaliToGregorian(jObj.jy, jObj.jm, jObj.jd);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    targetDate.setHours(0,0,0,0);
+    
+    const diffTime = targetDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays > 0) {
+        return `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"><i class="fas fa-clock me-1"></i>${diffDays} روز باقی‌مانده</span>`;
+    } else if (diffDays === 0) {
+        return `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"><i class="fas fa-exclamation-triangle me-1"></i>امروز موعد تحویل</span>`;
+    } else {
+        return `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"><i class="fas fa-exclamation-circle me-1"></i>${Math.abs(diffDays)} روز تأخیر</span>`;
+    }
+}
+
+// --- DatePicker Modal UI ---
+const monthNamesPersian = [
+    'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
+    'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
+];
+
+function openDatePicker(currentValueStr, onSelectCallback) {
+    state.datePickerCallback = onSelectCallback;
+    let initialJalali = parseJalali(currentValueStr) || getTodayJalali();
+    state.currentPickerDate = { jy: initialJalali.jy, jm: initialJalali.jm };
+    
+    renderDatePicker();
+    const modal = document.getElementById('datepicker-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeDatePicker() {
+    const modal = document.getElementById('datepicker-modal');
+    if (modal) modal.classList.add('hidden');
+    state.datePickerCallback = null;
+}
+
+function renderDatePicker() {
+    const { jy, jm } = state.currentPickerDate;
+    
+    const yearSelect = document.getElementById('dp-year-select');
+    const monthSelect = document.getElementById('dp-month-select');
+    
+    if (yearSelect && monthSelect) {
+        yearSelect.innerHTML = '';
+        for (let y = 1400; y <= 1410; y++) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            if (y === jy) opt.selected = true;
+            yearSelect.appendChild(opt);
+        }
+        
+        monthSelect.innerHTML = '';
+        monthNamesPersian.forEach((mName, idx) => {
+            const opt = document.createElement('option');
+            opt.value = idx + 1;
+            opt.textContent = mName;
+            if (idx + 1 === jm) opt.selected = true;
+            monthSelect.appendChild(opt);
+        });
+    }
+    
+    // Calculate days count
+    let daysCount = 30;
+    if (jm <= 6) daysCount = 31;
+    else if (jm <= 11) daysCount = 30;
+    else daysCount = isPersianLeapYear(jy) ? 30 : 29;
+    
+    // Day 1 Day-of-week calculation (0: Sun ... 6: Sat)
+    const firstDayGreg = jalaliToGregorian(jy, jm, 1);
+    let startDayOfWeek = (firstDayGreg.getDay() + 1) % 7; // Convert to Persian week (Sat: 0, Sun: 1, ...)
+    
+    const grid = document.getElementById('dp-days-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    
+    // Empty slots for padding
+    for (let i = 0; i < startDayOfWeek; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'h-9';
+        grid.appendChild(emptyCell);
+    }
+    
+    const todayJalali = getTodayJalali();
+    
+    for (let d = 1; d <= daysCount; d++) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const isToday = (todayJalali.jy === jy && todayJalali.jm === jm && todayJalali.jd === d);
+        
+        btn.className = `h-9 w-9 mx-auto rounded-lg text-sm font-medium transition-all flex items-center justify-center ${
+            isToday ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-300 dark:border-indigo-700' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+        }`;
+        btn.textContent = d;
+        btn.onclick = () => {
+            const selectedStr = formatJalali({ jy, jm, jd: d });
+            if (state.datePickerCallback) {
+                state.datePickerCallback(selectedStr);
+            }
+            closeDatePicker();
+        };
+        grid.appendChild(btn);
+    }
+}
+
+// --- Navigation & View Switching ---
+function showView(viewId) {
+    document.querySelectorAll('.app-view').forEach(v => v.classList.add('hidden'));
+    const target = document.getElementById(viewId);
+    if (target) target.classList.remove('hidden');
+    
+    // Control elements visibility by role
+    const adminOnlyElements = document.querySelectorAll('.admin-only');
+    const typistOnlyElements = document.querySelectorAll('.typist-only');
+    
+    if (state.currentUser && state.currentUser.role === 'admin') {
+        adminOnlyElements.forEach(el => el.classList.remove('hidden'));
+        typistOnlyElements.forEach(el => el.classList.add('hidden'));
+    } else if (state.currentUser && state.currentUser.role === 'typist') {
+        adminOnlyElements.forEach(el => el.classList.add('hidden'));
+        typistOnlyElements.forEach(el => el.classList.remove('hidden'));
+    }
+}
+
+// --- Authentication ---
+async function handleLogin(e) {
+    e.preventDefault();
+    if (!supabase) {
+        showToast('خطا در اتصال به دیتابیس Supabase', 'error');
+        return;
+    }
+    
+    const btn = document.getElementById('login-submit-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>در حال ورود...'; }
+    
+    try {
+        if (state.activeTab === 'admin') {
+            const pwd = toEnglishDigits(document.getElementById('admin-password-input').value);
+            const { data, error } = await supabase.rpc('verify_admin_password', { p_password: pwd });
+            
+            if (error) throw error;
+            if (data && data.success) {
+                state.currentUser = { role: 'admin', name: 'مدیر سیستم', typistId: null };
+                showToast('با موفقیت وارد شدید', 'success');
+                showDashboardView();
+            } else {
+                showToast(data?.message || 'رمز عبور مدیر اشتباه است', 'error');
+            }
+        } else {
+            const identifier = toEnglishDigits(document.getElementById('typist-identifier-input').value);
+            const pwd = toEnglishDigits(document.getElementById('typist-password-input').value);
+            
+            if (!identifier) {
+                showToast('لطفا کد ملی یا شماره همراه را وارد کنید', 'warning');
+                return;
+            }
+            
+            const { data, error } = await supabase.rpc('verify_typist_password', {
+                p_identifier: identifier,
+                p_password: pwd
+            });
+            
+            if (error) throw error;
+            if (data && data.success) {
+                state.currentUser = {
+                    role: 'typist',
+                    name: `${data.typist.first_name || ''} ${data.typist.last_name || ''}`,
+                    typistId: data.typist.id
+                };
+                showToast(`خوش آمدید، ${state.currentUser.name}`, 'success');
+                showTypistDetailView(data.typist.id);
+            } else {
+                showToast(data?.message || 'شناسه یا رمز عبور اشتباه است', 'error');
+            }
+        }
+    } catch (err) {
+        console.error('Login Error:', err);
+        showToast('خطا در ارتباط با سرور: ' + (err.message || err), 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = 'ورود به سامانه'; }
+    }
 }
 
 function handleLogout() {
-  currentUser = null;
-  sessionStorage.removeItem('typist_user');
-  showLoginView();
+    state.currentUser = null;
+    state.currentTypistId = null;
+    document.getElementById('login-form').reset();
+    showView('login-view');
+    showToast('از سامانه خارج شدید', 'info');
 }
 
-// VIEW SWITCHING
-function showLoginView() {
-  document.getElementById('login-view').classList.remove('hidden');
-  document.getElementById('dashboard-view').classList.add('hidden');
-  document.getElementById('detail-view').classList.add('hidden');
-  document.getElementById('user-nav-controls').classList.add('hidden');
-}
-
-function showAppViews() {
-  document.getElementById('login-view').classList.add('hidden');
-  document.getElementById('user-nav-controls').classList.remove('hidden');
-
-  if (currentUser.role === 'admin') {
-    showDashboardView();
-  } else {
-    showTypistDetailView(currentUser.id);
-  }
-}
-
+// --- Dashboard View (Admin) ---
 async function showDashboardView() {
-  if (currentUser.role !== 'admin') return;
-
-  document.getElementById('dashboard-view').classList.remove('hidden');
-  document.getElementById('detail-view').classList.add('hidden');
-  await fetchDashboardData();
+    showView('dashboard-view');
+    await loadDashboardData();
 }
 
-// DASHBOARD LOGIC (ADMIN)
-async function fetchDashboardData() {
-  try {
-    const { data, error } = await supabaseClient.rpc('get_dashboard_summary');
-    if (error) throw error;
-
-    dashboardData = data || [];
-    renderDashboardStats();
-    renderDashboardTable();
-  } catch (err) {
-    alert('خطا در دریافت اطلاعات دیتابیس: ' + err.message);
-  }
+async function loadDashboardData() {
+    if (!supabase) return;
+    try {
+        const { data, error } = await supabase.rpc('get_dashboard_summary');
+        if (error) throw error;
+        
+        state.typists = data || [];
+        renderDashboard();
+    } catch (err) {
+        console.error('Fetch Dashboard Error:', err);
+        showToast('خطا در دریافت اطلاعات دیتابیس: ' + err.message, 'error');
+    }
 }
 
-function renderDashboardStats() {
-  let totalTypists = dashboardData.length;
-  let totalWords = 0;
-  let totalPaid = 0;
-  let totalRemaining = 0;
-
-  dashboardData.forEach(item => {
-    totalWords += Number(item.total_words || 0);
-    totalPaid += Number(item.total_paid || 0);
-    totalRemaining += Number(item.remaining_balance || 0);
-  });
-
-  document.getElementById('stat-total-typists').textContent = formatNumber(totalTypists) + ' نفر';
-  document.getElementById('stat-total-words').textContent = formatNumber(totalWords);
-  document.getElementById('stat-total-paid').textContent = formatNumber(totalPaid) + ' تومان';
-  document.getElementById('stat-total-remaining').textContent = formatNumber(totalRemaining) + ' تومان';
-}
-
-function renderDashboardTable() {
-  const tbody = document.getElementById('typists-table-body');
-  const query = document.getElementById('dashboard-search').value.toLowerCase().trim();
-  tbody.innerHTML = '';
-
-  const filtered = dashboardData.filter(item => {
-    const fullName = `${item.first_name || ''} ${item.last_name || ''}`.toLowerCase();
-    const phone = item.phone || '';
-    const nid = item.national_id || '';
-    return fullName.includes(query) || phone.includes(query) || nid.includes(query);
-  });
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">هیچ تایپیستی یافت نشد</td></tr>`;
-    return;
-  }
-
-  filtered.forEach(item => {
-    const fullName = `${item.first_name || ''} ${item.last_name || ''}`;
-    const daysLeft = calculateDaysRemaining(item.delivery_date);
+function renderDashboard() {
+    const container = document.getElementById('typists-list-container');
+    if (!container) return;
     
-    let timerBadge = '<span class="text-xs text-slate-400">تعریف نشده</span>';
-    if (daysLeft !== null) {
-      if (daysLeft < 0) {
-        timerBadge = `<span class="px-2.5 py-1 bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 rounded-lg text-xs font-bold">${Math.abs(daysLeft)} روز تأخیر</span>`;
-      } else if (daysLeft === 0) {
-        timerBadge = `<span class="px-2.5 py-1 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-lg text-xs font-bold">تحویل امروز</span>`;
-      } else {
-        timerBadge = `<span class="px-2.5 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded-lg text-xs font-bold">${daysLeft} روز باقی‌مانده</span>`;
-      }
+    let filtered = state.typists.filter(t => {
+        const fullName = `${t.first_name || ''} ${t.last_name || ''}`.toLowerCase();
+        const nationalId = (t.national_id || '').toLowerCase();
+        const phone = (t.phone || '').toLowerCase();
+        const q = state.searchQuery.toLowerCase();
+        return fullName.includes(q) || nationalId.includes(q) || phone.includes(q);
+    });
+    
+    // Update Summaries
+    let grandTotalEarnings = 0;
+    let grandTotalPaid = 0;
+    state.typists.forEach(t => {
+        grandTotalEarnings += Number(t.total_earnings || 0);
+        grandTotalPaid += Number(t.total_paid || 0);
+    });
+    
+    const countEl = document.getElementById('stat-total-typists');
+    const earningsEl = document.getElementById('stat-total-earnings');
+    const paidEl = document.getElementById('stat-total-paid');
+    const remainingEl = document.getElementById('stat-total-remaining');
+    
+    if (countEl) countEl.textContent = state.typists.length.toLocaleString('fa-IR');
+    if (earningsEl) earningsEl.textContent = grandTotalEarnings.toLocaleString('fa-IR') + ' تومان';
+    if (paidEl) paidEl.textContent = grandTotalPaid.toLocaleString('fa-IR') + ' تومان';
+    if (remainingEl) remainingEl.textContent = (grandTotalEarnings - grandTotalPaid).toLocaleString('fa-IR') + ' تومان';
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-12 text-slate-400">
+                <i class="fas fa-users-slash text-4xl mb-3 block"></i>
+                <p class="font-medium">هیچ تایپیستی پیدا نشد</p>
+            </div>
+        `;
+        return;
     }
 
-    const tr = document.createElement('tr');
-    tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-700/30 transition';
-    tr.innerHTML = `
-      <td class="p-4 text-center">
-        <input type="checkbox" class="typist-checkbox rounded border-slate-300 text-blue-600 focus:ring-blue-500" data-phone="${item.phone}" />
-      </td>
-      <td class="p-4">
-        <div class="font-bold text-slate-900 dark:text-white">${fullName}</div>
-        <div class="text-xs text-slate-400 mt-0.5">🪪 ${item.national_id || '---'} | 📱 ${item.phone || '---'}</div>
-      </td>
-      <td class="p-4">
-        <div class="flex items-center space-x-1.5 space-x-reverse">
-          <a href="tel:${item.phone}" class="p-2 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 rounded-xl transition" title="تماس">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
-          </a>
-          <a href="sms:${item.phone}" class="p-2 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 rounded-xl transition" title="پیامک">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
-          </a>
-        </div>
-      </td>
-      <td class="p-4 text-center font-semibold">${formatNumber(item.total_words)}</td>
-      <td class="p-4 text-center font-bold ${Number(item.remaining_balance) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}">
-        ${formatNumber(item.remaining_balance)} تومان
-      </td>
-      <td class="p-4 text-center">${timerBadge}</td>
-      <td class="p-4 text-center">
-        <button onclick="showTypistDetailView('${item.id}')" class="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 rounded-xl font-medium text-xs hover:bg-blue-100 transition">
-          مدیریت و جزئیات
-        </button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
+    container.innerHTML = filtered.map((t, idx) => {
+        const fullName = `${t.first_name || ''} ${t.last_name || ''}`.trim() || 'بدون نام';
+        const isChecked = state.selectedTypistIds.has(t.id);
+        const timerBadge = getDeliveryTimerBadge(t.delivery_date);
+        const remaining = Number(t.remaining_balance || 0);
+        
+        return `
+            <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-800 transition-all duration-200">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" onchange="toggleSelectTypist('${t.id}')" ${isChecked ? 'checked' : ''} 
+                            class="w-5 h-5 text-indigo-600 rounded-md border-slate-300 focus:ring-indigo-500 cursor-pointer">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-bold text-slate-800 dark:text-slate-100 text-lg">${fullName}</h3>
+                                ${timerBadge}
+                            </div>
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                <span><i class="far fa-id-card me-1"></i>${t.national_id || '---'}</span>
+                                <span><i class="fas fa-phone me-1"></i>${t.phone || '---'}</span>
+                                ${state.currentUser.role === 'admin' ? `<span><i class="fas fa-file-invoice me-1"></i>نرخ صفحه: ${(Number(t.page_rate) || 0).toLocaleString('fa-IR')} تومان</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-wrap items-center justify-between md:justify-end gap-3 border-t md:border-t-0 pt-3 md:pt-0 border-slate-200 dark:border-slate-800">
+                        <div class="text-start md:text-left me-2">
+                            <span class="text-xs text-slate-400 block">مانده حساب</span>
+                            <span class="font-extrabold ${remaining > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'} text-base">
+                                ${Math.abs(remaining).toLocaleString('fa-IR')} تومان ${remaining < 0 ? '(طلبکار)' : ''}
+                            </span>
+                        </div>
+                        
+                        <!-- Quick Call & SMS Buttons -->
+                        <div class="flex items-center gap-1.5">
+                            <a href="tel:${t.phone}" title="تماس تلفنی" class="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center">
+                                <i class="fas fa-phone"></i>
+                            </a>
+                            <a href="sms:${t.phone}" title="ارسال پیامک" class="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center">
+                                <i class="fas fa-comment-alt"></i>
+                            </a>
+                            <button onclick="showTypistDetailView('${t.id}')" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-md hover:shadow-indigo-500/20 transition-all flex items-center gap-1.5 me-1">
+                                <i class="fas fa-user-gear"></i>
+                                <span>مدیریت و جزئیات</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
-function toggleSelectAllTypists(e) {
-  const checked = e.target.checked;
-  document.querySelectorAll('.typist-checkbox').forEach(cb => cb.checked = checked);
+function toggleSelectTypist(id) {
+    if (state.selectedTypistIds.has(id)) {
+        state.selectedTypistIds.delete(id);
+    } else {
+        state.selectedTypistIds.add(id);
+    }
 }
 
-// GROUP SMS LOGIC
-function openGroupSMSModal() {
-  const selectedCBs = document.querySelectorAll('.typist-checkbox:checked');
-  if (selectedCBs.length === 0) {
-    alert('لطفاً حداقل یک تایپیست را از جدول انتخاب کنید.');
-    return;
-  }
-  document.getElementById('modal-sms-recipients-count').textContent = `تعداد دریافت‌کنندگان: ${selectedCBs.length} نفر`;
-  document.getElementById('modal-sms-text').value = '';
-  openModal('modal-sms');
+function selectAllTypists(e) {
+    if (e.target.checked) {
+        state.typists.forEach(t => state.selectedTypistIds.add(t.id));
+    } else {
+        state.selectedTypistIds.clear();
+    }
+    renderDashboard();
 }
 
-function sendGroupSMS() {
-  const selectedCBs = document.querySelectorAll('.typist-checkbox:checked');
-  const text = encodeURIComponent(document.getElementById('modal-sms-text').value.trim());
-  const phones = Array.from(selectedCBs).map(cb => cb.getAttribute('data-phone')).filter(Boolean);
-
-  if (phones.length === 0) return;
-
-  const uri = `sms:${phones.join(',')}?body=${text}`;
-  window.location.href = uri;
-  closeAllModals();
+function openGroupSmsModal() {
+    if (state.selectedTypistIds.size === 0) {
+        showToast('لطفا حداقل یک تایپیست را انتخاب کنید', 'warning');
+        return;
+    }
+    const modal = document.getElementById('group-sms-modal');
+    if (modal) modal.classList.remove('hidden');
 }
 
-// EXPORT TO BANK CSV (Rial Calculation)
-function exportBankCSV() {
-  if (dashboardData.length === 0) {
-    alert('اطلاعاتی برای خروجی وجود ندارد.');
-    return;
-  }
-
-  let csvRows = [];
-  // BOM for Excel Persian utf-8 compatibility
-  csvRows.push('\uFEFFردیف,نام,نام خانوادگی,نام پدر,کد ملی,شماره تماس,شماره کارت,شماره شبا,مبلغ پرداختی به ریال');
-
-  dashboardData.forEach((item, idx) => {
-    const remainingRial = Math.max(0, Number(item.remaining_balance || 0) * 10);
-    const row = [
-      idx + 1,
-      `"${item.first_name || ''}"`,
-      `"${item.last_name || ''}"`,
-      `"${item.father_name || ''}"`,
-      `"${item.national_id || ''}"`,
-      `"${item.phone || ''}"`,
-      `"${item.card_number || ''}"`,
-      `"${item.iban || ''}"`,
-      remainingRial
-    ];
-    csvRows.push(row.join(','));
-  });
-
-  const csvContent = "data:text/csv;charset=utf-8," + csvRows.join('\n');
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
-  link.setAttribute("download", `پرداخت_بانکی_تایپیستها_${getTodayShamsi().replace(/\//g, '-')}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+function closeGroupSmsModal() {
+    const modal = document.getElementById('group-sms-modal');
+    if (modal) modal.classList.add('hidden');
 }
 
-// TYPIST DETAIL VIEW (USED BY BOTH ADMIN & TYPIST)
+function sendGroupSms() {
+    const bodyText = document.getElementById('sms-body-input').value;
+    const selectedTypists = state.typists.filter(t => state.selectedTypistIds.has(t.id));
+    const phones = selectedTypists.map(t => t.phone).filter(p => !!p).join(',');
+    
+    if (!phones) {
+        showToast('شماره تلفن معتبری یافت نشد', 'error');
+        return;
+    }
+    
+    // Open native SMS URI scheme
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const separator = isIOS ? '&' : '?';
+    const smsUrl = `sms:${phones}${separator}body=${encodeURIComponent(bodyText)}`;
+    
+    window.location.href = smsUrl;
+    closeGroupSmsModal();
+}
+
+// --- Detail View (Single Typist) ---
 async function showTypistDetailView(typistId) {
-  try {
-    const { data, error } = await supabaseClient.rpc('get_typist_detail', { p_typist_id: typistId });
-    if (error) throw error;
+    state.currentTypistId = typistId;
+    showView('detail-view');
+    await loadTypistDetail(typistId);
+}
 
-    currentTypistDetail = data;
-    renderTypistDetail();
-
-    document.getElementById('dashboard-view').classList.add('hidden');
-    document.getElementById('detail-view').classList.remove('hidden');
-
-    // Adjust UI based on user role (Admin vs Typist)
-    if (currentUser.role === 'typist') {
-      document.getElementById('detail-back-bar').classList.add('hidden');
-      document.getElementById('btn-open-add-payment').classList.add('hidden');
-      document.getElementById('detail-rate-badge').classList.add('hidden'); // Hide rate badge!
-      document.getElementById('th-report-rate').classList.add('hidden'); // Hide rate column!
-      document.getElementById('th-report-actions').classList.add('hidden');
-      document.getElementById('th-payment-actions').classList.add('hidden');
-    } else {
-      document.getElementById('detail-back-bar').classList.remove('hidden');
-      document.getElementById('btn-open-add-payment').classList.remove('hidden');
-      document.getElementById('detail-rate-badge').classList.remove('hidden'); // Show rate to admin
-      document.getElementById('th-report-rate').classList.remove('hidden');
-      document.getElementById('th-report-actions').classList.remove('hidden');
-      document.getElementById('th-payment-actions').classList.remove('hidden');
+async function loadTypistDetail(typistId) {
+    if (!supabase) return;
+    try {
+        const { data, error } = await supabase.rpc('get_typist_detail', { p_typist_id: typistId });
+        if (error) throw error;
+        
+        if (data && data.success && data.typist) {
+            renderTypistDetail(data);
+        } else {
+            showToast(data?.message || 'اطلاعات تایپیست یافت نشد', 'error');
+        }
+    } catch (err) {
+        console.error('Fetch Detail Error:', err);
+        showToast('خطا در دریافت جزئیات تایپیست: ' + (err.message || err), 'error');
     }
-
-  } catch (err) {
-    alert('خطا در دریافت جزئیات تایپیست: ' + err.message);
-  }
 }
 
-function renderTypistDetail() {
-  const p = currentTypistDetail.profile;
-  const stats = currentTypistDetail.stats;
-  const reports = currentTypistDetail.reports || [];
-  const payments = currentTypistDetail.payments || [];
+function renderTypistDetail(data) {
+    const typist = data.typist || {};
+    const fullName = `${typist.first_name || ''} ${typist.last_name || ''}`.trim() || 'بدون نام';
+    
+    // Header Info
+    const nameEl = document.getElementById('detail-typist-name');
+    if (nameEl) nameEl.textContent = fullName;
+    
+    const badgeContainer = document.getElementById('detail-timer-badge-container');
+    if (badgeContainer) badgeContainer.innerHTML = getDeliveryTimerBadge(typist.delivery_date);
+    
+    // Form pre-fill
+    document.getElementById('edit-first-name').value = typist.first_name || '';
+    document.getElementById('edit-last-name').value = typist.last_name || '';
+    document.getElementById('edit-father-name').value = typist.father_name || '';
+    document.getElementById('edit-national-id').value = typist.national_id || '';
+    document.getElementById('edit-phone').value = typist.phone || '';
+    document.getElementById('edit-card-number').value = typist.card_number || '';
+    document.getElementById('edit-iban').value = typist.iban || '';
+    
+    const pageRateInput = document.getElementById('edit-page-rate');
+    if (pageRateInput) pageRateInput.value = typist.page_rate || 0;
+    
+    document.getElementById('edit-delivery-date').value = typist.delivery_date || '';
 
-  const fullName = `${p.first_name || ''} ${p.last_name || ''}`;
-  document.getElementById('detail-name').textContent = fullName;
-  document.getElementById('detail-subinfo').textContent = 
-    `📱 ${p.phone || '---'} | 🪪 ملی: ${p.national_id || '---'} | 💳 کارت: ${p.card_number || '---'}`;
+    // Summary Cards
+    const totalEarningsEl = document.getElementById('detail-total-earnings');
+    const totalPaidEl = document.getElementById('detail-total-paid');
+    const remainingEl = document.getElementById('detail-remaining-balance');
+    
+    const earnings = Number(data.total_earnings || 0);
+    const paid = Number(data.total_paid || 0);
+    const remaining = Number(data.remaining_balance || 0);
+    
+    if (totalEarningsEl) totalEarningsEl.textContent = earnings.toLocaleString('fa-IR') + ' تومان';
+    if (totalPaidEl) totalPaidEl.textContent = paid.toLocaleString('fa-IR') + ' تومان';
+    if (remainingEl) remainingEl.textContent = Math.abs(remaining).toLocaleString('fa-IR') + ' تومان' + (remaining < 0 ? ' (طلبکار)' : '');
 
-  // Delivery Timer Badge
-  const daysLeft = calculateDaysRemaining(p.delivery_date);
-  const badgeWrapper = document.getElementById('detail-delivery-badge-wrapper');
-  if (daysLeft !== null) {
-    if (daysLeft < 0) {
-      badgeWrapper.innerHTML = `<span class="px-3 py-1.5 bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 rounded-xl text-xs font-bold">⚠️ ${Math.abs(daysLeft)} روز تأخیر تحویل پروژه</span>`;
-    } else if (daysLeft === 0) {
-      badgeWrapper.innerHTML = `<span class="px-3 py-1.5 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-xl text-xs font-bold">⏰ مهلت تحویل پروژه امروز است</span>`;
-    } else {
-      badgeWrapper.innerHTML = `<span class="px-3 py-1.5 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded-xl text-xs font-bold">⌛ ${daysLeft} روز تا مهلت تحویل پروژه</span>`;
+    // Render Tables
+    renderReportsTable(data.reports || []);
+    renderPaymentsTable(data.payments || []);
+}
+
+function renderReportsTable(reports) {
+    const tbody = document.getElementById('reports-table-body');
+    if (!tbody) return;
+    
+    if (reports.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400">هیچ کارکردی ثبت نشده است</td></tr>`;
+        return;
     }
-  } else {
-    badgeWrapper.innerHTML = '';
-  }
-
-  // Rate Badge (Admin view)
-  document.getElementById('detail-rate-badge').textContent = `💵 نرخ: ${formatNumber(p.rate)} تومان`;
-
-  // Direct Call/SMS Buttons in detail view for Admin
-  const contactDiv = document.getElementById('detail-contact-actions');
-  if (currentUser.role === 'admin') {
-    contactDiv.innerHTML = `
-      <a href="tel:${p.phone}" class="p-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 rounded-xl text-xs font-semibold flex items-center space-x-1 space-x-reverse">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
-        <span>تماس</span>
-      </a>
-      <a href="sms:${p.phone}" class="p-2 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded-xl text-xs font-semibold flex items-center space-x-1 space-x-reverse">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
-        <span>پیامک</span>
-      </a>
-    `;
-  } else {
-    contactDiv.innerHTML = '';
-  }
-
-  // Summary Stats
-  document.getElementById('detail-stat-words').textContent = formatNumber(stats.total_words);
-  document.getElementById('detail-stat-total').textContent = formatNumber(stats.total_earned) + ' تومان';
-  document.getElementById('detail-stat-paid').textContent = formatNumber(stats.total_paid) + ' تومان';
-  document.getElementById('detail-stat-remaining').textContent = formatNumber(stats.remaining_balance) + ' تومان';
-
-  // Render Reports Table
-  const repTbody = document.getElementById('reports-table-body');
-  repTbody.innerHTML = '';
-  if (reports.length === 0) {
-    repTbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">هیچ گزارشی ثبت نشده است</td></tr>`;
-  } else {
-    reports.forEach(r => {
-      const tr = document.createElement('tr');
-      tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-700/30 transition';
-
-      let rateCell = currentUser.role === 'admin' ? `<td class="p-3 sm:p-4 text-center">${formatNumber(r.rate)}</td>` : '';
-      let actionCell = currentUser.role === 'admin' ? `
-        <td class="p-3 sm:p-4 text-center">
-          <button onclick="deleteReport('${r.id}')" class="text-rose-600 hover:text-rose-700 text-xs font-semibold">حذف</button>
-        </td>` : '';
-
-      tr.innerHTML = `
-        <td class="p-3 sm:p-4 font-semibold">${r.report_date || '---'}</td>
-        <td class="p-3 sm:p-4 text-center">${formatNumber(r.words)}</td>
-        <td class="p-3 sm:p-4 text-center">${formatNumber(r.pages)}</td>
-        ${rateCell}
-        <td class="p-3 sm:p-4 text-center font-bold text-slate-900 dark:text-white">${formatNumber(r.total_amount)} تومان</td>
-        <td class="p-3 sm:p-4 text-slate-500">${r.notes || '---'}</td>
-        ${actionCell}
-      `;
-      repTbody.appendChild(tr);
-    });
-  }
-
-  // Render Payments Table
-  const payTbody = document.getElementById('payments-table-body');
-  payTbody.innerHTML = '';
-  if (payments.length === 0) {
-    payTbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">هیچ پرداختی ثبت نشده است</td></tr>`;
-  } else {
-    payments.forEach(pay => {
-      const tr = document.createElement('tr');
-      tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-700/30 transition';
-
-      let actionCell = currentUser.role === 'admin' ? `
-        <td class="p-3 sm:p-4 text-center">
-          <button onclick="deletePayment('${pay.id}')" class="text-rose-600 hover:text-rose-700 text-xs font-semibold">حذف</button>
-        </td>` : '';
-
-      tr.innerHTML = `
-        <td class="p-3 sm:p-4 font-semibold">${pay.payment_date || '---'}</td>
-        <td class="p-3 sm:p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">${formatNumber(pay.amount)} تومان</td>
-        <td class="p-3 sm:p-4 text-center"><span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs">${pay.payment_method || '---'}</span></td>
-        <td class="p-3 sm:p-4 text-center text-xs font-mono">${pay.ref_code || '---'}</td>
-        <td class="p-3 sm:p-4 text-slate-500">${pay.notes || '---'}</td>
-        ${actionCell}
-      `;
-      payTbody.appendChild(tr);
-    });
-  }
+    
+    const isAdmin = state.currentUser.role === 'admin';
+    
+    tbody.innerHTML = reports.map((r, i) => {
+        const pages = Number(r.page_count || 0);
+        const rate = Number(r.rate || 0);
+        const total = Number(r.total_amount || 0);
+        
+        return `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-100 dark:border-slate-800">
+                <td class="py-3 px-4 font-medium">${(i + 1).toLocaleString('fa-IR')}</td>
+                <td class="py-3 px-4">${r.report_date || '---'}</td>
+                <td class="py-3 px-4 font-bold text-indigo-600 dark:text-indigo-400">${pages.toLocaleString('fa-IR')} صفحه</td>
+                ${isAdmin ? `<td class="py-3 px-4">${rate.toLocaleString('fa-IR')} تومان</td>` : ''}
+                ${isAdmin ? `<td class="py-3 px-4 font-extrabold text-slate-800 dark:text-slate-200">${total.toLocaleString('fa-IR')} تومان</td>` : ''}
+                <td class="py-3 px-4 text-slate-500 dark:text-slate-400 text-xs">${r.description || '---'}</td>
+                <td class="py-3 px-4">
+                    <button onclick="deleteReport('${r.id}')" class="text-rose-500 hover:text-rose-700 p-1 transition-colors" title="حذف">
+                        <i class="fas fa-trash-can"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    // Hide rate column header if typist
+    const thRate = document.getElementById('th-report-rate');
+    const thTotal = document.getElementById('th-report-total');
+    if (thRate) thRate.style.display = isAdmin ? '' : 'none';
+    if (thTotal) thTotal.style.display = isAdmin ? '' : 'none';
 }
 
-// TYPIST FORM (ADD / EDIT PROFILE)
-function openTypistModal(profile = null) {
-  const modal = document.getElementById('modal-typist');
-  const title = document.getElementById('modal-typist-title');
-  const rateWrapper = document.getElementById('wrapper-modal-typist-rate');
-
-  if (profile) {
-    title.textContent = 'ویرایش اطلاعات تایپیست';
-    document.getElementById('modal-typist-id').value = profile.id;
-    document.getElementById('modal-typist-firstname').value = profile.first_name || '';
-    document.getElementById('modal-typist-lastname').value = profile.last_name || '';
-    document.getElementById('modal-typist-father').value = profile.father_name || '';
-    document.getElementById('modal-typist-nationalid').value = profile.national_id || '';
-    document.getElementById('modal-typist-phone').value = profile.phone || '';
-    document.getElementById('modal-typist-card').value = profile.card_number || '';
-    document.getElementById('modal-typist-iban').value = profile.iban || '';
-    document.getElementById('modal-typist-delivery').value = profile.delivery_date || '';
-    document.getElementById('modal-typist-rate').value = profile.rate || 0;
-  } else {
-    title.textContent = 'افزودن تایپیست جدید';
-    document.getElementById('form-typist').reset();
-    document.getElementById('modal-typist-id').value = '';
-    document.getElementById('modal-typist-delivery').value = getTodayShamsi();
-  }
-
-  // Hide rate input from modal if user is typist
-  if (currentUser.role === 'typist') {
-    rateWrapper.classList.add('hidden');
-  } else {
-    rateWrapper.classList.remove('hidden');
-  }
-
-  openModal('modal-typist');
-}
-
-async function handleSaveTypist(e) {
-  e.preventDefault();
-  const typistId = document.getElementById('modal-typist-id').value || null;
-
-  const payload = {
-    p_id: typistId,
-    p_first_name: document.getElementById('modal-typist-firstname').value.trim(),
-    p_last_name: document.getElementById('modal-typist-lastname').value.trim(),
-    p_father_name: document.getElementById('modal-typist-father').value.trim(),
-    p_national_id: toEnglishDigits(document.getElementById('modal-typist-nationalid').value.trim()),
-    p_phone: toEnglishDigits(document.getElementById('modal-typist-phone').value.trim()),
-    p_card_number: toEnglishDigits(document.getElementById('modal-typist-card').value.trim()),
-    p_iban: toEnglishDigits(document.getElementById('modal-typist-iban').value.trim()),
-    p_rate: parseFloat(document.getElementById('modal-typist-rate').value) || 0,
-    p_delivery_date: document.getElementById('modal-typist-delivery').value.trim(),
-    p_password_hash: null
-  };
-
-  try {
-    const { data, error } = await supabaseClient.rpc('upsert_typist', payload);
-    if (error) throw error;
-
-    closeAllModals();
-
-    if (currentUser.role === 'admin') {
-      await fetchDashboardData();
-      if (currentTypistDetail && currentTypistDetail.profile.id === data) {
-        await showTypistDetailView(data);
-      }
-    } else {
-      await showTypistDetailView(currentUser.id);
+function renderPaymentsTable(payments) {
+    const tbody = document.getElementById('payments-table-body');
+    if (!tbody) return;
+    
+    if (payments.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-400">هیچ پرداختی ثبت نشده است</td></tr>`;
+        return;
     }
-  } catch (err) {
-    alert('خطا در ذخیره اطلاعات: ' + err.message);
-  }
+    
+    const isAdmin = state.currentUser.role === 'admin';
+    
+    tbody.innerHTML = payments.map((p, i) => {
+        const amount = Number(p.amount || 0);
+        return `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-100 dark:border-slate-800">
+                <td class="py-3 px-4 font-medium">${(i + 1).toLocaleString('fa-IR')}</td>
+                <td class="py-3 px-4">${p.payment_date || '---'}</td>
+                <td class="py-3 px-4 font-bold text-emerald-600 dark:text-emerald-400">${amount.toLocaleString('fa-IR')} تومان</td>
+                <td class="py-3 px-4 text-slate-500 dark:text-slate-400 text-xs">${p.description || '---'}</td>
+                ${isAdmin ? `
+                <td class="py-3 px-4">
+                    <button onclick="deletePayment('${p.id}')" class="text-rose-500 hover:text-rose-700 p-1 transition-colors" title="حذف">
+                        <i class="fas fa-trash-can"></i>
+                    </button>
+                </td>` : '<td></td>'}
+            </tr>
+        `;
+    }).join('');
 }
 
-// REPORT LOGIC
-function openReportModal() {
-  document.getElementById('form-report').reset();
-  document.getElementById('modal-report-date').value = getTodayShamsi();
-  
-  const rateWrapper = document.getElementById('wrapper-modal-report-rate');
-  if (currentUser.role === 'typist') {
-    rateWrapper.classList.add('hidden');
-  } else {
-    rateWrapper.classList.remove('hidden');
-  }
-
-  openModal('modal-report');
+// --- CRUD Actions ---
+async function saveTypistProfile(e) {
+    if (e) e.preventDefault();
+    if (!supabase || !state.currentTypistId) return;
+    
+    const payload = {
+        p_id: state.currentTypistId,
+        p_first_name: document.getElementById('edit-first-name').value,
+        p_last_name: document.getElementById('edit-last-name').value,
+        p_father_name: document.getElementById('edit-father-name').value,
+        p_national_id: toEnglishDigits(document.getElementById('edit-national-id').value),
+        p_phone: toEnglishDigits(document.getElementById('edit-phone').value),
+        p_card_number: toEnglishDigits(document.getElementById('edit-card-number').value),
+        p_iban: toEnglishDigits(document.getElementById('edit-iban').value),
+        p_page_rate: Number(toEnglishDigits(document.getElementById('edit-page-rate')?.value || 0)),
+        p_delivery_date: document.getElementById('edit-delivery-date').value
+    };
+    
+    try {
+        const { data, error } = await supabase.rpc('upsert_typist', payload);
+        if (error) throw error;
+        
+        showToast('اطلاعات پروفایل با موفقیت به‌روزرسانی شد', 'success');
+        loadTypistDetail(state.currentTypistId);
+    } catch (err) {
+        console.error('Save Profile Error:', err);
+        showToast('خطا در ذخیره پروفایل: ' + err.message, 'error');
+    }
 }
 
-async function handleSaveReport(e) {
-  e.preventDefault();
-  const typistId = currentUser.role === 'admin' ? currentTypistDetail.profile.id : currentUser.id;
+function openAddTypistModal() {
+    document.getElementById('add-typist-form').reset();
+    const modal = document.getElementById('add-typist-modal');
+    if (modal) modal.classList.remove('hidden');
+}
 
-  const payload = {
-    p_typist_id: typistId,
-    p_report_date: document.getElementById('modal-report-date').value.trim(),
-    p_words: parseInt(document.getElementById('modal-report-words').value, 10) || 0,
-    p_pages: parseInt(document.getElementById('modal-report-pages').value, 10) || 0,
-    p_rate: currentUser.role === 'admin' ? (parseFloat(document.getElementById('modal-report-rate').value) || null) : null,
-    p_notes: document.getElementById('modal-report-notes').value.trim()
-  };
+function closeAddTypistModal() {
+    const modal = document.getElementById('add-typist-modal');
+    if (modal) modal.classList.add('hidden');
+}
 
-  try {
-    const { error } = await supabaseClient.rpc('add_typist_report', payload);
-    if (error) throw error;
+async function handleAddTypistSubmit(e) {
+    e.preventDefault();
+    if (!supabase) return;
+    
+    const payload = {
+        p_id: null, // Create New
+        p_first_name: document.getElementById('add-first-name').value,
+        p_last_name: document.getElementById('add-last-name').value,
+        p_father_name: document.getElementById('add-father-name').value,
+        p_national_id: toEnglishDigits(document.getElementById('add-national-id').value),
+        p_phone: toEnglishDigits(document.getElementById('add-phone').value),
+        p_card_number: toEnglishDigits(document.getElementById('add-card-number').value),
+        p_iban: toEnglishDigits(document.getElementById('add-iban').value),
+        p_page_rate: Number(toEnglishDigits(document.getElementById('add-page-rate').value || 0)),
+        p_delivery_date: document.getElementById('add-delivery-date').value
+    };
+    
+    try {
+        const { data, error } = await supabase.rpc('upsert_typist', payload);
+        if (error) throw error;
+        
+        showToast('تایپیست جدید با موفقیت اضافه شد', 'success');
+        closeAddTypistModal();
+        loadDashboardData();
+    } catch (err) {
+        console.error('Add Typist Error:', err);
+        showToast('خطا در افزودن تایپیست: ' + err.message, 'error');
+    }
+}
 
-    closeAllModals();
-    await showTypistDetailView(typistId);
-  } catch (err) {
-    alert('خطا در ثبت گزارش: ' + err.message);
-  }
+// Add Report Modal
+function openAddReportModal() {
+    const form = document.getElementById('add-report-form');
+    if (form) form.reset();
+    
+    // Set default date to today
+    const dateInput = document.getElementById('report-date-input');
+    if (dateInput) dateInput.value = formatJalali(getTodayJalali());
+    
+    const modal = document.getElementById('add-report-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeAddReportModal() {
+    const modal = document.getElementById('add-report-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function handleAddReportSubmit(e) {
+    e.preventDefault();
+    if (!supabase || !state.currentTypistId) return;
+    
+    const pageCount = Number(toEnglishDigits(document.getElementById('report-page-count').value));
+    const reportDate = document.getElementById('report-date-input').value;
+    const desc = document.getElementById('report-desc').value;
+    
+    if (!pageCount || pageCount <= 0) {
+        showToast('لطفاً تعداد صفحات معتبر وارد کنید', 'warning');
+        return;
+    }
+    
+    try {
+        const { data, error } = await supabase.rpc('add_typist_report', {
+            p_typist_id: state.currentTypistId,
+            p_page_count: pageCount,
+            p_report_date: reportDate,
+            p_description: desc
+        });
+        
+        if (error) throw error;
+        
+        showToast('کارکرد با موفقیت ثبت شد', 'success');
+        closeAddReportModal();
+        loadTypistDetail(state.currentTypistId);
+    } catch (err) {
+        console.error('Add Report Error:', err);
+        showToast('خطا در ثبت کارکرد: ' + err.message, 'error');
+    }
 }
 
 async function deleteReport(reportId) {
-  if (!confirm('آیا از حذف این گزارش مطمئن هستید؟')) return;
-  try {
-    const { error } = await supabaseClient.rpc('delete_typist_report', { p_report_id: reportId });
-    if (error) throw error;
-    await showTypistDetailView(currentTypistDetail.profile.id);
-  } catch (err) {
-    alert('خطا در حذف گزارش: ' + err.message);
-  }
+    if (!confirm('آیا از حذف این کارکرد اطمینان دارید؟')) return;
+    try {
+        const { data, error } = await supabase.rpc('delete_typist_report', { p_report_id: reportId });
+        if (error) throw error;
+        showToast('کارکرد حذف شد', 'info');
+        loadTypistDetail(state.currentTypistId);
+    } catch (err) {
+        showToast('خطا در حذف کارکرد: ' + err.message, 'error');
+    }
 }
 
-// PAYMENT LOGIC
-function openPaymentModal() {
-  document.getElementById('form-payment').reset();
-  document.getElementById('modal-payment-date').value = getTodayShamsi();
-  openModal('modal-payment');
+// Add Payment Modal (Admin Only)
+function openAddPaymentModal() {
+    const form = document.getElementById('add-payment-form');
+    if (form) form.reset();
+    
+    const dateInput = document.getElementById('payment-date-input');
+    if (dateInput) dateInput.value = formatJalali(getTodayJalali());
+    
+    const modal = document.getElementById('add-payment-modal');
+    if (modal) modal.classList.remove('hidden');
 }
 
-async function handleSavePayment(e) {
-  e.preventDefault();
-  const typistId = currentTypistDetail.profile.id;
+function closeAddPaymentModal() {
+    const modal = document.getElementById('add-payment-modal');
+    if (modal) modal.classList.add('hidden');
+}
 
-  const payload = {
-    p_typist_id: typistId,
-    p_payment_date: document.getElementById('modal-payment-date').value.trim(),
-    p_amount: parseFloat(document.getElementById('modal-payment-amount').value) || 0,
-    p_payment_method: document.getElementById('modal-payment-method').value,
-    p_ref_code: document.getElementById('modal-payment-ref').value.trim(),
-    p_notes: document.getElementById('modal-payment-notes').value.trim()
-  };
-
-  try {
-    const { error } = await supabaseClient.rpc('add_payment', payload);
-    if (error) throw error;
-
-    closeAllModals();
-    await showTypistDetailView(typistId);
-  } catch (err) {
-    alert('خطا در ثبت پرداخت: ' + err.message);
-  }
+async function handleAddPaymentSubmit(e) {
+    e.preventDefault();
+    if (!supabase || !state.currentTypistId) return;
+    
+    const amount = Number(toEnglishDigits(document.getElementById('payment-amount-input').value));
+    const paymentDate = document.getElementById('payment-date-input').value;
+    const desc = document.getElementById('payment-desc-input').value;
+    
+    if (!amount || amount <= 0) {
+        showToast('لطفاً مبلغ معتبر وارد کنید', 'warning');
+        return;
+    }
+    
+    try {
+        const { data, error } = await supabase.rpc('add_payment', {
+            p_typist_id: state.currentTypistId,
+            p_amount: amount,
+            p_payment_date: paymentDate,
+            p_description: desc
+        });
+        
+        if (error) throw error;
+        
+        showToast('پرداختی با موفقیت ثبت شد', 'success');
+        closeAddPaymentModal();
+        loadTypistDetail(state.currentTypistId);
+    } catch (err) {
+        console.error('Add Payment Error:', err);
+        showToast('خطا در ثبت پرداخت: ' + err.message, 'error');
+    }
 }
 
 async function deletePayment(paymentId) {
-  if (!confirm('آیا از حذف این پرداخت مطمئن هستید؟')) return;
-  try {
-    const { error } = await supabaseClient.rpc('delete_payment', { p_payment_id: paymentId });
-    if (error) throw error;
-    await showTypistDetailView(currentTypistDetail.profile.id);
-  } catch (err) {
-    alert('خطا در حذف پرداخت: ' + err.message);
-  }
+    if (!confirm('آیا از حذف این پرداختی اطمینان دارید؟')) return;
+    try {
+        const { data, error } = await supabase.rpc('delete_payment', { p_payment_id: paymentId });
+        if (error) throw error;
+        showToast('پرداختی حذف شد', 'info');
+        loadTypistDetail(state.currentTypistId);
+    } catch (err) {
+        showToast('خطا در حذف پرداخت: ' + err.message, 'error');
+    }
 }
 
-// CHANGE PASSWORD LOGIC
-async function handleChangePassword(e) {
-  e.preventDefault();
-  const currentPass = toEnglishDigits(document.getElementById('modal-pass-current').value.trim());
-  const newPass = toEnglishDigits(document.getElementById('modal-pass-new').value.trim());
+// Password Change Modal
+function openChangePasswordModal() {
+    document.getElementById('change-password-form').reset();
+    const modal = document.getElementById('change-password-modal');
+    if (modal) modal.classList.remove('hidden');
+}
 
-  try {
-    if (currentUser.role === 'admin') {
-      const { error } = await supabaseClient.rpc('change_admin_password', {
-        p_old_password: currentPass,
-        p_new_password: newPass
-      });
-      if (error) throw error;
-    } else {
-      const { error } = await supabaseClient.rpc('change_typist_password', {
-        p_typist_id: currentUser.id,
-        p_old_password: currentPass,
-        p_new_password: newPass
-      });
-      if (error) throw error;
+function closeChangePasswordModal() {
+    const modal = document.getElementById('change-password-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function handleChangePasswordSubmit(e) {
+    e.preventDefault();
+    if (!supabase) return;
+    
+    const oldPwd = toEnglishDigits(document.getElementById('old-password-input').value);
+    const newPwd = toEnglishDigits(document.getElementById('new-password-input').value);
+    
+    if (!newPwd || newPwd.length < 4) {
+        showToast('رمز عبور جدید باید حداقل ۴ کاراکتر باشد', 'warning');
+        return;
+    }
+    
+    try {
+        let res;
+        if (state.currentUser.role === 'admin') {
+            res = await supabase.rpc('change_admin_password', {
+                p_old_password: oldPwd,
+                p_new_password: newPwd
+            });
+        } else {
+            res = await supabase.rpc('change_typist_password', {
+                p_typist_id: state.currentUser.typistId,
+                p_old_password: oldPwd,
+                p_new_password: newPwd
+            });
+        }
+        
+        if (res.error) throw res.error;
+        if (res.data && res.data.success) {
+            showToast('رمز عبور با موفقیت تغییر کرد', 'success');
+            closeChangePasswordModal();
+        } else {
+            showToast(res.data?.message || 'رمز عبور فعلی اشتباه است', 'error');
+        }
+    } catch (err) {
+        console.error('Change Password Error:', err);
+        showToast('خطا در تغییر رمز عبور: ' + err.message, 'error');
+    }
+}
+
+// --- Bank Payment CSV/Excel Export (Rial Calculation) ---
+function exportBankCsv() {
+    if (state.typists.length === 0) {
+        showToast('اطلاعاتی برای خروجی وجود ندارد', 'warning');
+        return;
+    }
+    
+    // Headers: ردیف, نام, نام خانوادگی, نام پدر, کد ملی, شماره تماس, شماره کارت, شماره شبا, مبلغ پرداختی به ریال
+    const headers = ['ردیف', 'نام', 'نام خانوادگی', 'نام پدر', 'کد ملی', 'شماره تماس', 'شماره کارت', 'شماره شبا', 'مبلغ پرداختی به ریال'];
+    
+    const rows = state.typists.map((t, index) => {
+        const remainingToman = Number(t.remaining_balance || 0);
+        // Calculation: Remaining balance (Toman) * 10 = Amount in Rial
+        const amountRial = remainingToman > 0 ? remainingToman * 10 : 0;
+        
+        return [
+            index + 1,
+            `"${(t.first_name || '').replace(/"/g, '""')}"`,
+            `"${(t.last_name || '').replace(/"/g, '""')}"`,
+            `"${(t.father_name || '').replace(/"/g, '""')}"`,
+            `"${t.national_id || ''}"`,
+            `"${t.phone || ''}"`,
+            `"${t.card_number || ''}"`,
+            `"${t.iban || ''}"`,
+            amountRial
+        ].join(',');
+    });
+    
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `bank_payments_${formatJalali(getTodayJalali()).replace(/\//g, '-')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('فایل اکسل/CSV بانک با موفقیت دانلود شد', 'success');
+}
+
+// --- Initialize Event Listeners ---
+document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
+    
+    // Global Theme Toggle
+    const themeBtn = document.getElementById('theme-toggle-btn');
+    if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+    
+    // Auth Tab Switching
+    const tabAdmin = document.getElementById('tab-admin-login');
+    const tabTypist = document.getElementById('tab-typist-login');
+    const fieldAdmin = document.getElementById('field-admin-password');
+    const fieldTypist = document.getElementById('field-typist-inputs');
+    
+    if (tabAdmin && tabTypist) {
+        tabAdmin.addEventListener('click', () => {
+            state.activeTab = 'admin';
+            tabAdmin.classList.add('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
+            tabAdmin.classList.remove('border-transparent', 'text-slate-400');
+            tabTypist.classList.remove('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
+            tabTypist.classList.add('border-transparent', 'text-slate-400');
+            fieldAdmin.classList.remove('hidden');
+            fieldTypist.classList.add('hidden');
+        });
+        
+        tabTypist.addEventListener('click', () => {
+            state.activeTab = 'typist';
+            tabTypist.classList.add('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
+            tabTypist.classList.remove('border-transparent', 'text-slate-400');
+            tabAdmin.classList.remove('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
+            tabAdmin.classList.add('border-transparent', 'text-slate-400');
+            fieldTypist.classList.remove('hidden');
+            fieldAdmin.classList.add('hidden');
+        });
     }
 
-    alert('رمز عبور با موفقیت تغییر یافت.');
-    closeAllModals();
-  } catch (err) {
-    alert('خطا در تغییر رمز عبور: ' + err.message);
-  }
-}
+    // Login Form Submit
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+    
+    // Search Dashboard
+    const searchInput = document.getElementById('search-typists-input');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            state.searchQuery = e.target.value;
+            renderDashboard();
+        });
+    }
+    
+    // Edit Typist Form Submit
+    const editForm = document.getElementById('edit-typist-form');
+    if (editForm) editForm.addEventListener('submit', saveTypistProfile);
+    
+    // Add Typist Form Submit
+    const addTypistForm = document.getElementById('add-typist-form');
+    if (addTypistForm) addTypistForm.addEventListener('submit', handleAddTypistSubmit);
+    
+    // Add Report Form Submit
+    const addReportForm = document.getElementById('add-report-form');
+    if (addReportForm) addReportForm.addEventListener('submit', handleAddReportSubmit);
 
-// MODAL CONTROLS
-function openModal(modalId) {
-  document.getElementById(modalId).classList.remove('hidden');
-}
+    // Add Payment Form Submit
+    const addPaymentForm = document.getElementById('add-payment-form');
+    if (addPaymentForm) addPaymentForm.addEventListener('submit', handleAddPaymentSubmit);
+    
+    // Change Password Form Submit
+    const changePasswordForm = document.getElementById('change-password-form');
+    if (changePasswordForm) changePasswordForm.addEventListener('submit', handleChangePasswordSubmit);
 
-function closeAllModals() {
-  document.querySelectorAll('[id^="modal-"]').forEach(m => m.classList.add('hidden'));
-}
-
-// SHAMSI DATE PICKER POPUP LOGIC
-function openDatePicker(inputElement) {
-  activeDatePickerTargetInput = inputElement;
-
-  let currentVal = inputElement.value || getTodayShamsi();
-  let parsed = parseShamsiDate(currentVal);
-
-  if (!parsed) {
-    parsed = parseShamsiDate(getTodayShamsi());
-  }
-
-  dpState.year = parsed.year;
-  dpState.month = parsed.month;
-
-  renderDatePickerHeader();
-  renderDatePickerGrid();
-  openModal('modal-datepicker');
-}
-
-function renderDatePickerHeader() {
-  const monthSelect = document.getElementById('dp-select-month');
-  monthSelect.innerHTML = '';
-  FARSI_MONTHS.forEach((m, idx) => {
-    const opt = document.createElement('option');
-    opt.value = idx + 1;
-    opt.textContent = m;
-    if (idx + 1 === dpState.month) opt.selected = true;
-    monthSelect.appendChild(opt);
-  });
-
-  const yearSelect = document.getElementById('dp-select-year');
-  yearSelect.innerHTML = '';
-  const currentYear = parseShamsiDate(getTodayShamsi()).year;
-  for (let y = currentYear - 3; y <= currentYear + 5; y++) {
-    const opt = document.createElement('option');
-    opt.value = y;
-    opt.textContent = y;
-    if (y === dpState.year) opt.selected = true;
-    yearSelect.appendChild(opt);
-  }
-
-  document.getElementById('dp-current-title').textContent = `${FARSI_MONTHS[dpState.month - 1]} ${dpState.year}`;
-}
-
-function changeDPMonth(delta) {
-  dpState.month += delta;
-  if (dpState.month > 12) {
-    dpState.month = 1;
-    dpState.year++;
-  } else if (dpState.month < 1) {
-    dpState.month = 12;
-    dpState.year--;
-  }
-  renderDatePickerHeader();
-  renderDatePickerGrid();
-}
-
-function renderDatePickerGrid() {
-  renderDatePickerHeader();
-
-  const grid = document.getElementById('dp-days-grid');
-  grid.innerHTML = '';
-
-  let daysInMonth = 30;
-  if (dpState.month <= 6) daysInMonth = 31;
-  else if (dpState.month === 12) daysInMonth = 29;
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 transition font-medium';
-    btn.textContent = d;
-    btn.addEventListener('click', () => {
-      const mm = String(dpState.month).padStart(2, '0');
-      const dd = String(d).padStart(2, '0');
-      if (activeDatePickerTargetInput) {
-        activeDatePickerTargetInput.value = `${dpState.year}/${mm}/${dd}`;
-      }
-      closeAllModals();
-    });
-    grid.appendChild(btn);
-  }
-}
+    // DatePicker Navigation
+    const dpPrevMonth = document.getElementById('dp-prev-month');
+    const dpNextMonth = document.getElementById('dp-next-month');
+    
+    if (dpPrevMonth) {
+        dpPrevMonth.onclick = () => {
+            if (state.currentPickerDate.jm > 1) {
+                state.currentPickerDate.jm--;
+            } else {
+                state.currentPickerDate.jm = 12;
+                state.currentPickerDate.jy--;
+            }
+            renderDatePicker();
+        };
+    }
+    
+    if (dpNextMonth) {
+        dpNextMonth.onclick = () => {
+            if (state.currentPickerDate.jm < 12) {
+                state.currentPickerDate.jm++;
+            } else {
+                state.currentPickerDate.jm = 1;
+                state.currentPickerDate.jy++;
+            }
+            renderDatePicker();
+        };
+    }
+    
+    const dpYearSelect = document.getElementById('dp-year-select');
+    const dpMonthSelect = document.getElementById('dp-month-select');
+    
+    if (dpYearSelect) {
+        dpYearSelect.onchange = (e) => {
+            state.currentPickerDate.jy = parseInt(e.target.value);
+            renderDatePicker();
+        };
+    }
+    
+    if (dpMonthSelect) {
+        dpMonthSelect.onchange = (e) => {
+            state.currentPickerDate.jm = parseInt(e.target.value);
+            renderDatePicker();
+        };
+    }
+});
