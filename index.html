@@ -266,7 +266,17 @@
         </div>
     </div>
 
-    <!-- فایل اصلی منطق سیستم -->
-    <script type="module" src="app.js?v=3.0"></script>
+  <!-- استفاده از CDN پایدار jsdelivr با قابلیت فال‌بک خودکار -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    // اگر CDN اول در اینترنت ایران باز نشد، بلافاصله از CDN دوم لود کند
+    if (typeof supabase === 'undefined') {
+        document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/supabase/2.39.8/supabase.min.js"><\/script>');
+    }
+</script>
+
+<!-- بعد از آن، فایل برنامه شما -->
+<script src="app.js?v=3.0"></script>
+
 </body>
 </html>
