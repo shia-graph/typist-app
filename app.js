@@ -4,7 +4,7 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 
 // توکن اصلی anon را در صورت نیاز اینجا بروز کنید
-const SUPABASE_KEY = 'GAPGPTMASKTOKENddsrl8g8jm8X0X';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
 // ایجاد کلاینت متصل به سوپابیس
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -59,7 +59,6 @@ window.closeAdminLoginModal = function() {
     const input = document.getElementById('adminPasswordInput');
     if (input) input.value = '';
 };
-
 window.submitAdminLogin = async function() {
     const passwordInput = document.getElementById('adminPasswordInput');
     const enteredPassword = passwordInput ? passwordInput.value.trim() : '';
@@ -69,28 +68,37 @@ window.submitAdminLogin = async function() {
         return;
     }
 
-    // شناسایی کلاینت سوپابیس (چه supabase باشد و چه supabaseClient)
-    const client = (typeof supabaseClient !== 'undefined') ? supabaseClient : (typeof supabase !== 'undefined' ? supabase : null);
+    // شناسایی خودکار کلاینت سوپابیس از تمام متغیرهای ممکن در محیط مرورگر
+    let client = null;
+    if (typeof window.supabaseClient !== 'undefined' && window.supabaseClient) {
+        client = window.supabaseClient;
+    } else if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        client = supabaseClient;
+    } else if (typeof window.supabase !== 'undefined' && typeof window.supabase.from === 'function') {
+        client = window.supabase;
+    } else if (typeof supabase !== 'undefined' && typeof supabase.from === 'function') {
+        client = supabase;
+    }
 
     if (!client) {
-        console.error('خطا: شیء کلاینت Supabase در صفحه لود نشده است.');
-        alert('ارتباط با پایگاه داده برقرار نشد. لطفاً صفحه را مجدداً بارگذاری کنید.');
+        console.error('کلاینت Supabase پیدا نشد. لطفاً تعریف window.supabaseClient را در بالای app.js بررسی کنید.');
+        alert('خطای فنی: اتصال به سرویس‌دهنده برقرار نیست.');
         return;
     }
 
     try {
-        // فراخوانی امن تابع سرور بدون ارسال رمز اصلی به مرورگر
-        const { data, error } = await client.rpc('check_admin_pass', {
+        // اعتبارسنجی ۱۰۰٪ امن در سمت سرور (بدون فاش شدن رمز عبور در مرورگر)
+        const { data: isCorrect, error } = await client.rpc('check_admin_pass', {
             entered_pass: enteredPassword
         });
 
         if (error) {
-            console.error('جزئیات خطای بازگشتی از Supabase:', error);
-            alert('خطای سرور: ' + (error.message || 'عدم دسترسی به اعتبارسنجی'));
+            console.error('خطای بازگشتی از دیتابیس:', error);
+            alert('خطای سرور: ' + (error.message || 'عدم دسترسی به سامانه اعتبارسنجی'));
             return;
         }
 
-        if (data === true) {
+        if (isCorrect === true) {
             sessionStorage.setItem('admin_logged_in', 'true');
             if (typeof window.closeAdminLoginModal === 'function') {
                 window.closeAdminLoginModal();
@@ -102,7 +110,7 @@ window.submitAdminLogin = async function() {
         }
 
     } catch (err) {
-        console.error('متن دقیق خطای رخ‌داده:', err);
+        console.error('متن دقیق خطا:', err);
         alert('خطای اتصال: ' + (err.message || 'ناشناخته'));
     }
 };
