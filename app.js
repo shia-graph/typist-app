@@ -8,7 +8,6 @@ console.log("Typist Payroll App initialized successfully.");
 const SUPABASE_URL = 'https://zgkhixllsmutjldszjls.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpna2hpeGxsc211dGpsZHN6amxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxNzE3MTksImV4cCI6MjA1NTc0NzcxOX0.99zW5E_g3pZ3c2jE0m9pYt-hW46cZ14Z52-G6XyN88Y';
 
-// Use window.supabaseClient to avoid collision with window.supabase from CDN
 window.supabaseClient = null;
 if (window.supabase && typeof window.supabase.createClient === 'function') {
     window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -23,8 +22,8 @@ const state = {
     payments: [],
     searchQuery: '',
     selectedTypistIds: new Set(),
-    activeTab: 'admin', // 'admin' | 'typist' for login tab
-    datePickerCallback: null,
+    activeTab: 'admin',
+    datePickerTargetId: null,
     currentPickerDate: null
 };
 
@@ -46,22 +45,15 @@ function showToast(message, type = 'info') {
     const bgColors = {
         success: 'bg-emerald-600 dark:bg-emerald-500',
         error: 'bg-rose-600 dark:bg-rose-500',
-        info: 'bg-indigo-600 dark:bg-indigo-500',
-        warning: 'bg-amber-600 dark:bg-amber-500'
+        info: 'bg-blue-600 dark:bg-blue-500',
+        warning: 'bg-amber-500 dark:bg-amber-400'
     };
     
     toast.className = `fixed bottom-5 left-5 z-50 px-5 py-3 rounded-xl text-white font-medium shadow-2xl transition-all duration-300 transform translate-y-10 opacity-0 flex items-center gap-2 ${bgColors[type] || bgColors.info}`;
-    toast.innerHTML = `
-        <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
-        <span>${message}</span>
-    `;
+    toast.innerHTML = `<span>${message}</span>`;
     
     document.body.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.classList.remove('translate-y-10', 'opacity-0');
-    }, 10);
-    
+    setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 10);
     setTimeout(() => {
         toast.classList.add('translate-y-10', 'opacity-0');
         setTimeout(() => toast.remove(), 300);
@@ -87,15 +79,21 @@ window.toggleTheme = function() {
 
 function updateThemeToggleUI() {
     const isDark = document.documentElement.classList.contains('dark');
-    const icon = document.getElementById('theme-toggle-icon');
-    if (icon) {
-        icon.className = isDark ? 'fas fa-sun text-amber-400' : 'fas fa-moon text-indigo-600';
+    const darkIcon = document.getElementById('theme-toggle-dark-icon');
+    const lightIcon = document.getElementById('theme-toggle-light-icon');
+    if (darkIcon && lightIcon) {
+        if (isDark) {
+            darkIcon.classList.remove('hidden');
+            lightIcon.classList.add('hidden');
+        } else {
+            darkIcon.classList.add('hidden');
+            lightIcon.classList.remove('hidden');
+        }
     }
 }
 
 // --- Shamsi Date Utilities ---
 const JDN_OFFSET = 1948320.5;
-
 function isPersianLeapYear(jy) {
     return (((((jy - (jy > 0 ? 474 : 473)) % 2820) + 474) + 38) * 682) % 2816 < 682;
 }
@@ -112,11 +110,9 @@ function jalaliToGregorian(jy, jm, jd) {
     let d = Math.floor((4 * c + 3) / 1461);
     let e = c - Math.floor((1461 * d) / 4);
     let m = Math.floor((5 * e + 2) / 153);
-    
     let day = e - Math.floor((153 * m + 2) / 5) + 1;
     let month = m + 3 - 12 * Math.floor(m / 10);
     let year = b * 100 + d - 4800 + Math.floor(m / 10);
-    
     return new Date(year, month - 1, day);
 }
 
@@ -153,91 +149,68 @@ function parseJalali(str) {
     if (!str || typeof str !== 'string') return null;
     const parts = toEnglishDigits(str).split('/');
     if (parts.length !== 3) return null;
-    const jy = parseInt(parts[0]);
-    const jm = parseInt(parts[1]);
-    const jd = parseInt(parts[2]);
+    const jy = parseInt(parts[0]), jm = parseInt(parts[1]), jd = parseInt(parts[2]);
     if (isNaN(jy) || isNaN(jm) || isNaN(jd)) return null;
     return { jy, jm, jd };
 }
 
-// Calculate days status for delivery timer badge
 function getDeliveryTimerBadge(deliveryDateStr) {
-    if (!deliveryDateStr) return `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">تعریف نشده</span>`;
-    
+    if (!deliveryDateStr) return `<span class="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">نامشخص</span>`;
     const jObj = parseJalali(deliveryDateStr);
-    if (!jObj) return `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">نامعتبر</span>`;
+    if (!jObj) return `<span class="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">نامعتبر</span>`;
     
     const targetDate = jalaliToGregorian(jObj.jy, jObj.jm, jObj.jd);
     const today = new Date();
     today.setHours(0,0,0,0);
     targetDate.setHours(0,0,0,0);
     
-    const diffTime = targetDate - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays > 0) {
-        return `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"><i class="fas fa-clock me-1"></i>${diffDays} روز باقی‌مانده</span>`;
-    } else if (diffDays === 0) {
-        return `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"><i class="fas fa-exclamation-triangle me-1"></i>امروز موعد تحویل</span>`;
-    } else {
-        return `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"><i class="fas fa-exclamation-circle me-1"></i>${Math.abs(diffDays)} روز تأخیر</span>`;
-    }
+    const diffDays = Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24));
+    if (diffDays > 0) return `<span class="px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">${diffDays} روز مانده</span>`;
+    else if (diffDays === 0) return `<span class="px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">امروز موعد تحویل</span>`;
+    else return `<span class="px-2.5 py-1 rounded-lg text-xs font-medium bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">${Math.abs(diffDays)} روز تاخیر</span>`;
 }
 
-// --- DatePicker Modal UI ---
-const monthNamesPersian = [
-    'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
-    'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
-];
+// --- Datepicker Logic ---
+const monthNamesPersian = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
 
-window.openDatePicker = function(currentValueStr, onSelectCallback) {
-    state.datePickerCallback = onSelectCallback;
-    let initialJalali = parseJalali(currentValueStr) || getTodayJalali();
+function openDatePicker(targetId) {
+    state.datePickerTargetId = targetId;
+    const inputEl = document.getElementById(targetId);
+    let initialJalali = parseJalali(inputEl ? inputEl.value : '') || getTodayJalali();
     state.currentPickerDate = { jy: initialJalali.jy, jm: initialJalali.jm };
     
     renderDatePicker();
-    const modal = document.getElementById('datepicker-modal');
-    if (modal) modal.classList.remove('hidden');
-};
-
-window.closeDatePicker = function() {
-    const modal = document.getElementById('datepicker-modal');
-    if (modal) modal.classList.add('hidden');
-    state.datePickerCallback = null;
-};
+    document.getElementById('modal-datepicker')?.classList.remove('hidden');
+}
 
 function renderDatePicker() {
     if (!state.currentPickerDate) state.currentPickerDate = getTodayJalali();
     const { jy, jm } = state.currentPickerDate;
     
-    const yearSelect = document.getElementById('dp-year-select');
-    const monthSelect = document.getElementById('dp-month-select');
+    const title = document.getElementById('dp-current-title');
+    if (title) title.textContent = `${monthNamesPersian[jm - 1]} ${jy}`;
+    
+    const yearSelect = document.getElementById('dp-select-year');
+    const monthSelect = document.getElementById('dp-select-month');
     
     if (yearSelect && monthSelect) {
         yearSelect.innerHTML = '';
-        for (let y = 1400; y <= 1410; y++) {
+        for (let y = 1390; y <= 1410; y++) {
             const opt = document.createElement('option');
-            opt.value = y;
-            opt.textContent = y;
+            opt.value = y; opt.textContent = y;
             if (y === jy) opt.selected = true;
             yearSelect.appendChild(opt);
         }
-        
         monthSelect.innerHTML = '';
         monthNamesPersian.forEach((mName, idx) => {
             const opt = document.createElement('option');
-            opt.value = idx + 1;
-            opt.textContent = mName;
+            opt.value = idx + 1; opt.textContent = mName;
             if (idx + 1 === jm) opt.selected = true;
             monthSelect.appendChild(opt);
         });
     }
     
-    let daysCount = 30;
-    if (jm <= 6) daysCount = 31;
-    else if (jm <= 11) daysCount = 30;
-    else daysCount = isPersianLeapYear(jy) ? 30 : 29;
-    
+    let daysCount = (jm <= 6) ? 31 : (jm <= 11) ? 30 : (isPersianLeapYear(jy) ? 30 : 29);
     const firstDayGreg = jalaliToGregorian(jy, jm, 1);
     let startDayOfWeek = (firstDayGreg.getDay() + 1) % 7;
     
@@ -247,128 +220,104 @@ function renderDatePicker() {
     
     for (let i = 0; i < startDayOfWeek; i++) {
         const emptyCell = document.createElement('div');
-        emptyCell.className = 'h-9';
         grid.appendChild(emptyCell);
     }
     
     const todayJalali = getTodayJalali();
-    
     for (let d = 1; d <= daysCount; d++) {
         const btn = document.createElement('button');
         btn.type = 'button';
         const isToday = (todayJalali.jy === jy && todayJalali.jm === jm && todayJalali.jd === d);
-        
-        btn.className = `h-9 w-9 mx-auto rounded-lg text-sm font-medium transition-all flex items-center justify-center ${
-            isToday ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-300 dark:border-indigo-700' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
-        }`;
+        btn.className = `p-1 rounded-lg text-sm font-medium transition-all ${isToday ? 'bg-blue-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}`;
         btn.textContent = d;
         btn.onclick = () => {
-            const selectedStr = formatJalali({ jy, jm, jd: d });
-            if (state.datePickerCallback) {
-                state.datePickerCallback(selectedStr);
+            if (state.datePickerTargetId) {
+                const targetInput = document.getElementById(state.datePickerTargetId);
+                if (targetInput) targetInput.value = formatJalali({ jy, jm, jd: d });
             }
-            window.closeDatePicker();
+            document.getElementById('modal-datepicker')?.classList.add('hidden');
         };
         grid.appendChild(btn);
     }
 }
 
-// --- Navigation & View Switching ---
+// --- Navigation ---
 function showView(viewId) {
-    document.querySelectorAll('.app-view').forEach(v => v.classList.add('hidden'));
-    const target = document.getElementById(viewId);
-    if (target) target.classList.remove('hidden');
-    
-    const adminOnlyElements = document.querySelectorAll('.admin-only');
-    const typistOnlyElements = document.querySelectorAll('.typist-only');
-    
-    if (state.currentUser && state.currentUser.role === 'admin') {
-        adminOnlyElements.forEach(el => el.classList.remove('hidden'));
-        typistOnlyElements.forEach(el => el.classList.add('hidden'));
-    } else if (state.currentUser && state.currentUser.role === 'typist') {
-        adminOnlyElements.forEach(el => el.classList.add('hidden'));
-        typistOnlyElements.forEach(el => el.classList.remove('hidden'));
+    document.getElementById('login-view')?.classList.add('hidden');
+    document.getElementById('dashboard-view')?.classList.add('hidden');
+    document.getElementById('detail-view')?.classList.add('hidden');
+    document.getElementById(viewId)?.classList.remove('hidden');
+    updateNavUI();
+}
+
+function updateNavUI() {
+    const navControls = document.getElementById('user-nav-controls');
+    if (navControls) {
+        if (state.currentUser) navControls.classList.remove('hidden');
+        else navControls.classList.add('hidden');
     }
 }
 
 // --- Authentication ---
-window.handleLogin = async function(e) {
-    if (e) e.preventDefault();
+window.handleLogin = async function(e, role) {
+    e.preventDefault();
     if (!window.supabaseClient) {
-        showToast('خطا در اتصال به دیتابیس Supabase', 'error');
+        showToast('خطا در اتصال به دیتابیس', 'error');
         return;
     }
     
-    const btn = document.getElementById('login-submit-btn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>در حال ورود...'; }
+    const errBox = document.getElementById('login-error');
+    if (errBox) errBox.classList.add('hidden');
     
     try {
-        if (state.activeTab === 'admin') {
-            const adminInput = document.getElementById('admin-password-input');
-            const pwd = toEnglishDigits(adminInput ? adminInput.value : '');
+        if (role === 'admin') {
+            const pwd = toEnglishDigits(document.getElementById('admin-password')?.value || '');
             const { data, error } = await window.supabaseClient.rpc('verify_admin_password', { p_password: pwd });
-            
             if (error) throw error;
             const res = Array.isArray(data) ? data[0] : (data || {});
-            
             if (res && res.success) {
-                state.currentUser = { role: 'admin', name: 'مدیر سیستم', typistId: null };
+                state.currentUser = { role: 'admin', name: 'مدیر', typistId: null };
                 showToast('با موفقیت وارد شدید', 'success');
                 showDashboardView();
             } else {
-                showToast(res?.message || 'رمز عبور مدیر اشتباه است', 'error');
+                throw new Error(res?.message || 'رمز عبور اشتباه است');
             }
         } else {
-            const idenInput = document.getElementById('typist-identifier-input');
-            const pwdInput = document.getElementById('typist-password-input');
-            const identifier = toEnglishDigits(idenInput ? idenInput.value : '');
-            const pwd = toEnglishDigits(pwdInput ? pwdInput.value : '');
-            
-            if (!identifier) {
-                showToast('لطفا کد ملی یا شماره همراه را وارد کنید', 'warning');
-                return;
-            }
-            
-            const { data, error } = await window.supabaseClient.rpc('verify_typist_password', {
-                p_identifier: identifier,
-                p_password: pwd
-            });
-            
+            const iden = toEnglishDigits(document.getElementById('typist-identity')?.value || '');
+            const pwd = toEnglishDigits(document.getElementById('typist-password')?.value || '');
+            const { data, error } = await window.supabaseClient.rpc('verify_typist_password', { p_identifier: iden, p_password: pwd });
             if (error) throw error;
             const res = Array.isArray(data) ? data[0] : (data || {});
-            
             if (res && res.success && res.typist) {
-                const t = res.typist;
-                state.currentUser = {
-                    role: 'typist',
-                    name: `${t.first_name || ''} ${t.last_name || ''}`.trim() || 'تایپیست',
-                    typistId: t.id
-                };
-                showToast(`خوش آمدید، ${state.currentUser.name}`, 'success');
-                window.showTypistDetailView(t.id);
+                state.currentUser = { role: 'typist', name: `${res.typist.first_name} ${res.typist.last_name}`, typistId: res.typist.id };
+                showToast('خوش آمدید', 'success');
+                showTypistDetailView(res.typist.id);
             } else {
-                showToast(res?.message || 'شناسه یا رمز عبور اشتباه است', 'error');
+                throw new Error(res?.message || 'اطلاعات ورود اشتباه است');
             }
         }
     } catch (err) {
-        console.error('Login Error:', err);
-        showToast('خطا در ورود: ' + (err.message || err), 'error');
-    } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = 'ورود به سامانه'; }
+        if (errBox) {
+            errBox.textContent = err.message || 'خطا در ورود';
+            errBox.classList.remove('hidden');
+        } else {
+            showToast(err.message, 'error');
+        }
     }
 };
 
 window.handleLogout = function() {
     state.currentUser = null;
     state.currentTypistId = null;
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) loginForm.reset();
+    document.getElementById('form-login-admin')?.reset();
+    document.getElementById('form-login-typist')?.reset();
     showView('login-view');
-    showToast('از سامانه خارج شدید', 'info');
+    showToast('از سیستم خارج شدید', 'info');
 };
 
-// --- Dashboard View (Admin) ---
+// --- Dashboard (Admin) ---
 async function showDashboardView() {
+    if (!state.currentUser || state.currentUser.role !== 'admin') return;
     showView('dashboard-view');
     await loadDashboardData();
 }
@@ -378,704 +327,489 @@ async function loadDashboardData() {
     try {
         const { data, error } = await window.supabaseClient.rpc('get_dashboard_summary');
         if (error) throw error;
-        
-        let items = data;
-        if (Array.isArray(data) && data.length === 1 && Array.isArray(data[0])) {
-            items = data[0];
-        }
-        state.typists = Array.isArray(items) ? items.filter(Boolean) : [];
+        let items = Array.isArray(data) && Array.isArray(data[0]) ? data[0] : data;
+        state.typists = Array.isArray(items) ? items : [];
         renderDashboard();
     } catch (err) {
-        console.error('Fetch Dashboard Error:', err);
-        showToast('خطا در دریافت اطلاعات دیتابیس: ' + (err.message || err), 'error');
+        showToast('خطا در دریافت لیست تایپیست‌ها', 'error');
     }
 }
 
 function renderDashboard() {
-    const container = document.getElementById('typists-list-container');
-    if (!container) return;
+    const tbody = document.getElementById('typists-table-body');
+    if (!tbody) return;
     
-    let filtered = (state.typists || []).filter(t => t && typeof t === 'object').filter(t => {
-        const fullName = `${t.first_name || ''} ${t.last_name || ''}`.toLowerCase();
-        const nationalId = (t.national_id || '').toLowerCase();
-        const phone = (t.phone || '').toLowerCase();
-        const q = (state.searchQuery || '').toLowerCase();
-        return fullName.includes(q) || nationalId.includes(q) || phone.includes(q);
+    let filtered = state.typists.filter(t => {
+        const q = state.searchQuery.toLowerCase();
+        const str = `${t.first_name || ''} ${t.last_name || ''} ${t.national_id || ''} ${t.phone || ''}`.toLowerCase();
+        return str.includes(q);
     });
-    
-    // Update Summaries
-    let grandTotalEarnings = 0;
-    let grandTotalPaid = 0;
+
+    let totalEarnings = 0, totalPaid = 0, totalWords = 0;
     state.typists.forEach(t => {
-        if (t) {
-            grandTotalEarnings += Number(t.total_earnings || 0);
-            grandTotalPaid += Number(t.total_paid || 0);
-        }
+        totalEarnings += Number(t.total_earnings || 0);
+        totalPaid += Number(t.total_paid || 0);
+        totalWords += Number(t.page_rate || 0); // Placeholder for words if needed
     });
-    
-    const countEl = document.getElementById('stat-total-typists');
-    const earningsEl = document.getElementById('stat-total-earnings');
-    const paidEl = document.getElementById('stat-total-paid');
-    const remainingEl = document.getElementById('stat-total-remaining');
-    
-    if (countEl) countEl.textContent = state.typists.length.toLocaleString('fa-IR');
-    if (earningsEl) earningsEl.textContent = grandTotalEarnings.toLocaleString('fa-IR') + ' تومان';
-    if (paidEl) paidEl.textContent = grandTotalPaid.toLocaleString('fa-IR') + ' تومان';
-    if (remainingEl) remainingEl.textContent = (grandTotalEarnings - grandTotalPaid).toLocaleString('fa-IR') + ' تومان';
+
+    document.getElementById('stat-total-typists').textContent = state.typists.length.toLocaleString('fa-IR') + ' نفر';
+    document.getElementById('stat-total-paid').textContent = totalPaid.toLocaleString('fa-IR') + ' تومان';
+    document.getElementById('stat-total-remaining').textContent = (totalEarnings - totalPaid).toLocaleString('fa-IR') + ' تومان';
 
     if (filtered.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-12 text-slate-400">
-                <i class="fas fa-users-slash text-4xl mb-3 block"></i>
-                <p class="font-medium">هیچ تایپیستی پیدا نشد</p>
-            </div>
-        `;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-500">موردی یافت نشد</td></tr>`;
         return;
     }
 
-    container.innerHTML = filtered.map((t) => {
-        const fullName = `${t.first_name || ''} ${t.last_name || ''}`.trim() || 'بدون نام';
-        const isChecked = state.selectedTypistIds.has(t.id);
-        const timerBadge = getDeliveryTimerBadge(t.delivery_date);
+    tbody.innerHTML = filtered.map(t => {
         const remaining = Number(t.remaining_balance || 0);
-        const role = state.currentUser ? state.currentUser.role : 'admin';
+        const fullName = `${t.first_name || ''} ${t.last_name || ''}`.trim() || 'بدون نام';
+        const isChecked = state.selectedTypistIds.has(t.id) ? 'checked' : '';
         
         return `
-            <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-800 transition-all duration-200">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div class="flex items-center gap-3">
-                        <input type="checkbox" onchange="window.toggleSelectTypist('${t.id}')" ${isChecked ? 'checked' : ''} 
-                            class="w-5 h-5 text-indigo-600 rounded-md border-slate-300 focus:ring-indigo-500 cursor-pointer">
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <h3 class="font-bold text-slate-800 dark:text-slate-100 text-lg">${fullName}</h3>
-                                ${timerBadge}
-                            </div>
-                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                <span><i class="far fa-id-card me-1"></i>${t.national_id || '---'}</span>
-                                <span><i class="fas fa-phone me-1"></i>${t.phone || '---'}</span>
-                                ${role === 'admin' ? `<span><i class="fas fa-file-invoice me-1"></i>نرخ صفحه: ${(Number(t.page_rate) || 0).toLocaleString('fa-IR')} تومان</span>` : ''}
-                            </div>
-                        </div>
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                <td class="p-4 text-center">
+                    <input type="checkbox" onchange="window.toggleSelectTypist('${t.id}')" ${isChecked} class="rounded border-slate-300 text-blue-600" />
+                </td>
+                <td class="p-4">
+                    <div class="font-bold text-slate-900 dark:text-white">${fullName}</div>
+                    <div class="text-xs text-slate-500 mt-1">${t.national_id || '---'}</div>
+                </td>
+                <td class="p-4">
+                    <div class="flex items-center gap-2">
+                        <a href="tel:${t.phone}" class="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path></svg></a>
+                        <a href="sms:${t.phone}" class="p-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"></path></svg></a>
                     </div>
-                    
-                    <div class="flex flex-wrap items-center justify-between md:justify-end gap-3 border-t md:border-t-0 pt-3 md:pt-0 border-slate-200 dark:border-slate-800">
-                        <div class="text-start md:text-left me-2">
-                            <span class="text-xs text-slate-400 block">مانده حساب</span>
-                            <span class="font-extrabold ${remaining > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'} text-base">
-                                ${Math.abs(remaining).toLocaleString('fa-IR')} تومان ${remaining < 0 ? '(طلبکار)' : ''}
-                            </span>
-                        </div>
-                        
-                        <!-- Quick Call & SMS Buttons -->
-                        <div class="flex items-center gap-1.5">
-                            <a href="tel:${t.phone}" title="تماس تلفنی" class="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center">
-                                <i class="fas fa-phone"></i>
-                            </a>
-                            <a href="sms:${t.phone}" title="ارسال پیامک" class="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center">
-                                <i class="fas fa-comment-alt"></i>
-                            </a>
-                            <button onclick="window.showTypistDetailView('${t.id}')" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-md hover:shadow-indigo-500/20 transition-all flex items-center gap-1.5 me-1">
-                                <i class="fas fa-user-gear"></i>
-                                <span>مدیریت و جزئیات</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                </td>
+                <td class="p-4 text-center font-medium">${(Number(t.page_rate) || 0).toLocaleString('fa-IR')}</td>
+                <td class="p-4 text-center font-bold ${remaining > 0 ? 'text-rose-600' : 'text-emerald-600'}">
+                    ${Math.abs(remaining).toLocaleString('fa-IR')} ${remaining < 0 ? '(طلبکار)' : ''}
+                </td>
+                <td class="p-4 text-center">${getDeliveryTimerBadge(t.delivery_date)}</td>
+                <td class="p-4 text-center">
+                    <button onclick="window.showTypistDetailView('${t.id}')" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-lg text-xs font-semibold">جزئیات</button>
+                </td>
+            </tr>
         `;
     }).join('');
 }
 
 window.toggleSelectTypist = function(id) {
-    if (state.selectedTypistIds.has(id)) {
-        state.selectedTypistIds.delete(id);
-    } else {
-        state.selectedTypistIds.add(id);
-    }
+    if (state.selectedTypistIds.has(id)) state.selectedTypistIds.delete(id);
+    else state.selectedTypistIds.add(id);
+    updateSmsCount();
 };
 
-window.selectAllTypists = function(e) {
-    if (e.target.checked) {
-        state.typists.forEach(t => { if(t && t.id) state.selectedTypistIds.add(t.id); });
-    } else {
-        state.selectedTypistIds.clear();
-    }
+window.selectAllTypists = function(checked) {
+    if (checked) state.typists.forEach(t => state.selectedTypistIds.add(t.id));
+    else state.selectedTypistIds.clear();
     renderDashboard();
 };
 
-window.openGroupSmsModal = function() {
-    if (state.selectedTypistIds.size === 0) {
-        showToast('لطفا حداقل یک تایپیست را انتخاب کنید', 'warning');
-        return;
-    }
-    const modal = document.getElementById('group-sms-modal');
-    if (modal) modal.classList.remove('hidden');
-};
+function updateSmsCount() {
+    const el = document.getElementById('modal-sms-recipients-count');
+    if (el) el.textContent = `تعداد دریافت‌کنندگان: ${state.selectedTypistIds.size.toLocaleString('fa-IR')} نفر`;
+}
 
-window.closeGroupSmsModal = function() {
-    const modal = document.getElementById('group-sms-modal');
-    if (modal) modal.classList.add('hidden');
-};
-
-window.sendGroupSms = function() {
-    const bodyInput = document.getElementById('sms-body-input');
-    const bodyText = bodyInput ? bodyInput.value : '';
-    const selectedTypists = state.typists.filter(t => t && state.selectedTypistIds.has(t.id));
-    const phones = selectedTypists.map(t => t.phone).filter(p => !!p).join(',');
-    
-    if (!phones) {
-        showToast('شماره تلفن معتبری یافت نشد', 'error');
-        return;
-    }
-    
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const separator = isIOS ? '&' : '?';
-    const smsUrl = `sms:${phones}${separator}body=${encodeURIComponent(bodyText)}`;
-    
-    window.location.href = smsUrl;
-    window.closeGroupSmsModal();
-};
-
-// --- Detail View (Single Typist) ---
+// --- Detail View (Admin & Typist) ---
 window.showTypistDetailView = async function(typistId) {
     state.currentTypistId = typistId;
     showView('detail-view');
+    
+    // UI role setup
+    const isAdmin = (state.currentUser && state.currentUser.role === 'admin');
+    document.getElementById('detail-back-bar').style.display = isAdmin ? 'flex' : 'none';
+    document.getElementById('detail-rate-badge').style.display = isAdmin ? 'block' : 'none';
+    document.getElementById('btn-open-add-payment').style.display = isAdmin ? 'flex' : 'none';
+    document.getElementById('wrapper-modal-typist-rate').style.display = isAdmin ? 'block' : 'none';
+    document.getElementById('wrapper-modal-report-rate').style.display = isAdmin ? 'block' : 'none';
+    
     await loadTypistDetail(typistId);
 };
 
-async function loadTypistDetail(typistId) {
+async function loadTypistDetail(id) {
     if (!window.supabaseClient) return;
     try {
-        const { data, error } = await window.supabaseClient.rpc('get_typist_detail', { p_typist_id: typistId });
+        const { data, error } = await window.supabaseClient.rpc('get_typist_detail', { p_typist_id: id });
         if (error) throw error;
-        
         const res = Array.isArray(data) ? data[0] : (data || {});
-        if (res && res.success && res.typist) {
-            renderTypistDetail(res);
-        } else {
-            showToast(res?.message || 'اطلاعات تایپیست یافت نشد', 'error');
-        }
+        if (res && res.success) renderTypistDetail(res);
     } catch (err) {
-        console.error('Fetch Detail Error:', err);
-        showToast('خطا در دریافت جزئیات تایپیست: ' + (err.message || err), 'error');
+        showToast('خطا در دریافت جزئیات', 'error');
     }
 }
 
 function renderTypistDetail(data) {
-    if (!data) return;
-    const typist = data.typist || {};
-    const fullName = `${typist.first_name || ''} ${typist.last_name || ''}`.trim() || 'بدون نام';
+    const t = data.typist || {};
+    const isAdmin = (state.currentUser && state.currentUser.role === 'admin');
     
-    // Header Info
-    const nameEl = document.getElementById('detail-typist-name');
-    if (nameEl) nameEl.textContent = fullName;
+    document.getElementById('detail-name').textContent = `${t.first_name || ''} ${t.last_name || ''}`;
+    document.getElementById('detail-subinfo').textContent = `کد ملی: ${t.national_id || '---'} | موبایل: ${t.phone || '---'}`;
+    document.getElementById('detail-delivery-badge-wrapper').innerHTML = getDeliveryTimerBadge(t.delivery_date);
     
-    const badgeContainer = document.getElementById('detail-timer-badge-container');
-    if (badgeContainer) badgeContainer.innerHTML = getDeliveryTimerBadge(typist.delivery_date);
-    
-    // Form pre-fill
-    const fnInput = document.getElementById('edit-first-name');
-    const lnInput = document.getElementById('edit-last-name');
-    const fatInput = document.getElementById('edit-father-name');
-    const natInput = document.getElementById('edit-national-id');
-    const phInput = document.getElementById('edit-phone');
-    const cdInput = document.getElementById('edit-card-number');
-    const ibInput = document.getElementById('edit-iban');
-    const prInput = document.getElementById('edit-page-rate');
-    const ddInput = document.getElementById('edit-delivery-date');
+    if (isAdmin) {
+        document.getElementById('detail-rate-badge').textContent = `💵 نرخ هر کلمه: ${(Number(t.page_rate) || 0).toLocaleString('fa-IR')} تومان`;
+        document.getElementById('detail-contact-actions').innerHTML = `
+            <a href="tel:${t.phone}" class="p-2 bg-emerald-100 text-emerald-700 rounded-xl"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path></svg></a>
+            <a href="sms:${t.phone}" class="p-2 bg-blue-100 text-blue-700 rounded-xl"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"></path></svg></a>
+        `;
+    }
 
-    if (fnInput) fnInput.value = typist.first_name || '';
-    if (lnInput) lnInput.value = typist.last_name || '';
-    if (fatInput) fatInput.value = typist.father_name || '';
-    if (natInput) natInput.value = typist.national_id || '';
-    if (phInput) phInput.value = typist.phone || '';
-    if (cdInput) cdInput.value = typist.card_number || '';
-    if (ibInput) ibInput.value = typist.iban || '';
-    if (prInput) prInput.value = typist.page_rate || 0;
-    if (ddInput) ddInput.value = typist.delivery_date || '';
-
-    // Summary Cards
-    const totalEarningsEl = document.getElementById('detail-total-earnings');
-    const totalPaidEl = document.getElementById('detail-total-paid');
-    const remainingEl = document.getElementById('detail-remaining-balance');
-    
     const earnings = Number(data.total_earnings || 0);
     const paid = Number(data.total_paid || 0);
     const remaining = Number(data.remaining_balance || 0);
     
-    if (totalEarningsEl) totalEarningsEl.textContent = earnings.toLocaleString('fa-IR') + ' تومان';
-    if (totalPaidEl) totalPaidEl.textContent = paid.toLocaleString('fa-IR') + ' تومان';
-    if (remainingEl) remainingEl.textContent = Math.abs(remaining).toLocaleString('fa-IR') + ' تومان' + (remaining < 0 ? ' (طلبکار)' : '');
+    document.getElementById('detail-stat-total').textContent = earnings.toLocaleString('fa-IR') + ' تومان';
+    document.getElementById('detail-stat-paid').textContent = paid.toLocaleString('fa-IR') + ' تومان';
+    document.getElementById('detail-stat-remaining').textContent = Math.abs(remaining).toLocaleString('fa-IR') + ' تومان';
+    
+    // Store data in form for editing
+    document.getElementById('modal-typist-id').value = t.id || '';
+    document.getElementById('modal-typist-firstname').value = t.first_name || '';
+    document.getElementById('modal-typist-lastname').value = t.last_name || '';
+    document.getElementById('modal-typist-father').value = t.father_name || '';
+    document.getElementById('modal-typist-nationalid').value = t.national_id || '';
+    document.getElementById('modal-typist-phone').value = t.phone || '';
+    document.getElementById('modal-typist-rate').value = t.page_rate || '';
+    document.getElementById('modal-typist-card').value = t.card_number || '';
+    document.getElementById('modal-typist-iban').value = t.iban || '';
+    document.getElementById('modal-typist-delivery').value = t.delivery_date || '';
 
-    // Render Tables
-    renderReportsTable(data.reports || []);
-    renderPaymentsTable(data.payments || []);
+    renderReports(data.reports || [], isAdmin);
+    renderPayments(data.payments || [], isAdmin);
 }
 
-function renderReportsTable(reports) {
+function renderReports(reports, isAdmin) {
     const tbody = document.getElementById('reports-table-body');
-    if (!tbody) return;
+    const thRate = document.getElementById('th-report-rate');
+    if (thRate) thRate.style.display = isAdmin ? '' : 'none';
     
-    if (!Array.isArray(reports) || reports.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400">هیچ کارکردی ثبت نشده است</td></tr>`;
+    if (!reports.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-500">هیچ کارکردی ثبت نشده</td></tr>`;
         return;
     }
     
-    const isAdmin = state.currentUser ? state.currentUser.role === 'admin' : false;
+    let totalWordsCounter = 0;
     
-    tbody.innerHTML = reports.map((r, i) => {
-        const pages = Number(r.page_count || 0);
-        const rate = Number(r.rate || 0);
-        const total = Number(r.total_amount || 0);
-        
+    tbody.innerHTML = reports.map(r => {
+        const words = Number(r.page_count || 0);
+        totalWordsCounter += words;
         return `
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-100 dark:border-slate-800">
-                <td class="py-3 px-4 font-medium">${(i + 1).toLocaleString('fa-IR')}</td>
-                <td class="py-3 px-4">${r.report_date || '---'}</td>
-                <td class="py-3 px-4 font-bold text-indigo-600 dark:text-indigo-400">${pages.toLocaleString('fa-IR')} صفحه</td>
-                ${isAdmin ? `<td class="py-3 px-4">${rate.toLocaleString('fa-IR')} تومان</td>` : ''}
-                ${isAdmin ? `<td class="py-3 px-4 font-extrabold text-slate-800 dark:text-slate-200">${total.toLocaleString('fa-IR')} تومان</td>` : ''}
-                <td class="py-3 px-4 text-slate-500 dark:text-slate-400 text-xs">${r.description || '---'}</td>
-                <td class="py-3 px-4">
-                    <button onclick="window.deleteReport('${r.id}')" class="text-rose-500 hover:text-rose-700 p-1 transition-colors" title="حذف">
-                        <i class="fas fa-trash-can"></i>
-                    </button>
+            <tr class="border-b border-slate-100 dark:border-slate-800">
+                <td class="p-3">${r.report_date || ''}</td>
+                <td class="p-3 text-center font-bold text-blue-600">${words.toLocaleString('fa-IR')}</td>
+                <td class="p-3 text-center">---</td>
+                ${isAdmin ? `<td class="p-3 text-center">${(Number(r.rate)||0).toLocaleString('fa-IR')}</td>` : ''}
+                <td class="p-3 text-center font-bold">${(Number(r.total_amount)||0).toLocaleString('fa-IR')}</td>
+                <td class="p-3 text-xs text-slate-500">${r.description || ''}</td>
+                <td class="p-3 text-center">
+                    <button onclick="window.deleteReport('${r.id}')" class="text-rose-500 hover:text-rose-700"><svg class="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
                 </td>
             </tr>
         `;
     }).join('');
     
-    const thRate = document.getElementById('th-report-rate');
-    const thTotal = document.getElementById('th-report-total');
-    if (thRate) thRate.style.display = isAdmin ? '' : 'none';
-    if (thTotal) thTotal.style.display = isAdmin ? '' : 'none';
+    document.getElementById('detail-stat-words').textContent = totalWordsCounter.toLocaleString('fa-IR');
 }
 
-function renderPaymentsTable(payments) {
+function renderPayments(payments, isAdmin) {
     const tbody = document.getElementById('payments-table-body');
-    if (!tbody) return;
-    
-    if (!Array.isArray(payments) || payments.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-400">هیچ پرداختی ثبت نشده است</td></tr>`;
+    if (!payments.length) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500">هیچ پرداختی ثبت نشده</td></tr>`;
         return;
     }
-    
-    const isAdmin = state.currentUser ? state.currentUser.role === 'admin' : false;
-    
-    tbody.innerHTML = payments.map((p, i) => {
-        const amount = Number(p.amount || 0);
-        return `
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-100 dark:border-slate-800">
-                <td class="py-3 px-4 font-medium">${(i + 1).toLocaleString('fa-IR')}</td>
-                <td class="py-3 px-4">${p.payment_date || '---'}</td>
-                <td class="py-3 px-4 font-bold text-emerald-600 dark:text-emerald-400">${amount.toLocaleString('fa-IR')} تومان</td>
-                <td class="py-3 px-4 text-slate-500 dark:text-slate-400 text-xs">${p.description || '---'}</td>
-                ${isAdmin ? `
-                <td class="py-3 px-4">
-                    <button onclick="window.deletePayment('${p.id}')" class="text-rose-500 hover:text-rose-700 p-1 transition-colors" title="حذف">
-                        <i class="fas fa-trash-can"></i>
-                    </button>
-                </td>` : '<td></td>'}
-            </tr>
-        `;
-    }).join('');
+    tbody.innerHTML = payments.map(p => `
+        <tr class="border-b border-slate-100 dark:border-slate-800">
+            <td class="p-3">${p.payment_date || ''}</td>
+            <td class="p-3 text-center font-bold text-emerald-600">${(Number(p.amount)||0).toLocaleString('fa-IR')}</td>
+            <td class="p-3 text-center">---</td>
+            <td class="p-3 text-center">---</td>
+            <td class="p-3 text-xs text-slate-500">${p.description || ''}</td>
+            <td class="p-3 text-center">
+                ${isAdmin ? `<button onclick="window.deletePayment('${p.id}')" class="text-rose-500 hover:text-rose-700"><svg class="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>` : ''}
+            </td>
+        </tr>
+    `).join('');
 }
 
 // --- CRUD Actions ---
-window.saveTypistProfile = async function(e) {
-    if (e) e.preventDefault();
-    if (!window.supabaseClient || !state.currentTypistId) return;
-    
+window.submitTypistForm = async function(e) {
+    e.preventDefault();
+    const tId = document.getElementById('modal-typist-id').value;
     const payload = {
-        p_id: state.currentTypistId,
-        p_first_name: document.getElementById('edit-first-name')?.value || '',
-        p_last_name: document.getElementById('edit-last-name')?.value || '',
-        p_father_name: document.getElementById('edit-father-name')?.value || '',
-        p_national_id: toEnglishDigits(document.getElementById('edit-national-id')?.value || ''),
-        p_phone: toEnglishDigits(document.getElementById('edit-phone')?.value || ''),
-        p_card_number: toEnglishDigits(document.getElementById('edit-card-number')?.value || ''),
-        p_iban: toEnglishDigits(document.getElementById('edit-iban')?.value || ''),
-        p_page_rate: Number(toEnglishDigits(document.getElementById('edit-page-rate')?.value || 0)),
-        p_delivery_date: document.getElementById('edit-delivery-date')?.value || ''
+        p_id: tId ? tId : null,
+        p_first_name: document.getElementById('modal-typist-firstname').value,
+        p_last_name: document.getElementById('modal-typist-lastname').value,
+        p_father_name: document.getElementById('modal-typist-father').value,
+        p_national_id: toEnglishDigits(document.getElementById('modal-typist-nationalid').value),
+        p_phone: toEnglishDigits(document.getElementById('modal-typist-phone').value),
+        p_card_number: toEnglishDigits(document.getElementById('modal-typist-card').value),
+        p_iban: toEnglishDigits(document.getElementById('modal-typist-iban').value),
+        p_page_rate: Number(toEnglishDigits(document.getElementById('modal-typist-rate').value || 0)),
+        p_delivery_date: document.getElementById('modal-typist-delivery').value
     };
     
     try {
-        const { data, error } = await window.supabaseClient.rpc('upsert_typist', payload);
+        const { error } = await window.supabaseClient.rpc('upsert_typist', payload);
         if (error) throw error;
-        
-        showToast('اطلاعات پروفایل با موفقیت به‌روزرسانی شد', 'success');
-        loadTypistDetail(state.currentTypistId);
+        showToast('اطلاعات با موفقیت ذخیره شد', 'success');
+        document.getElementById('modal-typist').classList.add('hidden');
+        if (state.currentUser.role === 'admin' && !tId) loadDashboardData();
+        if (state.currentTypistId) loadTypistDetail(state.currentTypistId);
     } catch (err) {
-        console.error('Save Profile Error:', err);
-        showToast('خطا در ذخیره پروفایل: ' + (err.message || err), 'error');
+        showToast('خطا در ذخیره اطلاعات', 'error');
     }
 };
 
-window.openAddTypistModal = function() {
-    const form = document.getElementById('add-typist-form');
-    if (form) form.reset();
-    const modal = document.getElementById('add-typist-modal');
-    if (modal) modal.classList.remove('hidden');
-};
-
-window.closeAddTypistModal = function() {
-    const modal = document.getElementById('add-typist-modal');
-    if (modal) modal.classList.add('hidden');
-};
-
-window.handleAddTypistSubmit = async function(e) {
+window.submitReportForm = async function(e) {
     e.preventDefault();
-    if (!window.supabaseClient) return;
-    
-    const payload = {
-        p_id: null,
-        p_first_name: document.getElementById('add-first-name')?.value || '',
-        p_last_name: document.getElementById('add-last-name')?.value || '',
-        p_father_name: document.getElementById('add-father-name')?.value || '',
-        p_national_id: toEnglishDigits(document.getElementById('add-national-id')?.value || ''),
-        p_phone: toEnglishDigits(document.getElementById('add-phone')?.value || ''),
-        p_card_number: toEnglishDigits(document.getElementById('add-card-number')?.value || ''),
-        p_iban: toEnglishDigits(document.getElementById('add-iban')?.value || ''),
-        p_page_rate: Number(toEnglishDigits(document.getElementById('add-page-rate')?.value || 0)),
-        p_delivery_date: document.getElementById('add-delivery-date')?.value || ''
-    };
+    if (!state.currentTypistId) return;
+    const words = Number(toEnglishDigits(document.getElementById('modal-report-words').value || 0));
+    const pages = document.getElementById('modal-report-pages').value;
+    const date = document.getElementById('modal-report-date').value;
+    const notes = document.getElementById('modal-report-notes').value;
     
     try {
-        const { data, error } = await window.supabaseClient.rpc('upsert_typist', payload);
-        if (error) throw error;
-        
-        showToast('تایپیست جدید با موفقیت اضافه شد', 'success');
-        window.closeAddTypistModal();
-        loadDashboardData();
-    } catch (err) {
-        console.error('Add Typist Error:', err);
-        showToast('خطا در افزودن تایپیست: ' + (err.message || err), 'error');
-    }
-};
-
-window.openAddReportModal = function() {
-    const form = document.getElementById('add-report-form');
-    if (form) form.reset();
-    
-    const dateInput = document.getElementById('report-date-input');
-    if (dateInput) dateInput.value = formatJalali(getTodayJalali());
-    
-    const modal = document.getElementById('add-report-modal');
-    if (modal) modal.classList.remove('hidden');
-};
-
-window.closeAddReportModal = function() {
-    const modal = document.getElementById('add-report-modal');
-    if (modal) modal.classList.add('hidden');
-};
-
-window.handleAddReportSubmit = async function(e) {
-    e.preventDefault();
-    if (!window.supabaseClient || !state.currentTypistId) return;
-    
-    const pageCount = Number(toEnglishDigits(document.getElementById('report-page-count')?.value || '0'));
-    const reportDate = document.getElementById('report-date-input')?.value || '';
-    const desc = document.getElementById('report-desc')?.value || '';
-    
-    if (!pageCount || pageCount <= 0) {
-        showToast('لطفاً تعداد صفحات معتبر وارد کنید', 'warning');
-        return;
-    }
-    
-    try {
-        const { data, error } = await window.supabaseClient.rpc('add_typist_report', {
+        const { error } = await window.supabaseClient.rpc('add_typist_report', {
             p_typist_id: state.currentTypistId,
-            p_page_count: pageCount,
-            p_report_date: reportDate,
-            p_description: desc
+            p_page_count: words, // Passing words into page_count column based on new schema
+            p_report_date: date,
+            p_description: notes ? `صفحات: ${pages} - ${notes}` : `صفحات: ${pages}`
         });
-        
         if (error) throw error;
-        
-        showToast('کارکرد با موفقیت ثبت شد', 'success');
-        window.closeAddReportModal();
+        showToast('گزارش با موفقیت ثبت شد', 'success');
+        document.getElementById('modal-report').classList.add('hidden');
         loadTypistDetail(state.currentTypistId);
     } catch (err) {
-        console.error('Add Report Error:', err);
-        showToast('خطا در ثبت کارکرد: ' + (err.message || err), 'error');
+        showToast('خطا در ثبت گزارش', 'error');
     }
 };
 
-window.deleteReport = async function(reportId) {
-    if (!confirm('آیا از حذف این کارکرد اطمینان دارید؟')) return;
-    try {
-        const { data, error } = await window.supabaseClient.rpc('delete_typist_report', { p_report_id: reportId });
-        if (error) throw error;
-        showToast('کارکرد حذف شد', 'info');
-        loadTypistDetail(state.currentTypistId);
-    } catch (err) {
-        showToast('خطا در حذف کارکرد: ' + (err.message || err), 'error');
-    }
-};
-
-window.openAddPaymentModal = function() {
-    const form = document.getElementById('add-payment-form');
-    if (form) form.reset();
-    
-    const dateInput = document.getElementById('payment-date-input');
-    if (dateInput) dateInput.value = formatJalali(getTodayJalali());
-    
-    const modal = document.getElementById('add-payment-modal');
-    if (modal) modal.classList.remove('hidden');
-};
-
-window.closeAddPaymentModal = function() {
-    const modal = document.getElementById('add-payment-modal');
-    if (modal) modal.classList.add('hidden');
-};
-
-window.handleAddPaymentSubmit = async function(e) {
+window.submitPaymentForm = async function(e) {
     e.preventDefault();
-    if (!window.supabaseClient || !state.currentTypistId) return;
+    if (!state.currentTypistId) return;
+    const amount = Number(toEnglishDigits(document.getElementById('modal-payment-amount').value || 0));
+    const date = document.getElementById('modal-payment-date').value;
+    const method = document.getElementById('modal-payment-method').value;
+    const ref = document.getElementById('modal-payment-ref').value;
+    const notes = document.getElementById('modal-payment-notes').value;
     
-    const amount = Number(toEnglishDigits(document.getElementById('payment-amount-input')?.value || '0'));
-    const paymentDate = document.getElementById('payment-date-input')?.value || '';
-    const desc = document.getElementById('payment-desc-input')?.value || '';
-    
-    if (!amount || amount <= 0) {
-        showToast('لطفاً مبلغ معتبر وارد کنید', 'warning');
-        return;
-    }
+    const fullNotes = `روش: ${method} | پیگیری: ${ref} | ${notes}`;
     
     try {
-        const { data, error } = await window.supabaseClient.rpc('add_payment', {
+        const { error } = await window.supabaseClient.rpc('add_payment', {
             p_typist_id: state.currentTypistId,
             p_amount: amount,
-            p_payment_date: paymentDate,
-            p_description: desc
+            p_payment_date: date,
+            p_description: fullNotes
         });
-        
         if (error) throw error;
-        
-        showToast('پرداختی با موفقیت ثبت شد', 'success');
-        window.closeAddPaymentModal();
+        showToast('پرداخت با موفقیت ثبت شد', 'success');
+        document.getElementById('modal-payment').classList.add('hidden');
         loadTypistDetail(state.currentTypistId);
     } catch (err) {
-        console.error('Add Payment Error:', err);
-        showToast('خطا در ثبت پرداخت: ' + (err.message || err), 'error');
+        showToast('خطا در ثبت پرداخت', 'error');
     }
 };
 
-window.deletePayment = async function(paymentId) {
-    if (!confirm('آیا از حذف این پرداختی اطمینان دارید؟')) return;
-    try {
-        const { data, error } = await window.supabaseClient.rpc('delete_payment', { p_payment_id: paymentId });
-        if (error) throw error;
-        showToast('پرداختی حذف شد', 'info');
-        loadTypistDetail(state.currentTypistId);
-    } catch (err) {
-        showToast('خطا در حذف پرداخت: ' + (err.message || err), 'error');
-    }
-};
-
-window.openChangePasswordModal = function() {
-    const form = document.getElementById('change-password-form');
-    if (form) form.reset();
-    const modal = document.getElementById('change-password-modal');
-    if (modal) modal.classList.remove('hidden');
-};
-
-window.closeChangePasswordModal = function() {
-    const modal = document.getElementById('change-password-modal');
-    if (modal) modal.classList.add('hidden');
-};
-
-window.handleChangePasswordSubmit = async function(e) {
+window.submitChangePassword = async function(e) {
     e.preventDefault();
-    if (!window.supabaseClient) return;
-    
-    const oldPwd = toEnglishDigits(document.getElementById('old-password-input')?.value || '');
-    const newPwd = toEnglishDigits(document.getElementById('new-password-input')?.value || '');
-    
-    if (!newPwd || newPwd.length < 4) {
-        showToast('رمز عبور جدید باید حداقل ۴ کاراکتر باشد', 'warning');
-        return;
-    }
+    const oldP = toEnglishDigits(document.getElementById('modal-pass-current').value);
+    const newP = toEnglishDigits(document.getElementById('modal-pass-new').value);
     
     try {
         let res;
-        if (state.currentUser && state.currentUser.role === 'admin') {
-            res = await window.supabaseClient.rpc('change_admin_password', {
-                p_old_password: oldPwd,
-                p_new_password: newPwd
-            });
-        } else if (state.currentUser) {
-            res = await window.supabaseClient.rpc('change_typist_password', {
-                p_typist_id: state.currentUser.typistId,
-                p_old_password: oldPwd,
-                p_new_password: newPwd
-            });
-        }
-        
-        if (res && res.error) throw res.error;
-        const resData = Array.isArray(res?.data) ? res.data[0] : (res?.data || {});
-        
-        if (resData && resData.success) {
-            showToast('رمز عبور با موفقیت تغییر کرد', 'success');
-            window.closeChangePasswordModal();
+        if (state.currentUser.role === 'admin') {
+            res = await window.supabaseClient.rpc('change_admin_password', { p_old_password: oldP, p_new_password: newP });
         } else {
-            showToast(resData?.message || 'رمز عبور فعلی اشتباه است', 'error');
+            res = await window.supabaseClient.rpc('change_typist_password', { p_typist_id: state.currentUser.typistId, p_old_password: oldP, p_new_password: newP });
+        }
+        const data = Array.isArray(res?.data) ? res.data[0] : (res?.data || {});
+        if (data.success) {
+            showToast('رمز عبور تغییر کرد', 'success');
+            document.getElementById('modal-password').classList.add('hidden');
+        } else {
+            throw new Error(data.message || 'رمز عبور فعلی اشتباه است');
         }
     } catch (err) {
-        console.error('Change Password Error:', err);
-        showToast('خطا در تغییر رمز عبور: ' + (err.message || err), 'error');
+        showToast(err.message, 'error');
     }
 };
 
-// --- Bank Payment CSV/Excel Export (Exact Headers & Rial Calculation) ---
+window.deleteReport = async function(id) {
+    if(!confirm('آیا مطمئن هستید؟')) return;
+    await window.supabaseClient.rpc('delete_typist_report', { p_report_id: id });
+    loadTypistDetail(state.currentTypistId);
+};
+
+window.deletePayment = async function(id) {
+    if(!confirm('آیا مطمئن هستید؟')) return;
+    await window.supabaseClient.rpc('delete_payment', { p_payment_id: id });
+    loadTypistDetail(state.currentTypistId);
+};
+
+// --- Export & SMS ---
 window.exportBankCsv = function() {
-    if (!Array.isArray(state.typists) || state.typists.length === 0) {
-        showToast('اطلاعاتی برای خروجی وجود ندارد', 'warning');
-        return;
-    }
-    
+    if (!state.typists.length) return;
     const headers = ['ردیف', 'نام', 'نام خانوادگی', 'نام پدر', 'کد ملی', 'شماره تماس', 'شماره کارت', 'شماره شبا', 'مبلغ پرداختی به ریال'];
-    
-    const rows = state.typists.filter(Boolean).map((t, index) => {
-        const remainingToman = Number(t.remaining_balance || 0);
-        const amountRial = remainingToman > 0 ? remainingToman * 10 : 0;
-        
+    const rows = state.typists.map((t, i) => {
+        const rem = Number(t.remaining_balance || 0);
         return [
-            index + 1,
-            `"${(t.first_name || '').replace(/"/g, '""')}"`,
-            `"${(t.last_name || '').replace(/"/g, '""')}"`,
-            `"${(t.father_name || '').replace(/"/g, '""')}"`,
-            `"${t.national_id || ''}"`,
-            `"${t.phone || ''}"`,
-            `"${t.card_number || ''}"`,
-            `"${t.iban || ''}"`,
-            amountRial
+            i + 1,
+            `"${t.first_name || ''}"`, `"${t.last_name || ''}"`, `"${t.father_name || ''}"`,
+            `"${t.national_id || ''}"`, `"${t.phone || ''}"`, `"${t.card_number || ''}"`,
+            `"${t.iban || ''}"`, (rem > 0 ? rem * 10 : 0)
         ].join(',');
     });
     
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
+    const blob = new Blob(['\uFEFF' + [headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `bank_payments_${formatJalali(getTodayJalali()).replace(/\//g, '-')}.csv`);
+    link.href = URL.createObjectURL(blob);
+    link.download = `bank_export_${formatJalali(getTodayJalali()).replace(/\//g,'-')}.csv`;
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    
-    showToast('فایل اکسل/CSV بانک با موفقیت دانلود شد', 'success');
+    link.remove();
 };
 
-// --- Initialize Event Listeners safely ---
+window.sendGroupSms = function() {
+    const text = document.getElementById('modal-sms-text').value;
+    const phones = state.typists.filter(t => state.selectedTypistIds.has(t.id)).map(t => t.phone).join(',');
+    if (!phones) return showToast('شماره‌ای انتخاب نشده', 'warning');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    window.location.href = `sms:${phones}${isIOS ? '&' : '?'}body=${encodeURIComponent(text)}`;
+    document.getElementById('modal-sms').classList.add('hidden');
+};
+
+// --- Event Listeners Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     
-    const themeBtn = document.getElementById('theme-toggle-btn');
-    if (themeBtn) themeBtn.addEventListener('click', window.toggleTheme);
+    // Theme
+    document.getElementById('theme-toggle')?.addEventListener('click', window.toggleTheme);
     
-    const tabAdmin = document.getElementById('tab-admin-login');
-    const tabTypist = document.getElementById('tab-typist-login');
-    const fieldAdmin = document.getElementById('field-admin-password');
-    const fieldTypist = document.getElementById('field-typist-inputs');
+    // Auth Tabs
+    const tAdmin = document.getElementById('tab-login-admin');
+    const tTypist = document.getElementById('tab-login-typist');
+    const fAdmin = document.getElementById('form-login-admin');
+    const fTypist = document.getElementById('form-login-typist');
     
-    if (tabAdmin) {
-        tabAdmin.addEventListener('click', () => {
-            state.activeTab = 'admin';
-            tabAdmin.classList.add('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
-            tabAdmin.classList.remove('border-transparent', 'text-slate-400');
-            if (tabTypist) {
-                tabTypist.classList.remove('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
-                tabTypist.classList.add('border-transparent', 'text-slate-400');
-            }
-            if (fieldAdmin) fieldAdmin.classList.remove('hidden');
-            if (fieldTypist) fieldTypist.classList.add('hidden');
-        });
-    }
-    
-    if (tabTypist) {
-        tabTypist.addEventListener('click', () => {
-            state.activeTab = 'typist';
-            tabTypist.classList.add('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
-            tabTypist.classList.remove('border-transparent', 'text-slate-400');
-            if (tabAdmin) {
-                tabAdmin.classList.remove('border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400');
-                tabAdmin.classList.add('border-transparent', 'text-slate-400');
-            }
-            if (fieldTypist) fieldTypist.classList.remove('hidden');
-            if (fieldAdmin) fieldAdmin.classList.add('hidden');
-        });
+    if (tAdmin && tTypist) {
+        tAdmin.onclick = () => {
+            tAdmin.classList.add('text-blue-600', 'border-blue-600');
+            tAdmin.classList.remove('text-slate-500', 'border-transparent');
+            tTypist.classList.remove('text-blue-600', 'border-blue-600');
+            tTypist.classList.add('text-slate-500', 'border-transparent');
+            fAdmin?.classList.remove('hidden');
+            fTypist?.classList.add('hidden');
+        };
+        tTypist.onclick = () => {
+            tTypist.classList.add('text-blue-600', 'border-blue-600');
+            tTypist.classList.remove('text-slate-500', 'border-transparent');
+            tAdmin.classList.remove('text-blue-600', 'border-blue-600');
+            tAdmin.classList.add('text-slate-500', 'border-transparent');
+            fTypist?.classList.remove('hidden');
+            fAdmin?.classList.add('hidden');
+        };
     }
 
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) loginForm.addEventListener('submit', window.handleLogin);
+    // Forms
+    fAdmin?.addEventListener('submit', (e) => window.handleLogin(e, 'admin'));
+    fTypist?.addEventListener('submit', (e) => window.handleLogin(e, 'typist'));
     
-    const searchInput = document.getElementById('search-typists-input');
-    if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
-            state.searchQuery = e.target.value;
-            renderDashboard();
+    document.getElementById('btn-logout')?.addEventListener('click', window.handleLogout);
+    document.getElementById('btn-open-change-password')?.addEventListener('click', () => {
+        document.getElementById('form-change-password').reset();
+        document.getElementById('modal-password').classList.remove('hidden');
+    });
+
+    // Dashboard Buttons
+    document.getElementById('dashboard-search')?.addEventListener('input', (e) => {
+        state.searchQuery = e.target.value; renderDashboard();
+    });
+    
+    document.getElementById('select-all-typists')?.addEventListener('change', (e) => window.selectAllTypists(e.target.checked));
+    
+    document.getElementById('btn-export-excel')?.addEventListener('click', window.exportBankCsv);
+    
+    document.getElementById('btn-group-sms')?.addEventListener('click', () => {
+        if(state.selectedTypistIds.size === 0) return showToast('کسی را انتخاب نکرده‌اید', 'warning');
+        updateSmsCount();
+        document.getElementById('modal-sms').classList.remove('hidden');
+    });
+    
+    document.getElementById('btn-open-add-typist')?.addEventListener('click', () => {
+        document.getElementById('form-typist').reset();
+        document.getElementById('modal-typist-id').value = '';
+        document.getElementById('modal-typist').classList.remove('hidden');
+    });
+
+    // Detail View Buttons
+    document.getElementById('btn-back-to-dashboard')?.addEventListener('click', showDashboardView);
+    
+    document.getElementById('btn-open-add-report')?.addEventListener('click', () => {
+        document.getElementById('form-report').reset();
+        document.getElementById('modal-report-date').value = formatJalali(getTodayJalali());
+        document.getElementById('modal-report').classList.remove('hidden');
+    });
+    
+    document.getElementById('btn-open-add-payment')?.addEventListener('click', () => {
+        document.getElementById('form-payment').reset();
+        document.getElementById('modal-payment-date').value = formatJalali(getTodayJalali());
+        document.getElementById('modal-payment').classList.remove('hidden');
+    });
+    
+    document.getElementById('btn-open-edit-profile')?.addEventListener('click', () => {
+        document.getElementById('modal-typist').classList.remove('hidden');
+    });
+
+    // Form Submits
+    document.getElementById('form-typist')?.addEventListener('submit', window.submitTypistForm);
+    document.getElementById('form-report')?.addEventListener('submit', window.submitReportForm);
+    document.getElementById('form-payment')?.addEventListener('submit', window.submitPaymentForm);
+    document.getElementById('form-change-password')?.addEventListener('submit', window.submitChangePassword);
+    
+    document.getElementById('btn-send-sms-confirm')?.addEventListener('click', window.sendGroupSms);
+
+    // Modals Close
+    document.querySelectorAll('.btn-close-modal').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const modal = e.target.closest('.fixed.inset-0');
+            if (modal) modal.classList.add('hidden');
         });
-    }
-    
-    const editForm = document.getElementById('edit-typist-form');
-    if (editForm) editForm.addEventListener('submit', window.saveTypistProfile);
-    
-    const addTypistForm = document.getElementById('add-typist-form');
-    if (addTypistForm) addTypistForm.addEventListener('submit', window.handleAddTypistSubmit);
-    
-    const addReportForm = document.getElementById('add-report-form');
-    if (addReportForm) addReportForm.addEventListener('submit', window.handleAddReportSubmit);
+    });
 
-    const addPaymentForm = document.getElementById('add-payment-form');
-    if (addPaymentForm) addPaymentForm.addEventListener('submit', window.handleAddPaymentSubmit);
-    
-    const changePasswordForm = document.getElementById('change-password-form');
-    if (changePasswordForm) changePasswordForm.addEventListener('submit', window.handleChangePasswordSubmit);
+    // Datepicker Triggers
+    document.querySelectorAll('.btn-trigger-datepicker').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            openDatePicker(e.target.dataset.target);
+        });
+    });
 
-    const dpPrevMonth = document.getElementById('dp-prev-month');
-    if (dpPrevMonth) {
-        dpPrevMonth.onclick = () => {
-            if (!state.currentPickerDate) state.currentPickerDate = getTodayJalali();
-            if (state.currentPickerDate.jm > 1) {
-                state.currentPickerDate.jm--;
-            } else {
-                state.currentPickerDate.jm = 12;
-                state.currentPickerDate.jy--;
-            }
-            renderDatePicker();
-        };
-    }
+    // Datepicker Controls
+    document.getElementById('dp-prev-month')?.addEventListener('click', () => {
+        if (!state.currentPickerDate) return;
+        if (state.currentPickerDate.jm > 1) state.currentPickerDate.jm--;
+        else { state.currentPickerDate.jm = 12; state.currentPickerDate.jy--; }
+        renderDatePicker();
+    });
     
-    const dpNextMonth = document.getElementById('dp-next-month');
-    if (dpNextMonth) {
-        dpNextMonth.onclick = () => {
-            if (!state.currentPickerDate) state.currentPickerDate = getTodayJalali();
-            if (state.currentPickerDate.jm < 12) {
-                state.currentPickerDate.jm++;
-            } else {
-                state.currentPickerDate.jm = 1;
-                state.currentPickerDate.jy++;
-            }
-            renderDatePicker();
-        };
-    }
+    document.getElementById('dp-next-month')?.addEventListener('click', () => {
+        if (!state.currentPickerDate) return;
+        if (state.currentPickerDate.jm < 12) state.currentPickerDate.jm++;
+        else { state.currentPickerDate.jm = 1; state.currentPickerDate.jy++; }
+        renderDatePicker();
+    });
     
-    const dpYearSelect = document.getElementById('dp-year-select');
-    if (dpYearSelect) {
-        dpYearSelect.onchange = (e) => {
-            if (!state.currentPickerDate) state.currentPickerDate = getTodayJalali();
-            state.currentPickerDate.jy = parseInt(e.target.value);
-            renderDatePicker();
-        };
-    }
+    document.getElementById('dp-select-month')?.addEventListener('change', (e) => {
+        if (state.currentPickerDate) { state.currentPickerDate.jm = parseInt(e.target.value); renderDatePicker(); }
+    });
     
-    const dpMonthSelect = document.getElementById('dp-month-select');
-    if (dpMonthSelect) {
-        dpMonthSelect.onchange = (e) => {
-            if (!state.currentPickerDate) state.currentPickerDate = getTodayJalali();
-            state.currentPickerDate.jm = parseInt(e.target.value);
-            renderDatePicker();
-        };
-    }
+    document.getElementById('dp-select-year')?.addEventListener('change', (e) => {
+        if (state.currentPickerDate) { state.currentPickerDate.jy = parseInt(e.target.value); renderDatePicker(); }
+    });
+    
+    document.getElementById('dp-btn-today')?.addEventListener('click', () => {
+        state.currentPickerDate = getTodayJalali();
+        renderDatePicker();
+    });
 });
