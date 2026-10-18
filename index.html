@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>سامانه مدیریت تایپیست‌ها</title>
 
-  <!-- PWA -->
   <link rel="manifest" href="./manifest.json" />
   <meta name="theme-color" content="#4f46e5" />
 
@@ -13,7 +12,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-  <!-- Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -174,6 +172,11 @@
     .login-alert.hidden { display: none; }
     .login-alert.error { background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
     .login-alert.success { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+
+    .login-hint {
+      font-size: .72rem; color: #94a3b8; text-align: center;
+      margin-top: -.5rem; line-height: 1.6;
+    }
 
     /* ==================== Panel ==================== */
     #panel-screen { display: none; padding: 1rem; }
@@ -401,6 +404,12 @@
     .empty-row td { text-align: center; padding: 2rem 1rem; color: #94a3b8; font-weight: 600; }
 
     .hidden { display: none !important; }
+
+    @keyframes loadingBar {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
   </style>
 </head>
 
@@ -465,6 +474,21 @@
               autocomplete="username" placeholder="مثال: 09123456789 یا کد ملی" />
           </div>
         </div>
+        <div>
+          <label for="typist-password">رمز عبور</label>
+          <div class="input-wrap">
+            <input type="password" id="typist-password" required autocomplete="current-password" placeholder="••••" />
+            <button type="button" class="toggle-pass" data-toggle-pass="typist-password" aria-label="نمایش رمز عبور">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+            </button>
+          </div>
+          <div class="login-hint">رمز پیش‌فرض: ۴ رقم آخر کد ملی</div>
+        </div>
         <button type="submit" id="btn-typist-submit" class="btn-login btn-login-typist">
           <span>ورود به پرتال تایپیست</span>
         </button>
@@ -489,6 +513,7 @@
           </select>
           <button id="btn-refresh" class="btn btn-outline" type="button">🔄 تازه‌سازی</button>
           <button id="btn-export-excel" class="btn btn-outline" type="button">⬇️ خروجی CSV</button>
+          <button id="btn-change-password" class="btn btn-outline" type="button">🔑 تغییر رمز</button>
           <button id="btn-logout" class="btn btn-danger" type="button">🚪 خروج</button>
         </div>
       </div>
@@ -520,7 +545,7 @@
             📑 گزارش‌های کارکرد
             <span class="count" id="reports-count-badge">۰ ردیف</span>
           </h2>
-          <button id="btn-open-report-modal" class="btn btn-primary" type="button">➕ ثبت گزارش جدید</button>
+          <button id="btn-open-report-modal" class="btn btn-primary" type="button" data-admin-only>➕ ثبت گزارش جدید</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -538,7 +563,7 @@
       <div class="card">
         <div class="row" style="justify-content: space-between; margin-bottom: 1rem;">
           <h2 class="card-title" style="margin: 0;">💳 سوابق پرداخت</h2>
-          <button id="btn-open-payment-modal" class="btn btn-dark" type="button">➕ ثبت پرداخت جدید</button>
+          <button id="btn-open-payment-modal" class="btn btn-dark" type="button" data-admin-only>➕ ثبت پرداخت جدید</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -635,18 +660,12 @@
     </div>
   </div>
 
-  <!-- فایل JS اصلی -->
   <script src="./app.js"></script>
 
-  <!-- ثبت Service Worker (اختیاری، در صورت وجود sw.js) -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('./sw.js').then(function (reg) {
-          if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
-        }).catch(function (err) {
-          console.warn('SW register failed:', err);
-        });
+        navigator.serviceWorker.register('./sw.js').catch(function () {});
       });
     }
   </script>
