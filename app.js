@@ -2,16 +2,15 @@
 // ۱. تنظیمات اتصال و تعریف کلاینت دیتابیس Supabase
 // ==========================================================================
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
-const SUPABASE_KEY = 'GAPGPTMASKTOKENpt1r2tu40bX1X';
 
-// ایجاد کلاینت متصل به سوپابیس با بررسی دقیق متغیرهای سراسری
-const db = (window.supabase && typeof window.supabase.createClient === 'function')
-    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
-    : (typeof supabase !== 'undefined' ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null);
+// توکن اصلی anon را در صورت نیاز اینجا بروز کنید
+const SUPABASE_KEY = 'GAPGPTMASKTOKEN9pzt6flk5otX0X';
 
+// ایجاد کلاینت متصل به سوپابیس
+const db = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 window.db = db;
 window.client = db;
-window.supabaseClient = db;
+window.supabaseClient = db;     
 
 // متغیرهای وضعیت
 let currentAdminLoggedIn = false;
@@ -19,29 +18,18 @@ let currentTypistUser = null;
 let selectedTypistIdForAdmin = null;
 
 // ==========================================================================
-// ۲. تابع فوق‌العاده امن و ضدگلوله جهت تبدیل مقادیر به عدد (حذف قطعی باگ NaN)
+// ۲. توابع عمومی و تبدیل امن مقادیر (حل ریشه‌ای مشکل ارقام فارسی و NaN)
 // ==========================================================================
 function safeNumber(val) {
     if (val === null || val === undefined) return 0;
-    
-    let strVal = String(val).trim();
-    if (strVal === '' || strVal.toLowerCase() === 'nan' || strVal.toLowerCase() === 'undefined' || strVal.toLowerCase() === 'null') {
-        return 0;
-    }
-
-    // تبدیل ارقام فارسی و عربی به انگلیسی
-    const faDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-    const arDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-    for (let i = 0; i < 10; i++) {
-        strVal = strVal.split(faDigits[i]).join(i.toString());
-        strVal = strVal.split(arDigits[i]).join(i.toString());
-    }
-
-    // حذف کلیه کاراکترهای غیرعددی (ویرگول‌ها، فاصله‌ها، کاراکترهای مخفی یونیکد) به جز منفی و ممیز
-    strVal = strVal.replace(/[^\d.-]/g, '');
-
-    const parsed = parseFloat(strVal);
-    return (!isNaN(parsed) && isFinite(parsed)) ? Math.round(parsed * 100) / 100 : 0;
+    // تبدیل هوشمند ارقام فارسی و عربی به انگلیسی و حذف فاصله‌ها و ویرگول‌ها
+    const enVal = String(val)
+        .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+        .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+        .replace(/,/g, '')
+        .trim();
+    const num = Number(enVal);
+    return (isNaN(num) || !isFinite(num)) ? 0 : num;
 }
 window.safeNumber = safeNumber;
 
@@ -51,7 +39,7 @@ function formatToman(val) {
 window.formatToman = formatToman;
 
 function initPersianDatepickers() {
-    if (window.$ && $.fn && $.fn.persianDatepicker) {
+    if (window.$ && $.fn.persianDatepicker) {
         $('.pdate-field').persianDatepicker({
             format: 'YYYY/MM/DD',
             autoClose: true,
@@ -99,7 +87,7 @@ window.submitAdminLogin = async function() {
     }
 
     try {
-        // بررسی امن سمت سرور
+        // بررسی کاملاً امن سمت سرور بدون نشت رمز
         const { data: isCorrect, error } = await client.rpc('check_admin_pass', {
             entered_pass: enteredPassword
         });
@@ -111,6 +99,7 @@ window.submitAdminLogin = async function() {
         }
 
         if (isCorrect === true) {
+            // یکسان‌سازی کلید نشست تا ادمین بی‌معطلی لود شود
             sessionStorage.setItem('admin_logged', 'true');
             sessionStorage.setItem('admin_logged_in', 'true');
             localStorage.setItem('admin_logged', 'true');
@@ -211,7 +200,7 @@ window.typistLogout = function() {
 };
 
 // ==========================================================================
-// ۴. بخش تایپیست: ثبت و مشاهده گزارش کارکرد (ضد باگ NaN)
+// ۴. بخش تایپیست: ثبت و مشاهده گزارش کارکرد
 // ==========================================================================
 window.loadTypistSelfReports = async function() {
     if (!currentTypistUser) return;
@@ -234,25 +223,19 @@ window.loadTypistSelfReports = async function() {
         }
 
         tBody.innerHTML = data.map((r, i) => {
-            // خواندن منعطف نام فیلدها از دیتابیس
-            const rawPages = (r.pages !== undefined && r.pages !== null) ? r.pages : r.page_count;
-            const rawWords = (r.words !== undefined && r.words !== null) ? r.words : r.word_count;
-
-            const pages = safeNumber(rawPages);
-            const words = safeNumber(rawWords);
+            const pages = safeNumber(r.pages !== undefined ? r.pages : r.page_count);
+            const words = safeNumber(r.words !== undefined ? r.words : r.word_count);
             const isSettled = r.is_settled === true;
             const courseTitle = r.course_title || r.title || 'ثبت عمومی';
-            const repDate = r.report_date || (r.created_at ? r.created_at.substring(0, 10) : '-');
-
             return `
                 <tr class="hover:bg-gray-50 border-b">
-                    <td class="p-3 text-center">${(i + 1).toLocaleString('fa-IR')}</td>
+                    <td class="p-3">${i + 1}</td>
                     <td class="p-3 font-medium text-gray-800">${courseTitle}</td>
-                    <td class="p-3 font-mono text-center">${repDate}</td>
-                    <td class="p-3 text-center font-bold text-gray-700">${pages.toLocaleString('fa-IR')}</td>
-                    <td class="p-3 text-center font-bold text-indigo-700">${words.toLocaleString('fa-IR')}</td>
+                    <td class="p-3 font-mono">${r.report_date || '-'}</td>
+                    <td class="p-3">${pages.toLocaleString('fa-IR')}</td>
+                    <td class="p-3 font-semibold text-gray-700">${words.toLocaleString('fa-IR')}</td>
                     <td class="p-3 text-gray-500">${r.description || '-'}</td>
-                    <td class="p-3 text-center">
+                    <td class="p-3">
                         <span class="px-2 py-0.5 rounded text-xs font-bold ${isSettled ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">
                             ${isSettled ? 'تسویه شده' : 'در انتظار تسویه'}
                         </span>
@@ -269,8 +252,7 @@ window.loadTypistSelfReports = async function() {
 window.submitNewReport = async function() {
     if (!currentTypistUser) return;
 
-    const reportDateInput = document.getElementById('reportDateInput');
-    const reportDate = reportDateInput ? reportDateInput.value.trim() : '';
+    const reportDate = document.getElementById('reportDateInput').value.trim();
     const pages = safeNumber(document.getElementById('reportPagesInput').value);
     const words = safeNumber(document.getElementById('reportWordsInput').value);
     const desc = document.getElementById('reportDescInput').value.trim();
@@ -278,7 +260,7 @@ window.submitNewReport = async function() {
     const courseTitle = courseTitleInput ? courseTitleInput.value.trim() : '';
 
     if (!reportDate) {
-        alert('لطفاً تاریخ گزارش را وارد کنید.');
+        alert('لطفاً تاریخ گزارش را با کلیک روی فیلد از تقویم پاپ‌آپ انتخاب کنید.');
         return;
     }
     if (pages <= 0 && words <= 0) {
@@ -348,7 +330,7 @@ window.loadTypistsCards = async function() {
         grid.innerHTML = typists.map(t => {
             const myUnsettled = (unsettledReports || []).filter(r => r.typist_id === t.id);
             const pendingWords = myUnsettled.reduce((acc, cur) => {
-                const w = (cur.words !== undefined && cur.words !== null) ? cur.words : cur.word_count;
+                const w = (cur.words !== undefined) ? cur.words : cur.word_count;
                 return acc + safeNumber(w);
             }, 0);
             const pendingPay = pendingWords * safeNumber(t.rate_per_word);
@@ -436,21 +418,19 @@ window.loadAdminReportsTable = async function(typistId) {
         }
 
         tBody.innerHTML = reports.map(r => {
-            const rawPages = (r.pages !== undefined && r.pages !== null) ? r.pages : r.page_count;
-            const rawWords = (r.words !== undefined && r.words !== null) ? r.words : r.word_count;
-            const pages = safeNumber(rawPages);
-            const words = safeNumber(rawWords);
+            const pages = safeNumber(r.pages !== undefined ? r.pages : r.page_count);
+            const words = safeNumber(r.words !== undefined ? r.words : r.word_count);
             const amount = safeNumber(r.total_amount);
             const isSettled = r.is_settled === true;
 
             return `
                 <tr class="hover:bg-gray-50 border-b">
                     <td class="p-3 font-mono">${r.report_date || '-'}</td>
-                    <td class="p-3 text-center font-bold text-gray-700">${pages.toLocaleString('fa-IR')}</td>
-                    <td class="p-3 text-center font-bold text-indigo-700">${words.toLocaleString('fa-IR')}</td>
+                    <td class="p-3">${pages.toLocaleString('fa-IR')}</td>
+                    <td class="p-3 font-semibold">${words.toLocaleString('fa-IR')}</td>
                     <td class="p-3 text-green-700 font-bold">${formatToman(amount)} تومان</td>
                     <td class="p-3 text-gray-500">${r.description || '-'}</td>
-                    <td class="p-3 text-center">
+                    <td class="p-3">
                         <span class="px-2 py-0.5 rounded text-xs font-bold ${isSettled ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">
                             ${isSettled ? 'تسویه شده' : 'تسویه نشده'}
                         </span>
@@ -522,10 +502,10 @@ window.runSettlement = async function() {
         const reportIds = [];
 
         pendingReports.forEach(r => {
-            const rawPages = (r.pages !== undefined && r.pages !== null) ? r.pages : r.page_count;
-            const rawWords = (r.words !== undefined && r.words !== null) ? r.words : r.word_count;
-            totalWords += safeNumber(rawWords);
-            totalPages += safeNumber(rawPages);
+            const w = (r.words !== undefined) ? r.words : r.word_count;
+            const p = (r.pages !== undefined) ? r.pages : r.page_count;
+            totalWords += safeNumber(w);
+            totalPages += safeNumber(p);
             reportIds.push(r.id);
         });
 
@@ -626,7 +606,7 @@ window.exportSettleExcel = async function() {
 };
 
 // ==========================================================================
-// ۸. ثبت و ویرایش مشخصات تایپیست
+// ۸. ثبت و ویرایش تایپیست و تعریف پروژه جدید
 // ==========================================================================
 window.openNewTypistModal = function() {
     document.getElementById('typistModalTitle').textContent = 'ثبت تایپیست جدید';
@@ -672,7 +652,7 @@ window.saveTypistRecord = async function() {
     const editId = document.getElementById('editTypistId').value;
     const name = document.getElementById('mName').value.trim();
     const nationalCode = document.getElementById('mNationalCode').value.trim();
-    const phone = document.getElementById('mPhone').value.trim();
+    const phone = document.getElementById('phone').value.trim();
     const shaba = document.getElementById('mShaba').value.trim();
     const rate = safeNumber(document.getElementById('mRate').value);
     const startDate = document.getElementById('mStartDate').value.trim();
@@ -713,7 +693,7 @@ window.saveTypistRecord = async function() {
 };
 
 // ==========================================================================
-// ۹. راه‌اندازی پس از بارگذاری DOM و حفظ ماندگاری ورود مدیر
+// ۹. راه‌اندازی پس از بارگذاری DOM و حفظ ورود مدیر
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
     initPersianDatepickers();
