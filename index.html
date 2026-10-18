@@ -1,5 +1,7 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl" class="scroll-smooth">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: 'unsafe-inline';">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -8,7 +10,8 @@
     <!-- فونت استاندارد وزیرمتن -->
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
     <!-- Tailwind CSS پایدار -->
-    <script src="https://cdn.tailwindcss.com"></script>
+<!-- نسخه مستقیم و بدون نیاز به eval برای حل قطعی مشکل CSP گیت‌هاب -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
     <script>
         tailwind.config = {
             theme: {
