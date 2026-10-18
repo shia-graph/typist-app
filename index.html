@@ -1,859 +1,282 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>سامانه کارکرد و تسویه تایپیست‌ها</title>
-    <!-- استایل Tailwind CSS -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
-    <!-- کتابخانه Supabase JS -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap');
-        body {
-            font-family: 'Vazirmatn', sans-serif;
-            background-color: #f8fafc;
-            color: #1e293b;
-        }
-        .datepicker-dropdown {
-            position: absolute;
-            z-index: 1050;
-            width: 290px;
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 1rem;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        }
-        .table-cell-custom {
-            padding: 14px 16px;
-            text-align: center;
-            font-size: 0.875rem;
-            white-space: nowrap;
-        }
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>سامانه مدیریت کارکرد و تسویه تایپیست‌ها</title>
+  
+  <!-- فونت وزیرمتن و تیلویند -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- کلاینت رسمی سوپابیس -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body {
+      font-family: 'Vazirmatn', sans-serif;
+    }
+  </style>
 </head>
-<body class="antialiased min-h-screen flex flex-col justify-between">
+<body class="bg-slate-50 text-slate-800 min-h-screen">
 
-<!-- ===================================================================== -->
-<!-- ۱. صفحه لاگین (پیش‌فرض نمایش داده می‌شود) -->
-<!-- ===================================================================== -->
-<div id="loginSection" class="min-h-screen flex items-center justify-center p-4">
-    <div class="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-100 p-8 space-y-6">
-        <div class="text-center space-y-2">
-            <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl mx-auto flex items-center justify-center text-3xl shadow-inner">
-                📝
-            </div>
-            <h2 class="text-2xl font-black text-slate-800 tracking-tight">ورود به سامانه تایپ</h2>
-            <p class="text-xs text-slate-500 font-medium">برای مشاهده یا ثبت کارکرد، وارد حساب خود شوید</p>
+  <!-- نوار بالایی -->
+  <header class="bg-indigo-900 text-white shadow-md">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="bg-indigo-700 p-2.5 rounded-xl shadow-inner">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
         </div>
-
-        <!-- تب‌های سوئیچ نقش -->
-        <div class="flex p-1.5 bg-slate-100 rounded-2xl text-xs font-bold">
-            <button type="button" id="tabTypistBtn" onclick="switchLoginTab('typist')" class="flex-1 py-2.5 rounded-xl bg-white text-indigo-700 shadow-sm transition">
-                👤 تایپیست
-            </button>
-            <button type="button" id="tabAdminBtn" onclick="switchLoginTab('admin')" class="flex-1 py-2.5 rounded-xl text-slate-600 hover:text-slate-800 transition">
-                ⚙️ مدیر سامانه
-            </button>
+        <div>
+          <h1 class="text-lg md:text-xl font-bold">سامانه کارکرد و تسویه حساب تایپیست‌ها</h1>
+          <p class="text-xs text-indigo-200">مدیریت گزارشات دوره‌ای، کارمزد کلمات و امور مالی</p>
         </div>
+      </div>
 
-        <!-- فرم تایپیست -->
-        <form id="typistLoginForm" onsubmit="handleTypistLogin(event)" class="space-y-4">
-            <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1.5">کد ملی</label>
-                <input type="text" id="loginNationalCode" required placeholder="مثلاً: ۰۹۲۱۲۳۴۵۶۷" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-center font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1.5">شماره موبایل</label>
-                <input type="tel" id="loginPhone" required placeholder="مثلاً: ۰۹۱۲۳۴۵۶۷۸۹" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-center font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
-            </div>
-            <button type="submit" id="typistLoginSubmitBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3 rounded-xl text-sm shadow-md hover:shadow-lg transition transform active:scale-95">
-                ورود به پنل کاربری
-            </button>
-        </form>
-
-        <!-- فرم مدیر -->
-        <form id="adminLoginForm" onsubmit="handleAdminLogin(event)" class="space-y-4 hidden">
-            <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1.5">رمز عبور مدیریت</label>
-                <input type="password" id="adminPassword" required placeholder="رمز عبور را وارد کنید" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-center focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
-            </div>
-            <button type="submit" id="adminLoginSubmitBtn" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-extrabold py-3 rounded-xl text-sm shadow-md hover:shadow-lg transition transform active:scale-95">
-                ورود مدیریت
-            </button>
-        </form>
-
-        <div id="loginErrorMsg" class="hidden text-xs text-rose-600 bg-rose-50 border border-rose-100 p-3 rounded-xl text-center font-bold"></div>
+      <!-- سلکتور انتخاب تایپیست -->
+      <div class="flex items-center gap-2 bg-indigo-800/80 p-1.5 rounded-xl border border-indigo-700">
+        <label for="typist-select" class="text-xs text-indigo-200 pr-2 whitespace-nowrap">انتخاب تایپیست:</label>
+        <select id="typist-select" class="bg-indigo-950 text-white text-sm rounded-lg px-3 py-1.5 border border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          <option value="">در حال بارگذاری لیست...</option>
+        </select>
+        <button id="btn-refresh" title="تازه‌سازی داده‌ها" class="bg-indigo-700 hover:bg-indigo-600 p-2 rounded-lg text-white transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+        </button>
+      </div>
     </div>
-</div>
+  </header>
 
-<!-- ===================================================================== -->
-<!-- ۲. پنل اصلی نرم‌افزار (در ابتدا پنهان است) -->
-<!-- ===================================================================== -->
-<div id="appSection" class="hidden max-w-7xl mx-auto p-4 md:p-8 space-y-6 w-full">
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
 
-    <!-- هدر سامانه -->
-    <header class="flex flex-wrap items-center justify-between bg-white p-6 rounded-2xl shadow-sm border border-slate-100 gap-4">
-        <div class="flex items-center gap-3">
-            <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-2xl shadow-inner">
-                📝
-            </div>
-            <div>
-                <h1 class="text-xl md:text-2xl font-extrabold text-slate-800 tracking-tight">
-                    سامانه گزارش کارکرد و تسویه تایپ
-                </h1>
-                <p id="userWelcomeText" class="text-xs text-slate-500 mt-1 font-medium">خوش آمدید</p>
-            </div>
+    <!-- کارت مشخصات تایپیست انتخابی -->
+    <div id="typist-profile-card" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <span class="text-xs font-semibold text-slate-400 uppercase">مشخصات تایپیست</span>
+        <h2 id="profile-name" class="text-xl font-black text-slate-800 mt-1">لطفاً تایپیست را انتخاب کنید</h2>
+        <div class="flex flex-wrap items-center gap-4 text-xs text-slate-500 mt-2">
+          <span>کد ملی: <strong id="profile-national-id" class="text-slate-700 font-mono">---</strong></span>
+          <span>شماره تماس: <strong id="profile-phone" class="text-slate-700 font-mono">---</strong></span>
+          <span>شماره شبا: <strong id="profile-iban" class="text-slate-700 font-mono">---</strong></span>
+          <span>نرخ پیش‌فرض هر کلمه: <strong id="profile-default-rate" class="text-indigo-600">---</strong></span>
         </div>
-        <div class="flex items-center gap-3">
-            <span id="roleBadge" class="px-3.5 py-1.5 bg-indigo-50 text-indigo-700 text-xs rounded-full font-bold tracking-wide border border-indigo-100">پنل مدیریت</span>
-            <button onclick="logout()" class="px-4 py-2 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 text-xs font-bold rounded-xl transition duration-200">خروج</button>
-        </div>
-    </header>
+      </div>
+      
+      <!-- دکمه‌های عملیات -->
+      <div class="flex items-center gap-2">
+        <button id="btn-open-report-modal" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow transition flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+          </svg>
+          ثبت گزارش کارکرد جدید
+        </button>
+        <button id="btn-open-payment-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow transition flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+          </svg>
+          ثبت سند واریز وجه
+        </button>
+        <button id="btn-export-excel" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl border border-slate-300 transition flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          خروجی اکسل (CSV)
+        </button>
+      </div>
+    </div>
 
-    <!-- بخش انتخاب تایپیست و خلاصه وضعیت -->
-    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- پنل انتخاب تایپیست (برای مدیر فعاله، برای خود تایپیست فقط نام خودشه) -->
-        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
-            <div id="typistSelectContainer">
-                <label class="block text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
-                    <span>👤</span> انتخاب تایپیست:
-                </label>
-                <select id="typistSelect" onchange="loadSelectedTypistData()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
-                    <option value="">در حال بارگذاری اسامی تایپیست‌ها...</option>
-                </select>
-            </div>
+    <!-- کارت‌های آمار و گزارش تجمیعی -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <p class="text-xs text-slate-400 font-medium">مجموع کلمات تایپ‌شده</p>
+        <p id="sum-total-words" class="text-lg md:text-xl font-black text-indigo-700 mt-1">۰ کلمه</p>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <p class="text-xs text-slate-400 font-medium">مجموع صفحات</p>
+        <p id="sum-total-pages" class="text-lg md:text-xl font-black text-slate-700 mt-1">۰ صفحه</p>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <p class="text-xs text-slate-400 font-medium">کل کارکرد ناخالص</p>
+        <p id="sum-total-payable" class="text-lg md:text-xl font-black text-slate-900 mt-1">۰ تومان</p>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <p class="text-xs text-slate-400 font-medium">کل دریافتی / پرداختی‌ها</p>
+        <p id="sum-total-paid" class="text-lg md:text-xl font-black text-emerald-600 mt-1">۰ تومان</p>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm col-span-2 md:col-span-1">
+        <p class="text-xs text-slate-400 font-medium">مانده قابل تسویه</p>
+        <p id="sum-remaining-balance" class="text-lg md:text-xl font-black text-rose-600 mt-1">۰ تومان</p>
+      </div>
+    </div>
 
-            <div id="typistMeta" class="mt-4 pt-4 border-t border-slate-100 text-xs text-slate-600 space-y-2 bg-slate-50/70 p-3.5 rounded-xl">
-                <p class="flex justify-between"><span>نام کامل:</span> <span id="metaName" class="font-bold text-slate-800">-</span></p>
-                <p class="flex justify-between"><span>نرخ هر کلمه:</span> <span id="metaRate" class="font-bold text-emerald-600">۱۵ تومان</span></p>
-                <p class="flex justify-between"><span>شماره شبا:</span> <span id="metaSheba" class="font-mono text-slate-700">-</span></p>
-            </div>
-        </div>
-
-        <!-- ویجت خلاصه تسویه حساب جاری -->
-        <div class="bg-gradient-to-br from-indigo-600 via-indigo-700 to-blue-800 p-6 rounded-2xl text-white shadow-xl lg:col-span-2 flex flex-col justify-between relative overflow-hidden">
-            <div class="absolute -left-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-
-            <div class="flex flex-wrap justify-between items-center gap-4 z-10">
-                <div>
-                    <span class="text-xs font-semibold uppercase tracking-wider text-indigo-200">مبلغ قابل تسویه (موارد جدید تسویه‌نشده)</span>
-                    <div class="text-3xl md:text-4xl font-black mt-2 tracking-tight">
-                        <span id="unsettledTotal">۰</span> <span class="text-sm font-medium text-indigo-200">تومان</span>
-                    </div>
-                </div>
-                <button id="adminSettlementBtn" onclick="processSettlement()" class="px-5 py-3 bg-white text-indigo-950 font-black text-xs rounded-xl shadow-lg hover:bg-indigo-50 hover:shadow-xl transition transform active:scale-95 flex items-center gap-2">
-                    <span>💳</span> ثبت تسویه حساب قطعی موارد جدید
-                </button>
-            </div>
-            
-            <div class="grid grid-cols-3 gap-2 mt-6 pt-4 border-t border-indigo-500/30 text-xs font-medium z-10">
-                <div class="bg-indigo-900/30 p-2.5 rounded-xl text-center">تعداد کل صفحات: <span id="summaryPages" class="font-bold text-white block text-sm mt-0.5">۰</span></div>
-                <div class="bg-indigo-900/30 p-2.5 rounded-xl text-center">تعداد کل کلمات: <span id="summaryWords" class="font-bold text-white block text-sm mt-0.5">۰</span></div>
-                <div class="bg-indigo-900/30 p-2.5 rounded-xl text-center">گزارش‌های معوق: <span id="summaryPendingCount" class="font-bold text-white block text-sm mt-0.5">۰</span> مورد</div>
-            </div>
-        </div>
-    </section>
-
-    <!-- فرم افزودن / ثبت گزارش کارکرد -->
-    <section class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-        <h3 class="text-sm font-extrabold text-slate-800 mb-4 flex items-center gap-2">
-            <span class="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs">➕</span> 
-            ثبت گزارش کارکرد جدید
+    <!-- جدول گزارش‌های ثبت‌شده کارکرد -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+        <h3 class="font-bold text-slate-800 text-sm md:text-base flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+          ریز گزارش‌های کارکرد تایپ
         </h3>
-        <form id="reportForm" onsubmit="handleReportSubmit(event)" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4 items-end">
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">شماره جلسه / دوره</label>
-                <input type="number" id="formPeriod" required min="1" value="1" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-center font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">تعداد صفحات</label>
-                <input type="number" id="formPages" required min="1" placeholder="مثلاً ۸" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-center font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">تعداد کلمات</label>
-                <input type="number" id="formWords" required min="0" placeholder="مثلاً ۲۰۰۰" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-center font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">تاریخ گزارش</label>
-                <div class="relative">
-                    <input type="text" id="formDate" readonly placeholder="انتخاب تاریخ" onclick="toggleDatePicker()" class="w-full border border-slate-200 rounded-xl p-2.5 text-sm text-center cursor-pointer bg-slate-50 font-medium hover:bg-slate-100 transition">
-                    <div id="simpleDatePicker" class="datepicker-dropdown p-3.5 hidden top-12 right-0">
-                        <div class="flex justify-between items-center mb-2 pb-2 border-b text-xs font-bold text-slate-700">
-                            <span>انتخاب تاریخ شمسی</span>
-                            <button type="button" onclick="toggleDatePicker()" class="text-slate-400 hover:text-slate-600 text-base font-bold">&times;</button>
-                        </div>
-                        <div class="grid grid-cols-3 gap-1.5 text-xs">
-                            <button type="button" onclick="selectToday()" class="col-span-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg font-bold hover:bg-indigo-100 transition">امروز</button>
-                            <button type="button" onclick="selectQuickDate(1)" class="p-2 bg-slate-50 border border-slate-100 rounded-lg font-medium hover:bg-slate-100 transition">دیروز</button>
-                            <button type="button" onclick="selectQuickDate(2)" class="p-2 bg-slate-50 border border-slate-100 rounded-lg font-medium hover:bg-slate-100 transition">۲ روز پیش</button>
-                            <button type="button" onclick="selectQuickDate(3)" class="p-2 bg-slate-50 border border-slate-100 rounded-lg font-medium hover:bg-slate-100 transition">۳ روز پیش</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">توضیحات</label>
-                <input type="text" id="formDescription" placeholder="اختیاری..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
-            </div>
-            <div>
-                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-2.5 rounded-xl text-sm shadow-md hover:shadow-lg transition transform active:scale-95">
-                    ثبت کارکرد
-                </button>
-            </div>
-        </form>
-    </section>
+        <span id="reports-count-badge" class="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-semibold">۰ ردیف</span>
+      </div>
 
-    <!-- جدول گزارش‌ها -->
-    <section class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div class="p-5 bg-slate-50/50 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
-            <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-2">
-                <span>📋</span> لیست کارکردهای ثبت‌شده
-            </h3>
-            <button onclick="exportToCleanExcel()" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs rounded-xl shadow-sm flex items-center gap-1.5 font-bold transition">
-                <span>📥</span> خروجی اکسل استاندارد
-            </button>
+      <div class="overflow-x-auto">
+        <table class="w-full text-right text-xs md:text-sm">
+          <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+            <tr>
+              <th class="py-3 px-3 text-center">ردیف</th>
+              <th class="py-3 px-3 text-center">تاریخ ثبت</th>
+              <th class="py-3 px-3 text-center">دوره</th>
+              <th class="py-3 px-3 text-center">صفحات</th>
+              <th class="py-3 px-3 text-center">کلمات</th>
+              <th class="py-3 px-3 text-center">نرخ کلمه</th>
+              <th class="py-3 px-3 text-center">مبلغ کل محاسبه‌شده</th>
+              <th class="py-3 px-3 text-center">وضعیت تسویه</th>
+              <th class="py-3 px-4 text-right">توضیحات</th>
+            </tr>
+          </thead>
+          <tbody id="typist-reports-tbody" class="divide-y divide-slate-100">
+            <tr>
+              <td colspan="9" class="py-8 text-center text-slate-400 font-medium">لطفاً تایپیست را انتخاب کنید تا اطلاعات بارگذاری شود.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- جدول پرداختی‌ها / واریزی‌ها -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+        <h3 class="font-bold text-slate-800 text-sm md:text-base flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+          سوابق واریزی و تسویه‌حساب‌ها
+        </h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-right text-xs md:text-sm">
+          <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+            <tr>
+              <th class="py-3 px-3 text-center">ردیف</th>
+              <th class="py-3 px-3 text-center">تاریخ واریز</th>
+              <th class="py-3 px-3 text-center">مبلغ واریزی</th>
+              <th class="py-3 px-3 text-center">روش پرداخت</th>
+              <th class="py-3 px-3 text-center">کد پیگیری</th>
+              <th class="py-3 px-4 text-right">توضیحات</th>
+            </tr>
+          </thead>
+          <tbody id="payments-tbody" class="divide-y divide-slate-100">
+            <tr>
+              <td colspan="6" class="py-6 text-center text-slate-400">سند پرداختی یافت نشد.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- مودال ثبت گزارش جدید -->
+  <div id="modal-report" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 class="text-base font-bold text-slate-800">ثبت گزارش جدید کارکرد</h3>
+        <button onclick="closeModal('modal-report')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+
+      <form id="form-new-report" class="space-y-4 text-xs md:text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-600 mb-1 font-medium">شماره دوره</label>
+            <input type="number" id="inp-period" required value="1" min="1" class="w-full p-2.5 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+          </div>
+          <div>
+            <label class="block text-slate-600 mb-1 font-medium">تعداد صفحات</label>
+            <input type="text" id="inp-pages" required placeholder="مثال: ۲۵" class="w-full p-2.5 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+          </div>
         </div>
 
-        <div class="overflow-x-auto">
-            <table class="w-full text-right border-collapse">
-                <thead>
-                    <tr class="bg-slate-100/70 text-slate-600 text-xs font-bold border-b border-slate-200">
-                        <th class="table-cell-custom">ردیف</th>
-                        <th class="table-cell-custom">تاریخ ثبت</th>
-                        <th class="table-cell-custom">جلسه / دوره</th>
-                        <th class="table-cell-custom">صفحات</th>
-                        <th class="table-cell-custom">کلمات</th>
-                        <th class="table-cell-custom">مبلغ (تومان)</th>
-                        <th class="table-cell-custom">توضیحات</th>
-                        <th class="table-cell-custom">وضعیت تسویه</th>
-                        <th class="table-cell-custom">عملیات</th>
-                    </tr>
-                </thead>
-                <tbody id="reportsTableBody" class="divide-y divide-slate-100 text-slate-700">
-                    <tr>
-                        <td colspan="9" class="p-12 text-center text-slate-400 text-sm font-medium">در حال بارگذاری داده‌ها...</td>
-                    </tr>
-                </tbody>
-            </table>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-600 mb-1 font-medium">تعداد کلمات (الزامی)</label>
+            <input type="text" id="inp-words" required placeholder="مثال: ۵,۴۰۰" class="w-full p-2.5 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+          </div>
+          <div>
+            <label class="block text-slate-600 mb-1 font-medium">نرخ هر کلمه (تومان)</label>
+            <input type="text" id="inp-rate" required placeholder="مثال: ۵۰" class="w-full p-2.5 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+          </div>
         </div>
-    </section>
 
-</div>
-
-<script>
-// ==========================================================================
-// ابزارهای تبدیل ارقام و امن‌سازی اعداد (ضد NaN)
-// ==========================================================================
-function fixNumbers(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-        .replace(/[۰-۹]/g, d => d.charCodeAt(0) - 1776)
-        .replace(/[٠-٩]/g, d => d.charCodeAt(0) - 1632)
-        .trim();
-}
-
-function safeNumber(val, defaultVal = 0) {
-    if (val === null || val === undefined || val === '') return defaultVal;
-    const cleaned = fixNumbers(val).replace(/,/g, '');
-    const num = Number(cleaned);
-    return isNaN(num) ? defaultVal : num;
-}
-
-// ==========================================================================
-// تنظیمات سوپابیس و دریافت کلاینت امن
-// ==========================================================================
-const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
-
-// خواندن کلید ذخیره‌شده یا استفاده از کلید پروژه
-function getApiKey() {
-    return localStorage.getItem('sb_anon_key') || 'GAPGPTMASKTOKENrwelxqv5oecX1X';
-}
-
-function initSupabase(customKey = null) {
-    const key = customKey || getApiKey();
-    try {
-        return window.supabase.createClient(SUPABASE_URL, key, {
-            auth: { persistSession: false, autoRefreshToken: false }
-        });
-    } catch (e) {
-        console.error("خطا در ایجاد کلاینت سوپابیس:", e);
-        return null;
-    }
-}
-
-let supabaseClient = initSupabase();
-let currentUserRole = null; // 'admin' یا 'typist'
-let currentLoggedInTypist = null;
-let currentTypistId = null;
-let currentReports = [];
-let currentTypistRate = 15;
-
-// ==========================================================================
-// مدیریت تب‌های صفحه لاگین
-// ==========================================================================
-function switchLoginTab(role) {
-    hideLoginError();
-    const tabTypist = document.getElementById('tabTypistBtn');
-    const tabAdmin = document.getElementById('tabAdminBtn');
-    const typistForm = document.getElementById('typistLoginForm');
-    const adminForm = document.getElementById('adminLoginForm');
-
-    if (role === 'typist') {
-        tabTypist.className = 'flex-1 py-2.5 rounded-xl bg-white text-indigo-700 shadow-sm transition';
-        tabAdmin.className = 'flex-1 py-2.5 rounded-xl text-slate-600 hover:text-slate-800 transition';
-        typistForm.classList.remove('hidden');
-        adminForm.classList.add('hidden');
-    } else {
-        tabAdmin.className = 'flex-1 py-2.5 rounded-xl bg-white text-indigo-700 shadow-sm transition';
-        tabTypist.className = 'flex-1 py-2.5 rounded-xl text-slate-600 hover:text-slate-800 transition';
-        adminForm.classList.remove('hidden');
-        typistForm.classList.add('hidden');
-    }
-}
-
-function showLoginError(msg) {
-    const errBox = document.getElementById('loginErrorMsg');
-    errBox.textContent = msg;
-    errBox.classList.remove('hidden');
-}
-
-function hideLoginError() {
-    const errBox = document.getElementById('loginErrorMsg');
-    errBox.classList.add('hidden');
-}
-
-// چک کردن خطای کلید دیتابیس و راهنمایی سریع کاربر
-function checkApiKeyError(err) {
-    if (err && (err.message?.includes('Invalid API key') || err.message?.includes('JWT') || err.code === 'PGRST301')) {
-        const newKey = prompt("کلید اتصال دیتابیس (anon key) معتبر نیست.\nلطفاً anon key پروژه Supabase را اینجا وارد کنید:");
-        if (newKey && newKey.trim()) {
-            localStorage.setItem('sb_anon_key', newKey.trim());
-            supabaseClient = initSupabase(newKey.trim());
-            alert("کلید جدید ذخیره شد. لطفاً دوباره وارد شوید.");
-            return true;
-        }
-    }
-    return false;
-}
-
-// ==========================================================================
-// لاگین تایپیست (با کد ملی و شماره موبایل)
-// ==========================================================================
-async function handleTypistLogin(e) {
-    e.preventDefault();
-    hideLoginError();
-
-    const nationalCode = fixNumbers(document.getElementById('loginNationalCode').value);
-    const phone = fixNumbers(document.getElementById('loginPhone').value);
-
-    if (!nationalCode || !phone) {
-        showLoginError("لطفاً هر دو فیلد کد ملی و شماره موبایل را وارد نمایید.");
-        return;
-    }
-
-    const btn = document.getElementById('typistLoginSubmitBtn');
-    btn.disabled = true;
-    btn.textContent = "در حال بررسی...";
-
-    try {
-        const { data, error } = await supabaseClient
-            .from('typists')
-            .select('*')
-            .eq('national_code', nationalCode)
-            .single();
-
-        if (error) {
-            if (checkApiKeyError(error)) return;
-            throw error;
-        }
-
-        if (!data || fixNumbers(data.phone) !== phone) {
-            showLoginError("مشخصات وارد شده با اطلاعات تایپیست همخوانی ندارد.");
-            return;
-        }
-
-        // ورود موفق تایپیست
-        currentUserRole = 'typist';
-        currentLoggedInTypist = data;
-        launchAppForTypist(data);
-
-    } catch (err) {
-        console.error("خطا در لاگین تایپیست:", err);
-        showLoginError("اطلاعات یافت نشد یا دسترسی نامعتبر است.");
-    } finally {
-        btn.disabled = false;
-        btn.textContent = "ورود به پنل کاربری";
-    }
-}
-
-// ==========================================================================
-// لاگین مدیریت
-// ==========================================================================
-async function handleAdminLogin(e) {
-    e.preventDefault();
-    hideLoginError();
-
-    const pass = document.getElementById('adminPassword').value.trim();
-    if (!pass) {
-        showLoginError("لطفاً رمز عبور را وارد کنید.");
-        return;
-    }
-
-    const btn = document.getElementById('adminLoginSubmitBtn');
-    btn.disabled = true;
-    btn.textContent = "در حال اعتبارسنجی...";
-
-    try {
-        // تست اعتبارسنجی با تابع RPC یا جدول تنظیمات
-        const { data, error } = await supabaseClient.rpc('check_admin_pass', { p_password: pass });
-        
-        let isValid = false;
-        if (!error && data === true) {
-            isValid = true;
-        } else {
-            // فالبک از جدول تنظیمات در صورت نبود فانکشن
-            const { data: setRow } = await supabaseClient
-                .from('app_settings')
-                .select('admin_pass')
-                .single();
-            if (setRow && (setRow.admin_pass === pass || pass === 'admin123')) {
-                isValid = true;
-            } else if (pass === 'admin123') {
-                isValid = true;
-            }
-        }
-
-        if (!isValid) {
-            showLoginError("رمز عبور مدیریت صحیح نیست.");
-            return;
-        }
-
-        // ورود موفق مدیر
-        currentUserRole = 'admin';
-        launchAppForAdmin();
-
-    } catch (err) {
-        if (checkApiKeyError(err)) return;
-        console.error("خطا در لاگین مدیر:", err);
-        showLoginError("خطا در ارتباط با سرور: " + (err.message || err));
-    } finally {
-        btn.disabled = false;
-        btn.textContent = "ورود مدیریت";
-    }
-}
-
-// ==========================================================================
-// بارگذاری واسط کاربری بعد از لاگین
-// ==========================================================================
-function launchAppForAdmin() {
-    document.getElementById('loginSection').classList.add('hidden');
-    document.getElementById('appSection').classList.remove('hidden');
-    document.getElementById('roleBadge').textContent = "مدیر سیستم (فاضل)";
-    document.getElementById('roleBadge').className = "px-3.5 py-1.5 bg-indigo-50 text-indigo-700 text-xs rounded-full font-bold tracking-wide border border-indigo-100";
-    document.getElementById('adminSettlementBtn').classList.remove('hidden');
-    document.getElementById('typistSelectContainer').classList.remove('hidden');
-    
-    setDefaultDate();
-    loadTypistsList();
-}
-
-function launchAppForTypist(typist) {
-    document.getElementById('loginSection').classList.add('hidden');
-    document.getElementById('appSection').classList.remove('hidden');
-    document.getElementById('roleBadge').textContent = `تایپیست: ${typist.name}`;
-    document.getElementById('roleBadge').className = "px-3.5 py-1.5 bg-emerald-50 text-emerald-700 text-xs rounded-full font-bold tracking-wide border border-emerald-100";
-    document.getElementById('userWelcomeText').textContent = `خوش آمدید، ${typist.name}`;
-    
-    // مخفی‌سازی دکمه تسویه قطعی برای تایپیست عادی
-    document.getElementById('adminSettlementBtn').classList.add('hidden');
-    
-    // مخفی کردن دراپ‌داون انتخاب، قفل کردن روی همین تایپیست
-    const select = document.getElementById('typistSelect');
-    select.innerHTML = `<option value="${typist.id}">${typist.name}</option>`;
-    select.value = typist.id;
-    select.disabled = true;
-
-    setDefaultDate();
-    loadSelectedTypistData();
-}
-
-function setDefaultDate() {
-    const today = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-    document.getElementById('formDate').value = today;
-}
-
-// ==========================================================================
-// بارگذاری لیست تایپیست‌ها (مخصوص مدیر)
-// ==========================================================================
-async function loadTypistsList() {
-    try {
-        const { data, error } = await supabaseClient
-            .from('typists')
-            .select('id, name')
-            .order('name');
-
-        if (error) {
-            if (checkApiKeyError(error)) return;
-            throw error;
-        }
-
-        const select = document.getElementById('typistSelect');
-        select.innerHTML = '<option value="">-- انتخاب کنید --</option>';
-
-        (data || []).forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = t.name;
-            select.appendChild(opt);
-        });
-
-        if (data && data.length > 0) {
-            select.value = data[0].id;
-            loadSelectedTypistData();
-        }
-    } catch (err) {
-        console.error("خطا در دریافت لیست تایپیست‌ها:", err);
-        alert("خطا در جدول تایپیست‌ها: " + (err.message || err));
-    }
-}
-
-// ==========================================================================
-// بارگذاری گزارش‌های تایپیست فعال
-// ==========================================================================
-async function loadSelectedTypistData() {
-    const typistId = document.getElementById('typistSelect').value;
-    if (!typistId) return;
-
-    currentTypistId = typistId;
-
-    try {
-        const { data: typist, error: tErr } = await supabaseClient
-            .from('typists')
-            .select('*')
-            .eq('id', typistId)
-            .single();
-
-        if (!tErr && typist) {
-            document.getElementById('typistMeta').classList.remove('hidden');
-            document.getElementById('metaName').textContent = typist.name || '-';
-            currentTypistRate = safeNumber(typist.rate_per_word ?? typist.rate, 15);
-            document.getElementById('metaRate').textContent = `${currentTypistRate.toLocaleString('fa-IR')} تومان`;
-            document.getElementById('metaSheba').textContent = typist.shaba || typist.sheba || typist.iban || '-';
-        }
-    } catch (e) {
-        console.warn("خطا در خواندن اطلاعات تایپیست:", e);
-    }
-
-    try {
-        const { data: reports, error } = await supabaseClient
-            .from('typist_reports')
-            .select('*')
-            .eq('typist_id', typistId)
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        currentReports = reports || [];
-        renderReportsTable(currentReports);
-    } catch (err) {
-        console.error("خطا در دریافت گزارش‌ها:", err);
-    }
-}
-
-// ==========================================================================
-// رندر کردن جدول بدون باگ NaN
-// ==========================================================================
-function renderReportsTable(reports) {
-    const tbody = document.getElementById('reportsTableBody');
-    tbody.innerHTML = '';
-
-    if (!reports || reports.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-12 text-center text-slate-400 text-xs font-medium">هیچ گزارشی برای این تایپیست ثبت نشده است.</td></tr>`;
-        updateSummaryWidget(0, 0, 0, 0);
-        return;
-    }
-
-    let unsettledTotal = 0;
-    let totalPages = 0;
-    let totalWords = 0;
-    let pendingCount = 0;
-
-    reports.forEach((row, index) => {
-        let formattedDate = '-';
-        const dateVal = row.report_date || row.created_at;
-        if (dateVal) {
-            try {
-                formattedDate = new Intl.DateTimeFormat('fa-IR-u-nu-latn', {
-                    year: 'numeric', month: '2-digit', day: '2-digit'
-                }).format(new Date(dateVal));
-            } catch (e) {
-                formattedDate = String(dateVal).substring(0, 10);
-            }
-        }
-
-        const pages = safeNumber(row.pages ?? row.page_count, 0);
-        const words = safeNumber(row.words ?? row.word_count, 0);
-        const period = fixNumbers(row.period ?? row.period_number ?? '-') || '-';
-        
-        let amount = safeNumber(row.total_amount ?? row.amount, 0);
-        if (amount === 0 && words > 0) {
-            const appliedRate = safeNumber(row.rate ?? row.rate_per_word, currentTypistRate);
-            amount = words * appliedRate;
-        }
-
-        const isSettled = row.is_settled === true;
-
-        if (!isSettled) {
-            unsettledTotal += amount;
-            pendingCount++;
-        }
-        totalPages += pages;
-        totalWords += words;
-
-        const canDelete = currentUserRole === 'admin' || !isSettled;
-
-        const tr = document.createElement('tr');
-        tr.className = isSettled ? "bg-slate-50/60 opacity-65" : "hover:bg-indigo-50/30 transition";
-        tr.innerHTML = `
-            <td class="table-cell-custom text-slate-400 font-mono text-xs">${index + 1}</td>
-            <td class="table-cell-custom font-mono text-xs text-slate-600">${formattedDate}</td>
-            <td class="table-cell-custom font-bold text-slate-800">${period}</td>
-            <td class="table-cell-custom font-semibold text-indigo-600 font-mono">${pages.toLocaleString('fa-IR')}</td>
-            <td class="table-cell-custom font-mono text-slate-600">${words.toLocaleString('fa-IR')}</td>
-            <td class="table-cell-custom font-mono font-bold text-emerald-700">${amount.toLocaleString('fa-IR')}</td>
-            <td class="table-cell-custom text-xs text-slate-500 max-w-xs truncate" title="${row.description || ''}">${row.description || '-'}</td>
-            <td class="table-cell-custom">
-                ${isSettled 
-                    ? '<span class="px-2.5 py-1 rounded-lg text-xs bg-slate-200/80 text-slate-600 font-bold">تسویه شده</span>' 
-                    : '<span class="px-2.5 py-1 rounded-lg text-xs bg-amber-100 text-amber-800 font-extrabold shadow-sm">تسویه نشده</span>'
-                }
-            </td>
-            <td class="table-cell-custom">
-                ${canDelete ? `<button onclick="deleteReport('${row.id}')" class="text-rose-500 hover:text-rose-700 text-xs font-bold px-2.5 py-1 rounded-lg hover:bg-rose-50 transition">حذف</button>` : '-'}
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-
-    updateSummaryWidget(unsettledTotal, totalPages, totalWords, pendingCount);
-}
-
-function updateSummaryWidget(unsettledTotal, pages, words, count) {
-    document.getElementById('unsettledTotal').textContent = unsettledTotal.toLocaleString('fa-IR');
-    document.getElementById('summaryPages').textContent = pages.toLocaleString('fa-IR');
-    document.getElementById('summaryWords').textContent = words.toLocaleString('fa-IR');
-    document.getElementById('summaryPendingCount').textContent = count.toLocaleString('fa-IR');
-}
-
-// ==========================================================================
-// ثبت گزارش جدید
-// ==========================================================================
-async function handleReportSubmit(e) {
-    e.preventDefault();
-    if (!currentTypistId) {
-        alert("لطفاً ابتدا یک تایپیست انتخاب کنید.");
-        return;
-    }
-
-    const period = safeNumber(document.getElementById('formPeriod').value, 1);
-    const pages = safeNumber(document.getElementById('formPages').value, 0);
-    const words = safeNumber(document.getElementById('formWords').value, 0);
-    const description = document.getElementById('formDescription').value.trim();
-    const totalAmount = words * currentTypistRate;
-
-    const payload = {
-        typist_id: currentTypistId,
-        period: period,
-        pages: pages,
-        words: words,
-        rate: currentTypistRate,
-        total_amount: totalAmount,
-        description: description,
-        is_settled: false
-    };
-
-    try {
-        const { error } = await supabaseClient.from('typist_reports').insert([payload]);
-        if (error) {
-            if (error.message && error.message.includes("Could not find")) {
-                const fallbackPayload = {
-                    typist_id: currentTypistId,
-                    period_number: period,
-                    page_count: pages,
-                    word_count: words,
-                    rate_per_word: currentTypistRate,
-                    total_amount: totalAmount,
-                    description: description,
-                    is_settled: false
-                };
-                const { error: err2 } = await supabaseClient.from('typist_reports').insert([fallbackPayload]);
-                if (err2) throw err2;
-            } else {
-                throw error;
-            }
-        }
-
-        document.getElementById('formPages').value = '';
-        document.getElementById('formWords').value = '';
-        document.getElementById('formDescription').value = '';
-        await loadSelectedTypistData();
-    } catch (err) {
-        console.error("خطا در ذخیره کارکرد:", err);
-        alert("خطا در ذخیره‌سازی: " + err.message);
-    }
-}
-
-// ==========================================================================
-// حذف گزارش
-// ==========================================================================
-async function deleteReport(reportId) {
-    if (!confirm("آیا از حذف این ردیف کارکرد اطمینان دارید؟")) return;
-
-    try {
-        const { error } = await supabaseClient
-            .from('typist_reports')
-            .delete()
-            .eq('id', reportId);
-
-        if (error) throw error;
-        await loadSelectedTypistData();
-    } catch (err) {
-        alert("خطا در حذف گزارش: " + err.message);
-    }
-}
-
-// ==========================================================================
-// تسویه حساب قطعی
-// ==========================================================================
-async function processSettlement() {
-    if (currentUserRole !== 'admin') {
-        alert("فقط مدیر سامانه اجازه ثبت تسویه حساب قطعی دارد.");
-        return;
-    }
-
-    const pendingReports = currentReports.filter(r => !r.is_settled);
-    if (pendingReports.length === 0) {
-        alert("هیچ مورد تسویه‌نشده‌ای برای این تایپیست وجود ندارد.");
-        return;
-    }
-
-    if (!confirm(`آیا از تسویه حساب قطعی ${pendingReports.length} مورد مطمئن هستید؟`)) return;
-
-    try {
-        const ids = pendingReports.map(r => r.id);
-        const { error } = await supabaseClient
-            .from('typist_reports')
-            .update({ is_settled: true })
-            .in('id', ids);
-
-        if (error) throw error;
-        alert("تسویه حساب با موفقیت ثبت شد.");
-        await loadSelectedTypistData();
-    } catch (err) {
-        alert("خطا در اعمال تسویه حساب: " + err.message);
-    }
-}
-
-// ==========================================================================
-// مدیریت تقویم
-// ==========================================================================
-function toggleDatePicker() {
-    const el = document.getElementById('simpleDatePicker');
-    el.classList.toggle('hidden');
-}
-
-function selectToday() {
-    setDefaultDate();
-    toggleDatePicker();
-}
-
-function selectQuickDate(daysAgo) {
-    const d = new Date();
-    d.setDate(d.getDate() - daysAgo);
-    const formatted = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-    document.getElementById('formDate').value = formatted;
-    toggleDatePicker();
-}
-
-// ==========================================================================
-// خروجی اکسل استاندارد
-// ==========================================================================
-function sanitizeForCsv(val) {
-    if (!val) return '';
-    let str = String(val).replace(/[\t\n\r]/g, ' ').trim();
-    if (str.startsWith('=') || str.startsWith('+') || str.startsWith('-') || str.startsWith('@')) {
-        str = "'" + str;
-    }
-    return `"${str}"`;
-}
-
-function exportToCleanExcel() {
-    if (!currentReports || currentReports.length === 0) {
-        alert("داده‌ای برای خروجی اکسل وجود ندارد.");
-        return;
-    }
-
-    const headers = ["ردیف", "تاریخ", "جلسه/دوره", "صفحات", "کلمات", "مبلغ (تومان)", "توضیحات", "وضعیت"];
-    const rows = currentReports.map((r, i) => {
-        const dateStr = r.report_date || (r.created_at ? r.created_at.substring(0, 10) : '-');
-        return [
-            i + 1,
-            `\t${dateStr}`,
-            r.period || r.period_number || 1,
-            safeNumber(r.pages ?? r.page_count, 0),
-            safeNumber(r.words ?? r.word_count, 0),
-            safeNumber(r.total_amount ?? r.amount, 0),
-            sanitizeForCsv(r.description),
-            r.is_settled ? "تسویه شده" : "تسویه نشده"
-        ].join("\t");
-    });
-
-    const csvContent = "\uFEFF" + headers.join("\t") + "\n" + rows.join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `reports_${currentTypistId}_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
-function logout() {
-    currentUserRole = null;
-    currentLoggedInTypist = null;
-    currentTypistId = null;
-    document.getElementById('appSection').classList.add('hidden');
-    document.getElementById('loginSection').classList.remove('hidden');
-    document.getElementById('typistLoginForm').reset();
-    document.getElementById('adminLoginForm').reset();
-}
-
-// بایند کردن توابع به window
-window.switchLoginTab = switchLoginTab;
-window.handleTypistLogin = handleTypistLogin;
-window.handleAdminLogin = handleAdminLogin;
-window.loadSelectedTypistData = loadSelectedTypistData;
-window.handleReportSubmit = handleReportSubmit;
-window.deleteReport = deleteReport;
-window.processSettlement = processSettlement;
-window.toggleDatePicker = toggleDatePicker;
-window.selectToday = selectToday;
-window.selectQuickDate = selectQuickDate;
-window.exportToCleanExcel = exportToCleanExcel;
-window.logout = logout;
-</script>
-
+        <div class="p-3 bg-indigo-50 rounded-xl text-indigo-900 flex justify-between items-center text-xs">
+          <span>مبلغ محاسبه‌شده:</span>
+          <span id="calculated-total-preview" class="font-bold text-sm">۰ تومان</span>
+        </div>
+
+        <div>
+          <label class="block text-slate-600 mb-1 font-medium">توضیحات یا عنوان فایل</label>
+          <textarea id="inp-desc" rows="2" placeholder="توضیح اختیاری..." class="w-full p-2.5 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modal-report')" class="px-4 py-2 border rounded-xl text-slate-600 hover:bg-slate-100">انصراف</button>
+          <button type="submit" id="btn-submit-report" class="px-5 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold shadow">ثبت در دیتابیس</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- مودال ثبت پرداخت -->
+  <div id="modal-payment" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 class="text-base font-bold text-slate-800">ثبت پرداخت / تسویه‌حساب</h3>
+        <button onclick="closeModal('modal-payment')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+
+      <form id="form-new-payment" class="space-y-4 text-xs md:text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-600 mb-1 font-medium">مبلغ واریزی (تومان)</label>
+            <input type="text" id="inp-pay-amount" required placeholder="مثال: ۵۰۰,۰۰۰" class="w-full p-2.5 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none" />
+          </div>
+          <div>
+            <label class="block text-slate-600 mb-1 font-medium">تاریخ واریز</label>
+            <input type="date" id="inp-pay-date" required class="w-full p-2.5 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-600 mb-1 font-medium">روش پرداخت</label>
+            <select id="inp-pay-method" class="w-full p-2.5 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+              <option value="کارت به کارت">کارت به کارت</option>
+              <option value="پایا / ساتنا">پایا / ساتنا</option>
+              <option value="نقدی">نقدی</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-600 mb-1 font-medium">کد رهگیری یا شماره ارجاع</label>
+            <input type="text" id="inp-pay-track" placeholder="اختیاری" class="w-full p-2.5 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-slate-600 mb-1 font-medium">بابت / توضیحات</label>
+          <input type="text" id="inp-pay-desc" placeholder="تسویه دوره ۱..." class="w-full p-2.5 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none" />
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modal-payment')" class="px-4 py-2 border rounded-xl text-slate-600 hover:bg-slate-100">انصراف</button>
+          <button type="submit" id="btn-submit-payment" class="px-5 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-semibold shadow">ثبت واریز</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- اسکریپت اصلی -->
+  <script src="app.js"></script>
 </body>
 </html>
