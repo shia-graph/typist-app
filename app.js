@@ -6,7 +6,6 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 
-
 // متغیرهای وضعیت جاری برنامه (State)
 let currentTypist = null;
 let isAdmin = false;
@@ -37,7 +36,7 @@ const Jalali = {
         return { jy, jm, jd };
     },
 
-    toGregorian(jy, jm, jd) {
+    toGregorian(jy, jm, gd) {
         let gy = (jy <= 979) ? 621 : 1600;
         jy -= (jy <= 979) ? 0 : 979;
         let days = (365 * jy) + Math.floor(jy / 33) * 8 + Math.floor(((jy % 33) + 3) / 4) 
@@ -53,7 +52,6 @@ const Jalali = {
         days %= 1461;
         gy += Math.floor((days - 1) / 365);
         if (days > 0) days = (days - 1) % 365;
-        const gd = days + 1;
         const sal_a = [0, 31, ((gy % 4 === 0 && gy % 100 !== 0) || (gy % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
         let gm = 0;
         while (gm < 13 && days >= sal_a[gm]) {
@@ -71,7 +69,7 @@ const Jalali = {
 
     parse(str) {
         if (!str) return null;
-        const parts = str.split('/').map(Number);
+        const parts = String(str).trim().split('/').map(Number);
         if (parts.length !== 3 || parts.some(isNaN)) return null;
         return { jy: parts[0], jm: parts[1], jd: parts[2] };
     },
@@ -97,26 +95,22 @@ const Jalali = {
 };
 
 // ==========================================
-// ۳. موتور محاسبه دوره‌های ۱۰ روزه و تایم‌لاین
+// ۳. موتور تایم‌لاین دوره ۱۰ روزه و وضعیت تاخیر
 // ==========================================
 function calculatePeriodTimeline(typist, reports) {
     const today = Jalali.todayString();
     const startDate = typist.delivery_date || today;
-    
-    // فیلتر گزارش‌های همین تایپیست و مرتب‌سازی بر اساس شماره دوره
+
     const typistReports = reports
         .filter(r => r.typist_id === typist.id)
         .sort((a, b) => (Number(a.period) || 0) - (Number(b.period) || 0));
 
-    const totalDaysPassed = Math.max(0, Jalali.daysBetween(startDate, today));
     const highestSubmittedPeriod = typistReports.length > 0 
         ? Math.max(...typistReports.map(r => Number(r.period) || 0)) 
         : 0;
 
-    // شماره دوره‌ای که تایپیست هم‌اکنون باید گزارش دهد
     const activePeriod = highestSubmittedPeriod + 1;
 
-    // تاریخ شروع دوره جاری: بر اساس تاریخ پایان دوره قبل یا تاریخ تحویل اولیه
     let lastCheckpointDate = startDate;
     if (typistReports.length > 0) {
         const lastRep = typistReports[typistReports.length - 1];
@@ -134,8 +128,6 @@ function calculatePeriodTimeline(typist, reports) {
         daysRemaining: Math.max(0, daysRemaining),
         isLate,
         delayDays,
-        totalDaysPassed,
-        reportsCount: typistReports.length,
         statusLabel: isLate 
             ? `⚠️ تاخیر در دوره ${activePeriod} (${delayDays} روز گذشته)` 
             : `⏳ دوره ${activePeriod} (${daysRemaining} روز مانده تا موعد ثبت)`
@@ -143,7 +135,26 @@ function calculatePeriodTimeline(typist, reports) {
 }
 
 // ==========================================
-// ۴. مدیریت پاپ‌آپ تقویم شمسی جلالی
+// ۴. مدیریت مودال‌های بازشو و پاپ‌آپ ورود
+// ==========================================
+function showLoginModal() {
+    const modal = document.getElementById('loginModal') || document.getElementById('typistLoginModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+    } else {
+        // در صورتی که ساختار صفحه تک‌صفحه‌ای باشد و سکشن لاگین باشد
+        const loginSec = document.getElementById('loginSection');
+        if (loginSec) loginSec.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+function closeLoginModal() {
+    const modal = document.getElementById('loginModal') || document.getElementById('typistLoginModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// ==========================================
+// ۵. مدیریت پاپ‌آپ تقویم شمسی جلالی
 // ==========================================
 let calYear = 1405;
 let calMonth = 7;
@@ -180,7 +191,7 @@ function renderCalendarPopup() {
     for (let day = 1; day <= daysInMonth; day++) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'p-2 text-sm rounded-lg hover:bg-emerald-500 hover:text-white transition-colors border border-gray-100 text-gray-700';
+        btn.className = 'p-2 text-sm rounded-lg hover:bg-emerald-600 hover:text-white transition-colors border border-gray-100 text-gray-700 font-medium';
         btn.innerText = day;
         btn.onclick = () => {
             if (calendarTargetInput) {
@@ -206,14 +217,14 @@ function nextCalMonth() {
 }
 
 // ==========================================
-// ۵. احراز هویت تایپیست و ورود مدیر
+// ۶. ورود تایپیست و ورود مدیر
 // ==========================================
 async function handleTypistLogin() {
-    const nationalCode = document.getElementById('loginNationalCode').value.trim();
-    const phone = document.getElementById('loginPhone').value.trim();
+    const nationalCode = (document.getElementById('loginNationalCode') || {}).value?.trim();
+    const phone = (document.getElementById('loginPhone') || {}).value?.trim();
 
     if (!nationalCode || !phone) {
-        alert('لطفاً کد ملی و شماره همراه را وارد کنید.');
+        alert('لطفاً کد ملی و شماره همراه خود را وارد نمایید.');
         return;
     }
 
@@ -227,12 +238,13 @@ async function handleTypistLogin() {
 
         if (error) throw error;
         if (!data) {
-            alert('مشخصات وارد شده در سامانه یافت نشد.');
+            alert('مشخصات تایپیست در سامانه یافت نشد.');
             return;
         }
 
         currentTypist = data;
         isAdmin = false;
+        closeLoginModal();
         showTypistDashboard();
     } catch (err) {
         console.error('خطای ورود تایپیست:', err);
@@ -241,7 +253,7 @@ async function handleTypistLogin() {
 }
 
 async function handleAdminLogin() {
-    const inputPass = prompt('لطفاً رمز عبور مدیر را وارد نمایید:');
+    const inputPass = prompt('رمز عبور مدیر را وارد نمایید:');
     if (!inputPass) return;
 
     try {
@@ -258,31 +270,40 @@ async function handleAdminLogin() {
             currentTypist = null;
             showAdminDashboard();
         } else {
-            alert('رمز عبور مدیر نادرست است!');
+            alert('رمز عبور مدیر اشتباه است!');
         }
     } catch (err) {
-        console.error('خطا در دریافت رمز مدیر:', err);
-        alert('خطای اتصال به سرور جهت اعتبارسنجی مدیر.');
+        console.error('خطا در بررسی رمز مدیر:', err);
+        alert('خطای اتصال به سرور در اعتبارسنجی مدیر.');
     }
 }
 
 function logout() {
     currentTypist = null;
     isAdmin = false;
-    document.getElementById('typistDashboardSection').classList.add('hidden');
-    document.getElementById('adminDashboardSection').classList.add('hidden');
-    document.getElementById('loginSection').classList.remove('hidden');
+    const typSec = document.getElementById('typistDashboardSection');
+    const admSec = document.getElementById('adminDashboardSection');
+    const logSec = document.getElementById('loginSection');
+    
+    if (typSec) typSec.classList.add('hidden');
+    if (admSec) admSec.classList.add('hidden');
+    if (logSec) logSec.classList.remove('hidden');
 }
 
 // ==========================================
-// ۶. داشبورد تایپیست و ثبت کارکرد ۱۰ روزه
+// ۷. پنل تایپیست و ثبت گزارش ۱۰ روزه
 // ==========================================
 async function showTypistDashboard() {
-    document.getElementById('loginSection').classList.add('hidden');
-    document.getElementById('adminDashboardSection').classList.add('hidden');
-    document.getElementById('typistDashboardSection').classList.remove('hidden');
+    const logSec = document.getElementById('loginSection');
+    const admSec = document.getElementById('adminDashboardSection');
+    const typSec = document.getElementById('typistDashboardSection');
 
-    document.getElementById('typistHeaderName').innerText = currentTypist.name || 'همکار گرامی';
+    if (logSec) logSec.classList.add('hidden');
+    if (admSec) admSec.classList.add('hidden');
+    if (typSec) typSec.classList.remove('hidden');
+
+    const nameElem = document.getElementById('typistHeaderName');
+    if (nameElem && currentTypist) nameElem.innerText = currentTypist.name || 'همکار گرامی';
     await loadTypistData();
 }
 
@@ -297,19 +318,18 @@ async function loadTypistData() {
         if (error) throw error;
         const myReports = reports || [];
 
-        // محاسبه تایم‌لاین و وضعیت دوره
         const timeline = calculatePeriodTimeline(currentTypist, myReports);
 
-        // به‌روزرسانی کارت وضعیت تایم‌لاین
+        // بروزرسانی جعبه تایم‌لاین
         const timelineBox = document.getElementById('periodTimelineBox');
         if (timelineBox) {
             timelineBox.innerHTML = `
-                <div class="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl border ${timeline.isLate ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-emerald-50 border-emerald-200 text-emerald-900'}">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-xl border ${timeline.isLate ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-emerald-50 border-emerald-300 text-emerald-900'}">
                     <div class="flex items-center gap-3">
-                        <span class="text-2xl">${timeline.isLate ? '⚠️' : '⏱️'}</span>
+                        <span class="text-3xl">${timeline.isLate ? '⚠️' : '⏱️'}</span>
                         <div>
                             <div class="font-bold text-base">${timeline.statusLabel}</div>
-                            <div class="text-xs text-gray-500 mt-1">شماره دوره‌های ثبت‌شده تاکنون: ${timeline.highestSubmittedPeriod} دوره</div>
+                            <div class="text-xs text-gray-500 mt-1">تعداد دوره‌های تکمیل شده: ${timeline.highestSubmittedPeriod} دوره</div>
                         </div>
                     </div>
                     <div class="bg-white px-4 py-2 rounded-lg border text-sm font-semibold shadow-sm">
@@ -319,16 +339,15 @@ async function loadTypistData() {
             `;
         }
 
-        // تنظیم شماره دوره پیشنهادی در فیلد ورودی فرم
         const periodInput = document.getElementById('reportPeriodInput');
         if (periodInput) periodInput.value = timeline.activePeriod;
 
-        // رندر ردیف‌های گزارش کارکرد (بدون NaN)
+        // رندر جدول کارکرد با جلوگیری ۱۰۰٪ از نمایش NaN
         const tbody = document.getElementById('typistReportsTbody');
         if (!tbody) return;
 
         if (myReports.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-gray-400">تاکنون گزارشی برای شما ثبت نشده است.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-gray-400">هنوز کارکردی برای شما ثبت نشده است.</td></tr>`;
             return;
         }
 
@@ -338,8 +357,8 @@ async function loadTypistData() {
             const dateStr = r.created_at ? Jalali.formatDate(r.created_at) : '-';
             const periodNum = r.period || 1;
             const lateBadge = r.is_late 
-                ? `<span class="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded mr-1">تاخیر (${r.delay_days} روز)</span>` 
-                : `<span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded mr-1">به‌موقع</span>`;
+                ? `<span class="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded font-normal mr-1">تاخیر (${r.delay_days} روز)</span>` 
+                : `<span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded font-normal mr-1">به‌موقع</span>`;
 
             return `
                 <tr class="border-b hover:bg-gray-50 text-center">
@@ -353,8 +372,7 @@ async function loadTypistData() {
         }).join('');
 
     } catch (err) {
-        console.error('خطا در بارگذاری کارکرد تایپیست:', err);
-        alert('خطا در دریافت گزارش‌ها: ' + err.message);
+        console.error('خطا در دریافت اطلاعات کارکرد:', err);
     }
 }
 
@@ -365,12 +383,11 @@ async function submitTypistReport() {
     const desc = document.getElementById('reportDescInput').value.trim();
 
     if (isNaN(pages) || pages <= 0) {
-        alert('لطفاً تعداد صفحات انجام شده را به درستی وارد کنید.');
+        alert('لطفاً تعداد صفحات تایپ‌شده را به عدد وارد کنید.');
         return;
     }
 
     try {
-        // دریافت تاریخچه برای ارزیابی تاخیر
         const { data: reports } = await db
             .from('typist_reports')
             .select('*')
@@ -392,24 +409,27 @@ async function submitTypistReport() {
         const { error } = await db.from('typist_reports').insert([reportData]);
         if (error) throw error;
 
-        alert('✅ گزارش دوره با موفقیت ثبت شد. تایمر ۱۰ روز دوره بعدی آغاز گردید.');
+        alert('✅ گزارش با موفقیت ثبت شد و تایمر ۱۰ روز دوره بعد مجدداً آغاز گردید.');
         document.getElementById('reportPagesInput').value = '';
         if (document.getElementById('reportWordsInput')) document.getElementById('reportWordsInput').value = '';
         document.getElementById('reportDescInput').value = '';
         await loadTypistData();
     } catch (err) {
-        console.error('خطا در ثبت گزارش کارکرد:', err);
         alert('خطا در ثبت گزارش: ' + err.message);
     }
 }
 
 // ==========================================
-// ۷. پنل مدیریت جامع و ثبت مستقیم کارکرد توسط مدیر
+// ۸. داشبورد مدیریت و ثبت کارکرد توسط مدیر
 // ==========================================
 async function showAdminDashboard() {
-    document.getElementById('loginSection').classList.add('hidden');
-    document.getElementById('typistDashboardSection').classList.add('hidden');
-    document.getElementById('adminDashboardSection').classList.remove('hidden');
+    const logSec = document.getElementById('loginSection');
+    const typSec = document.getElementById('typistDashboardSection');
+    const admSec = document.getElementById('adminDashboardSection');
+
+    if (logSec) logSec.classList.add('hidden');
+    if (typSec) typSec.classList.add('hidden');
+    if (admSec) admSec.classList.remove('hidden');
 
     await loadAdminAllData();
 }
@@ -422,9 +442,6 @@ async function loadAdminAllData() {
             db.from('payments').select('*').order('created_at', { ascending: false })
         ]);
 
-        if (tRes.error) throw tRes.error;
-        if (rRes.error) throw rRes.error;
-
         allTypists = tRes.data || [];
         allReports = rRes.data || [];
         allPayments = pRes.data || [];
@@ -433,27 +450,24 @@ async function loadAdminAllData() {
         renderAdminReportsList();
         renderAdminTypistsManagement();
     } catch (err) {
-        console.error('خطا در دریافت اطلاعات جامع مدیر:', err);
-        alert('خطا در بارگذاری اطلاعات پنل مدیریت: ' + err.message);
+        console.error('خطا در دریافت اطلاعات مدیر:', err);
     }
 }
 
-// لیست کشویی انتخاب تایپیست برای مدیر
 function populateAdminTypistDropdown() {
     const select = document.getElementById('adminTypistSelect');
     if (!select) return;
 
-    select.innerHTML = '<option value="">-- انتخاب تایپیست جهت ثبت کارکرد --</option>' +
+    select.innerHTML = '<option value="">-- انتخاب تایپیست --</option>' +
         allTypists.map(t => `<option value="${t.id}">${t.name || 'بدون نام'} (${t.national_code})</option>`).join('');
 }
 
-// جدول کلی کارکردها در پنل مدیریت (حل معضل عدم نمایش)
 function renderAdminReportsList() {
     const tbody = document.getElementById('adminAllReportsTbody');
     if (!tbody) return;
 
     if (allReports.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-gray-400">هیچ کارکردی در پایگاه داده ثبت نشده است.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-gray-400">هیچ کارکردی ثبت نشده است.</td></tr>`;
         return;
     }
 
@@ -461,7 +475,7 @@ function renderAdminReportsList() {
     allTypists.forEach(t => { typistMap[t.id] = t; });
 
     tbody.innerHTML = allReports.map(r => {
-        const typist = typistMap[r.typist_id] || { name: 'نامشخص', phone: '', national_code: '-' };
+        const typist = typistMap[r.typist_id] || { name: 'نامشخص', national_code: '-' };
         const pages = Number(r.pages) || 0;
         const words = r.words ? Number(r.words).toLocaleString('fa-IR') : '-';
         const dateStr = r.created_at ? Jalali.formatDate(r.created_at) : '-';
@@ -486,7 +500,6 @@ function renderAdminReportsList() {
     }).join('');
 }
 
-// ثبت کارکرد مستقیماً توسط شخص مدیر
 async function handleAdminDirectReportSubmit() {
     const typistId = document.getElementById('adminTypistSelect').value;
     const period = parseInt(document.getElementById('adminReportPeriod').value);
@@ -499,7 +512,7 @@ async function handleAdminDirectReportSubmit() {
         return;
     }
     if (isNaN(pages) || pages <= 0) {
-        alert('لطفاً تعداد صفحات را به عدد معتبر وارد کنید.');
+        alert('لطفاً تعداد صفحات را به عدد وارد کنید.');
         return;
     }
 
@@ -518,18 +531,16 @@ async function handleAdminDirectReportSubmit() {
         const { error } = await db.from('typist_reports').insert([reportData]);
         if (error) throw error;
 
-        alert('✅ کارکرد تایپیست با موفقیت توسط مدیر ثبت شد.');
+        alert('✅ کارکرد تایپیست توسط مدیر با موفقیت ثبت شد.');
         document.getElementById('adminReportPages').value = '';
         if (document.getElementById('adminReportWords')) document.getElementById('adminReportWords').value = '';
         document.getElementById('adminReportDesc').value = '';
         await loadAdminAllData();
     } catch (err) {
-        console.error('خطای ثبت کارکرد توسط مدیر:', err);
         alert('خطا در ثبت کارکرد: ' + err.message);
     }
 }
 
-// لیست مدیریت تایپیست‌ها و وضعیت تسویه دوگانه
 function renderAdminTypistsManagement() {
     const container = document.getElementById('adminTypistsListContainer');
     if (!container) return;
@@ -557,7 +568,7 @@ function renderAdminTypistsManagement() {
                         <span>📅 تحویل: ${t.delivery_date || '-'}</span>
                     </div>
                     <div class="mt-2 text-xs font-semibold ${timeline.isLate ? 'text-red-600' : 'text-emerald-700'}">
-                        ${timeline.statusLabel} | کارکرد کل: ${totalPages.toLocaleString('fa-IR')} صفحه
+                        ${timeline.statusLabel} | مجموع صفحات: ${totalPages.toLocaleString('fa-IR')}
                     </div>
                 </div>
 
@@ -572,7 +583,7 @@ function renderAdminTypistsManagement() {
 }
 
 // ==========================================
-// ۸. مدل دوگانه تسویه حساب و خروجی دقیق اکسل
+// ۹. تسویه حساب و خروجی اکسل بانکی (۵ ستون)
 // ==========================================
 let currentSettlementTypistId = null;
 
@@ -581,22 +592,25 @@ function openSettlementModal(typistId) {
     const typist = allTypists.find(t => t.id === typistId);
     if (!typist) return;
 
-    document.getElementById('settlementTypistName').innerText = typist.name;
-    document.getElementById('settlementModal').classList.remove('hidden');
+    const nameSpan = document.getElementById('settlementTypistName');
+    if (nameSpan) nameSpan.innerText = typist.name;
+    const modal = document.getElementById('settlementModal');
+    if (modal) modal.classList.remove('hidden');
 }
 
 function closeSettlementModal() {
     currentSettlementTypistId = null;
-    document.getElementById('settlementModal').classList.add('hidden');
+    const modal = document.getElementById('settlementModal');
+    if (modal) modal.classList.add('hidden');
 }
 
 async function executeSettlement() {
-    const model = document.getElementById('settlementTypeSelect').value; // 'monthly' یا 'full'
+    const model = document.getElementById('settlementTypeSelect').value;
     const amount = parseInt(document.getElementById('settlementAmountInput').value);
     const desc = document.getElementById('settlementDescInput').value.trim();
 
     if (isNaN(amount) || amount <= 0) {
-        alert('لطفاً مبلغ معتبر تسویه را وارد کنید.');
+        alert('لطفاً مبلغ معتبر وارد نمایید.');
         return;
     }
 
@@ -616,29 +630,20 @@ async function executeSettlement() {
         closeSettlementModal();
         await loadAdminAllData();
     } catch (err) {
-        console.error('خطای ثبت تسویه:', err);
         alert('خطا در ثبت تسویه: ' + err.message);
     }
 }
 
-// خروجی اکسل دقیق با ۵ ستون مدنظر و UTF-8 BOM
 function exportSettlementsToExcel() {
     if (allPayments.length === 0) {
-        alert('داده‌ای برای خروجی فایل اکسل وجود ندارد.');
+        alert('داده‌ای برای خروجی اکسل وجود ندارد.');
         return;
     }
 
     const typistMap = {};
     allTypists.forEach(t => { typistMap[t.id] = t; });
 
-    // ستون‌های فرمت استاندارد بانکی
-    const headers = [
-        "نام و نام خانوادگی",
-        "کد ملی",
-        "شماره تماس",
-        "مبلغ",
-        "شماره شبا"
-    ];
+    const headers = ["نام و نام خانوادگی", "کد ملی", "شماره تماس", "مبلغ", "شماره شبا"];
 
     const rows = allPayments.map(p => {
         const typist = typistMap[p.typist_id] || {};
@@ -657,14 +662,35 @@ function exportSettlementsToExcel() {
     const url = URL.createObjectURL(blob);
 
     link.setAttribute("href", url);
-    link.setAttribute("download", `گزارش_تسویه_بانکی_${Jalali.todayString().replace(/\//g, '-')}.csv`);
+    link.setAttribute("download", `تسویه_بانکی_${Jalali.todayString().replace(/\//g, '-')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 }
 
-// مقداردهی اولیه رویدادها پس از لود صفحه
+// ==========================================
+// ۱۰. متصل کردن توابع به شیء سراسری window
+// ==========================================
+// (برای جلوگیری از خطاهای ReferenceError مثل showLoginModal is not defined)
+window.showLoginModal = showLoginModal;
+window.closeLoginModal = closeLoginModal;
+window.handleTypistLogin = handleTypistLogin;
+window.handleAdminLogin = handleAdminLogin;
+window.logout = logout;
+window.submitTypistReport = submitTypistReport;
+window.handleAdminDirectReportSubmit = handleAdminDirectReportSubmit;
+window.openSettlementModal = openSettlementModal;
+window.closeSettlementModal = closeSettlementModal;
+window.executeSettlement = executeSettlement;
+window.exportSettlementsToExcel = exportSettlementsToExcel;
+window.openJalaliCalendar = openJalaliCalendar;
+window.closeJalaliCalendar = closeJalaliCalendar;
+window.prevCalMonth = prevCalMonth;
+window.nextCalMonth = nextCalMonth;
+
+// راه‌اندازی اولیه
 window.addEventListener('DOMContentLoaded', () => {
-    console.log('سامانه مدیریت تایپیست‌ها بارگذاری شد.');
+    console.log('سامانه مدیریت تایپیست‌ها آماده است.');
 });
+
 
