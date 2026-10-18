@@ -21,6 +21,13 @@ let dpState = {
   month: 12
 };
 
+function toEnglishDigits(str) {
+  if (!str) return '';
+  return str
+    .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+}
+
 function g2j(gy, gm, gd) {
   var g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
   var jy = (gy <= 1600) ? 0 : 979;
@@ -48,7 +55,8 @@ function getTodayShamsi() {
 
 function parseShamsiDate(str) {
   if (!str) return null;
-  const parts = str.split('/');
+  const cleanStr = toEnglishDigits(str);
+  const parts = cleanStr.split('/');
   if (parts.length !== 3) return null;
   return {
     year: parseInt(parts[0], 10),
@@ -211,7 +219,7 @@ function switchLoginTab(tab) {
 async function handleAdminLogin(e) {
   e.preventDefault();
   const passInput = document.getElementById('admin-password');
-  const pass = passInput.value.trim();
+  const pass = toEnglishDigits(passInput.value.trim());
   const errDiv = document.getElementById('login-error');
   const btnSubmit = document.getElementById('btn-submit-admin');
 
@@ -243,8 +251,8 @@ async function handleAdminLogin(e) {
 
 async function handleTypistLogin(e) {
   e.preventDefault();
-  const identity = document.getElementById('typist-identity').value.trim();
-  const pass = document.getElementById('typist-password').value.trim();
+  const identity = toEnglishDigits(document.getElementById('typist-identity').value.trim());
+  const pass = toEnglishDigits(document.getElementById('typist-password').value.trim());
   const errDiv = document.getElementById('login-error');
   const btnSubmit = document.getElementById('btn-submit-typist');
 
@@ -672,10 +680,10 @@ async function handleSaveTypist(e) {
     p_first_name: document.getElementById('modal-typist-firstname').value.trim(),
     p_last_name: document.getElementById('modal-typist-lastname').value.trim(),
     p_father_name: document.getElementById('modal-typist-father').value.trim(),
-    p_national_id: document.getElementById('modal-typist-nationalid').value.trim(),
-    p_phone: document.getElementById('modal-typist-phone').value.trim(),
-    p_card_number: document.getElementById('modal-typist-card').value.trim(),
-    p_iban: document.getElementById('modal-typist-iban').value.trim(),
+    p_national_id: toEnglishDigits(document.getElementById('modal-typist-nationalid').value.trim()),
+    p_phone: toEnglishDigits(document.getElementById('modal-typist-phone').value.trim()),
+    p_card_number: toEnglishDigits(document.getElementById('modal-typist-card').value.trim()),
+    p_iban: toEnglishDigits(document.getElementById('modal-typist-iban').value.trim()),
     p_rate: parseFloat(document.getElementById('modal-typist-rate').value) || 0,
     p_delivery_date: document.getElementById('modal-typist-delivery').value.trim(),
     p_password_hash: null
@@ -795,8 +803,8 @@ async function deletePayment(paymentId) {
 // CHANGE PASSWORD LOGIC
 async function handleChangePassword(e) {
   e.preventDefault();
-  const currentPass = document.getElementById('modal-pass-current').value.trim();
-  const newPass = document.getElementById('modal-pass-new').value.trim();
+  const currentPass = toEnglishDigits(document.getElementById('modal-pass-current').value.trim());
+  const newPass = toEnglishDigits(document.getElementById('modal-pass-new').value.trim());
 
   try {
     if (currentUser.role === 'admin') {
