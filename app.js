@@ -72,24 +72,23 @@ window.submitAdminLogin = async function() {
         return;
     }
 
-    // استفاده مستقیم از کلاینتی که در بالای فایل ساختید (window.db)
-    const client = window.db || window.supabaseClient || window.client || (typeof db !== 'undefined' ? db : null);
+    // استفاده مستقیم از db که در خطوط بالا ساخته‌اید
+    const client = window.db || db;
 
     if (!client) {
-        console.error('کلاینت دیتابیس (db) یافت نشد.');
-        alert('خطای فنی: اتصال به سرور دیتابیس برقرار نیست.');
+        alert('خطای اتصال به دیتابیس.');
         return;
     }
 
     try {
-        // اعتبارسنجی ۱۰۰٪ امن در سرور بدون هیچ‌گونه نشت رمز به مرورگر
+        // بررسی امن سمت سرور بدون ارسال رمز عبور به مرورگر
         const { data: isCorrect, error } = await client.rpc('check_admin_pass', {
             entered_pass: enteredPassword
         });
 
         if (error) {
-            console.error('خطای بازگشتی از سرور:', error);
-            alert('خطای سرور در بررسی رمز: ' + (error.message || 'نامشخص'));
+            console.error('خطای سرور:', error);
+            alert('خطا در اعتبارسنجی: ' + (error.message || 'خطای سرور'));
             return;
         }
 
@@ -103,10 +102,9 @@ window.submitAdminLogin = async function() {
             alert('رمز عبور وارد شده اشتباه است.');
             if (passwordInput) passwordInput.value = '';
         }
-
     } catch (err) {
-        console.error('خطای پیش‌بینی نشده:', err);
-        alert('خطا در ارتباط با سرور: ' + (err.message || ''));
+        console.error('خطا:', err);
+        alert('خطا در برقراری ارتباط.');
     }
 };
 
