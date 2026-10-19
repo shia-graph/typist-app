@@ -6,20 +6,28 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
+var _cachedClient = null;
 
-window.SUPABASE_URL = SUPABASE_URL;
-window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
-
-const supabaseClient = (window.supabase && window.supabase.createClient) 
-    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) 
-    : null;
+// Dynamic Safe Client Getter
+function getSupabaseClient() {
+    if (_cachedClient) return _cachedClient;
+    if (window.supabase && typeof window.supabase.createClient === 'function') {
+        _cachedClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        return _cachedClient;
+    }
+    if (window.createClient && typeof window.createClient === 'function') {
+        _cachedClient = window.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        return _cachedClient;
+    }
+    return null;
+}
 
 // Global Application State
-let currentUserRole = null; // 'admin' | 'typist'
-let currentTypistId = null;
-let currentTypistData = null;
-let allTypistsData = [];
-let targetDateInputId = null;
+var currentUserRole = null; // 'admin' | 'typist'
+var currentTypistId = null;
+var currentTypistData = null;
+var allTypistsData = [];
+var targetDateInputId = null;
 
 // Safe DOM Helper Accessors
 function getEl(id) { return document.getElementById(id); }
@@ -128,13 +136,14 @@ async function handleAdminLogin(e) {
         showLoading();
         hideLoginError();
 
-        if (!supabaseClient) {
+        const client = getSupabaseClient();
+        if (!client) {
             hideLoading();
-            showLoginError('خطا در اتصال به شبکه Supabase');
+            showLoginError('کتابخانه Supabase هنوز بارگذاری نشده است. لطفاً چند لحظه بعد دوباره تلاش کنید.');
             return;
         }
 
-        const { data, error } = await supabaseClient.rpc('verify_admin_password', { _pass: cleanPass });
+        const { data, error } = await client.rpc('verify_admin_password', { _pass: cleanPass });
         hideLoading();
 
         if (error) {
@@ -180,13 +189,14 @@ async function handleTypistLogin(e) {
         showLoading();
         hideLoginError();
 
-        if (!supabaseClient) {
+        const client = getSupabaseClient();
+        if (!client) {
             hideLoading();
-            showLoginError('خطا در اتصال به شبکه Supabase');
+            showLoginError('کتابخانه Supabase بارگذاری نشده است.');
             return;
         }
 
-        const { data, error } = await supabaseClient.rpc('verify_typist_password', { 
+        const { data, error } = await client.rpc('verify_typist_password', { 
             _login_id: cleanId, 
             _pass: cleanPass 
         });
@@ -249,7 +259,9 @@ function showAdminDashboard() {
 async function loadAdminDashboardData() {
     try {
         showLoading();
-        const { data, error } = await supabaseClient.rpc('get_dashboard_summary');
+        const client = getSupabaseClient();
+        if (!client) return;
+        const { data, error } = await client.rpc('get_dashboard_summary');
         hideLoading();
 
         if (error) {
@@ -384,7 +396,9 @@ async function saveTypist(e) {
 
     try {
         showLoading();
-        const { error } = await supabaseClient.rpc('upsert_typist', {
+        const client = getSupabaseClient();
+        if (!client) return;
+        const { error } = await client.rpc('upsert_typist', {
             _id: id,
             _first_name: first_name,
             _last_name: last_name,
@@ -426,7 +440,9 @@ async function viewTypistDetail(typistId) {
 async function loadTypistDetailData(typistId) {
     try {
         showLoading();
-        const { data, error } = await supabaseClient.rpc('get_typist_detail', { _typist_id: typistId });
+        const client = getSupabaseClient();
+        if (!client) return;
+        const { data, error } = await client.rpc('get_typist_detail', { _typist_id: typistId });
         hideLoading();
 
         if (error) {
@@ -529,7 +545,9 @@ async function saveProfileEdit() {
 
     try {
         showLoading();
-        const { error } = await supabaseClient.rpc('upsert_typist', {
+        const client = getSupabaseClient();
+        if (!client) return;
+        const { error } = await client.rpc('upsert_typist', {
             _id: id,
             _first_name: first_name,
             _last_name: last_name,
@@ -675,9 +693,12 @@ async function saveReport(e) {
 
     try {
         showLoading();
+        const client = getSupabaseClient();
+        if (!client) return;
+
         let error = null;
         if (reportId) {
-            const res = await supabaseClient.rpc('update_typist_report', {
+            const res = await client.rpc('update_typist_report', {
                 _report_id: reportId,
                 _typist_id: currentTypistId,
                 _title: title,
@@ -688,7 +709,7 @@ async function saveReport(e) {
             });
             error = res.error;
         } else {
-            const res = await supabaseClient.rpc('add_typist_report', {
+            const res = await client.rpc('add_typist_report', {
                 _typist_id: currentTypistId,
                 _title: title,
                 _delivery_date: date,
@@ -723,7 +744,9 @@ async function deleteReport(reportId) {
     if (!confirm('آیا از حذف این گزارش کار مطمئن هستید؟')) return;
     try {
         showLoading();
-        const { error } = await supabaseClient.rpc('delete_typist_report', { _report_id: reportId });
+        const client = getSupabaseClient();
+        if (!client) return;
+        const { error } = await client.rpc('delete_typist_report', { _report_id: reportId });
         hideLoading();
 
         if (error) {
@@ -781,9 +804,12 @@ async function savePayment(e) {
 
     try {
         showLoading();
+        const client = getSupabaseClient();
+        if (!client) return;
+
         let error = null;
         if (paymentId) {
-            const res = await supabaseClient.rpc('update_payment', {
+            const res = await client.rpc('update_payment', {
                 _payment_id: paymentId,
                 _typist_id: currentTypistId,
                 _amount: amount,
@@ -793,7 +819,7 @@ async function savePayment(e) {
             });
             error = res.error;
         } else {
-            const res = await supabaseClient.rpc('add_payment', {
+            const res = await client.rpc('add_payment', {
                 _typist_id: currentTypistId,
                 _amount: amount,
                 _payment_date: date,
@@ -822,7 +848,9 @@ async function deletePayment(paymentId) {
     if (!confirm('آیا از حذف این پرداخت مطمئن هستید؟')) return;
     try {
         showLoading();
-        const { error } = await supabaseClient.rpc('delete_payment', { _payment_id: paymentId });
+        const client = getSupabaseClient();
+        if (!client) return;
+        const { error } = await client.rpc('delete_payment', { _payment_id: paymentId });
         hideLoading();
 
         if (error) {
@@ -853,7 +881,9 @@ async function loadTypistSelfDashboardData() {
     if (!currentTypistId) return;
     try {
         showLoading();
-        const { data, error } = await supabaseClient.rpc('get_typist_detail', { _typist_id: currentTypistId });
+        const client = getSupabaseClient();
+        if (!client) return;
+        const { data, error } = await client.rpc('get_typist_detail', { _typist_id: currentTypistId });
         hideLoading();
 
         if (error) {
@@ -971,12 +1001,15 @@ async function saveNewPassword(e) {
 
     try {
         showLoading();
+        const client = getSupabaseClient();
+        if (!client) return;
+
         let error = null;
         if (currentUserRole === 'admin') {
-            const res = await supabaseClient.rpc('change_admin_password', { _new_pass: newPass });
+            const res = await client.rpc('change_admin_password', { _new_pass: newPass });
             error = res.error;
         } else {
-            const res = await supabaseClient.rpc('change_typist_password', { _typist_id: currentTypistId, _new_pass: newPass });
+            const res = await client.rpc('change_typist_password', { _typist_id: currentTypistId, _new_pass: newPass });
             error = res.error;
         }
         hideLoading();
@@ -1111,11 +1144,6 @@ function closeDatePicker() {
 }
 
 function applyDatePicker() {
-    const year = getEl('pickerYear')?.value || '1403';
-    const month = getEl('pickerMonth')?.value || '01';
-    const day = getEl('pickerDay')?.value || '01';
-    
-    // Convert Shamsi to ISO approximation or set value
     if (targetDateInputId) {
         safeSetValue(targetDateInputId, new Date().toISOString().split('T')[0]);
     }
