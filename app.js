@@ -6,6 +6,7 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
+
 let supabaseClient = null;
 let currentUser = null;
 let isAdmin = false;
@@ -23,7 +24,7 @@ const toEnglishDigits = (str) => {
     if (str === null || str === undefined) return "";
     return str.toString()
         .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))
-        .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
+        .replace(/[٠-٩]/g, d => "٠١٢٣٥٦٧٨٩".indexOf(d));
 };
 
 const formatCurrency = (num) => {
@@ -36,11 +37,11 @@ function showLoading(show) {
     if (el) el.style.display = show ? 'flex' : 'none';
 }
 
-// توابع مپر استخراج فیلدها از دیتابیس
+// توابع استخراج امن فیلدهای تایپیست
 function getTypistFullName(t) {
     if (!t) return "کاربر سیستم";
     if (t.first_name || t.last_name) {
-        return `${t.first_name || ''} ${t.last_name || ''}`.trim();
+        return (t.first_name || '') + ' ' + (t.last_name || '');
     }
     return t.name || t.id || "تایپیست";
 }
@@ -90,13 +91,12 @@ async function login() {
             }
         }
 
-        // ۲. بررسی لاگین تایپیست‌ها (جستجوی همزمان در national_id, phone, id)
+        // ۲. بررسی لاگین تایپیست‌ها
         const { data: typistsData, error: tErr } = await client
             .from('typists')
             .select('*');
 
         if (!tErr && typistsData && typistsData.length > 0) {
-            // یافتن کاربر متناظر با ورودی کاربر
             const matchedUser = typistsData.find(t => {
                 const phone = (t.phone || '').trim();
                 const nationalId = (t.national_id || '').trim();
@@ -258,25 +258,30 @@ async function loadTypistDashboard() {
 
         const list = document.getElementById('myWorksList');
         if (works && works.length > 0) {
-            list.innerHTML = works.map(w => {
+            let html = '';
+            for (let i = 0; i < works.length; i++) {
+                const w = works[i];
                 const title = w.title || w.file_title || 'بدون عنوان';
                 const pages = w.page_count || w.quantity || w.pages || 0;
                 const dateStr = w.record_date || w.created_at;
                 const isDelivered = w.is_delivered || w.completed || (w.status === 'completed');
                 const isSettled = w.is_settled || false;
+                const dDate = new Date(dateStr).toLocaleDateString('fa-IR');
 
-                return `
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="p-4 text-xs font-mono">${new Date(dateStr).toLocaleDateString('fa-IR')}</td>
-                        <td class="p-4 font-bold text-gray-800">${title}</td>
-                        <td class="p-4 text-center font-bold text-blue-600">${pages}</td>
-                        <td class="p-4 text-center">${isDelivered ? '<span class="text-green-600 font-bold">✔️ تحویل شده</span>' : '<span class="text-gray-400">❌ در حال انجام</span>'}</td>
-                        <td class="p-4 text-center">${isSettled ? '<span class="bg-green-100 text-green-700 px-2 py-1 rounded-lg text-xs font-bold">✔️ تسویه کامل</span>' : '<span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-lg text-xs font-bold">⏳ در انتظار تسویه</span>'}</td>
-                    </tr>
-                `;
-            }).join('');
+                const delTag = isDelivered ? '<span class="text-green-600 font-bold">✔️ تحویل شده</span>' : '<span class="text-gray-400">❌ در حال انجام</span>';
+                const setTag = isSettled ? '<span class="bg-green-100 text-green-700 px-2 py-1 rounded-lg text-xs font-bold">✔️ تسویه کامل</span>' : '<span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-lg text-xs font-bold">⏳ در انتظار تسویه</span>';
+
+                html += '<tr class="hover:bg-gray-50 transition-colors">';
+                html += '<td class="p-4 text-xs font-mono">' + dDate + '</td>';
+                html += '<td class="p-4 font-bold text-gray-800">' + title + '</td>';
+                html += '<td class="p-4 text-center font-bold text-blue-600">' + pages + '</td>';
+                html += '<td class="p-4 text-center">' + delTag + '</td>';
+                html += '<td class="p-4 text-center">' + setTag + '</td>';
+                html += '</tr>';
+            }
+            list.innerHTML = html;
         } else {
-            list.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-gray-400">هیچ کاری برای شما ثبت نشده است.</td></tr>`;
+            list.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-gray-400">هیچ کاری برای شما ثبت نشده است.</td></tr>';
         }
 
         document.getElementById('p_name').value = currentUser.first_name || currentUser.name || '';
@@ -311,7 +316,7 @@ async function saveTypistProfile() {
     const updateData = {
         first_name: document.getElementById('p_name').value.trim(),
         last_name: document.getElementById('p_family').value.trim(),
-        name: `${document.getElementById('p_name').value.trim()} ${document.getElementById('p_family').value.trim()}`.trim(),
+        name: (document.getElementById('p_name').value.trim() + ' ' + document.getElementById('p_family').value.trim()).trim(),
         father_name: document.getElementById('p_father').value.trim(),
         phone: toEnglishDigits(document.getElementById('p_phone').value.trim()),
         card_number: toEnglishDigits(document.getElementById('p_card').value.trim()),
@@ -353,40 +358,41 @@ async function loadTypists() {
 function renderTypistsTable(listData) {
     const list = document.getElementById('typistsList');
     if (!listData || listData.length === 0) {
-        list.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-gray-400">هیچ تایپیستی یافت نشد.</td></tr>`;
+        list.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-gray-400">هیچ تایپیستی یافت نشد.</td></tr>';
         return;
     }
 
-    list.innerHTML = listData.map(t => {
+    let html = '';
+    for (let i = 0; i < listData.length; i++) {
+        const t = listData[i];
         const fullName = getTypistFullName(t);
         const phone = getTypistPhone(t);
         const nationalId = getTypistNationalId(t);
         const rate = t.page_rate || t.rate_per_word || t.default_page_rate || 0;
 
-        return `
-            <tr class="hover:bg-gray-50 transition-colors">
-                <td class="p-4 text-center">
-                    <input type="checkbox" class="typist-checkbox w-4 h-4 rounded text-blue-600 focus:ring-blue-500" value="${phone}" data-id="${t.id}">
-                </td>
-                <td class="p-4 font-mono font-bold text-gray-700 text-xs">${nationalId}</td>
-                <td class="p-4 font-bold text-gray-900">${fullName}</td>
-                <td class="p-4 text-center font-bold text-blue-600">${formatCurrency(rate)} تومان</td>
-                <td class="p-4 text-center">
-                    <div class="flex items-center justify-center gap-2">
-                        ${phone ? `<a href="tel:${phone}" class="bg-green-100 text-green-700 p-2 rounded-xl text-xs font-bold hover:bg-green-200">📞 تماس</a>` : ''}
-                        ${phone ? `<a href="sms:${phone}" class="bg-blue-100 text-blue-700 p-2 rounded-xl text-xs font-bold hover:bg-blue-200">✉️ پیامک</a>` : ''}
-                    </div>
-                </td>
-                <td class="p-4 text-center">
-                    <div class="flex items-center justify-center gap-2">
-                        <button onclick="openEditModal('${t.id}')" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-xl font-bold text-xs">✏️ ویرایش</button>
-                        <button onclick="resetPasswordModal('${t.id}')" class="bg-yellow-50 text-yellow-700 hover:bg-yellow-100 px-3 py-1.5 rounded-xl font-bold text-xs">🔑 ریست رمز</button>
-                        <button onclick="deleteTypist('${t.id}')" class="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-xl font-bold text-xs">🗑️ حذف</button>
-                    </div>
-                </td>
-            </tr>
-        `;
-    }).join('');
+        let callBtn = '';
+        if (phone) {
+            callBtn = '<a href="tel:' + phone + '" class="bg-green-100 text-green-700 p-2 rounded-xl text-xs font-bold hover:bg-green-200">📞 تماس</a>';
+        }
+        let smsBtn = '';
+        if (phone) {
+            smsBtn = '<a href="sms:' + phone + '" class="bg-blue-100 text-blue-700 p-2 rounded-xl text-xs font-bold hover:bg-blue-200">✉️ پیامک</a>';
+        }
+
+        html += '<tr class="hover:bg-gray-50 transition-colors">';
+        html += '<td class="p-4 text-center"><input type="checkbox" class="typist-checkbox w-4 h-4 rounded text-blue-600 focus:ring-blue-500" value="' + phone + '" data-id="' + t.id + '"></td>';
+        html += '<td class="p-4 font-mono font-bold text-gray-700 text-xs">' + nationalId + '</td>';
+        html += '<td class="p-4 font-bold text-gray-900">' + fullName + '</td>';
+        html += '<td class="p-4 text-center font-bold text-blue-600">' + formatCurrency(rate) + ' تومان</td>';
+        html += '<td class="p-4 text-center"><div class="flex items-center justify-center gap-2">' + callBtn + ' ' + smsBtn + '</div></td>';
+        html += '<td class="p-4 text-center">';
+        html += '<div class="flex items-center justify-center gap-2">';
+        html += '<button onclick="openEditModal(\'' + t.id + '\')" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-xl font-bold text-xs">✏️ ویرایش</button>';
+        html += '<button onclick="resetPasswordModal(\'' + t.id + '\')" class="bg-yellow-50 text-yellow-700 hover:bg-yellow-100 px-3 py-1.5 rounded-xl font-bold text-xs">🔑 ریست رمز</button>';
+        html += '<button onclick="deleteTypist(\'' + t.id + '\')" class="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-xl font-bold text-xs">🗑️ حذف</button>';
+        html += '</div></td></tr>';
+    }
+    list.innerHTML = html;
 }
 
 function filterTypists() {
@@ -421,7 +427,7 @@ async function addTypist() {
             national_id: national_id,
             first_name: first_name,
             last_name: last_name,
-            name: `${first_name} ${last_name}`.trim(),
+            name: (first_name + ' ' + last_name).trim(),
             phone: phone,
             password: pass || defaultPass,
             page_rate: rate
@@ -439,7 +445,7 @@ async function addTypist() {
 }
 
 async function deleteTypist(id) {
-    if (!confirm(`آیا از حذف این تایپیست و کارهای ثبت‌شده او اطمینان دارید؟`)) return;
+    if (!confirm("آیا از حذف این تایپیست و کارهای ثبت‌شده او اطمینان دارید؟")) return;
 
     showLoading(true);
     const client = getSupabaseClient();
@@ -480,10 +486,13 @@ function closeEditModal() {
 
 async function saveTypistModalEdit() {
     const id = document.getElementById('edit_t_id').value;
+    const fName = document.getElementById('edit_t_name').value.trim();
+    const lName = document.getElementById('edit_t_family').value.trim();
+
     const updateData = {
-        first_name: document.getElementById('edit_t_name').value.trim(),
-        last_name: document.getElementById('edit_t_family').value.trim(),
-        name: `${document.getElementById('edit_t_name').value.trim()} ${document.getElementById('edit_t_family').value.trim()}`.trim(),
+        first_name: fName,
+        last_name: lName,
+        name: (fName + ' ' + lName).trim(),
         father_name: document.getElementById('edit_t_father').value.trim(),
         phone: toEnglishDigits(document.getElementById('edit_t_phone').value.trim()),
         page_rate: parseInt(toEnglishDigits(document.getElementById('edit_t_rate').value.trim())),
@@ -554,7 +563,11 @@ async function loadTypistDropdowns() {
     const { data } = await getSupabaseClient().from('typists').select('*').order('name');
     if (!data) return;
 
-    const options = data.map(t => `<option value="${t.id}">${getTypistFullName(t)} (${getTypistPhone(t)})</option>`).join('');
+    let options = '';
+    for (let i = 0; i < data.length; i++) {
+        const t = data[i];
+        options += '<option value="' + t.id + '">' + getTypistFullName(t) + ' (' + getTypistPhone(t) + ')</option>';
+    }
     document.getElementById('w_typist').innerHTML = options;
     document.getElementById('p_typist').innerHTML = options;
 }
@@ -572,40 +585,38 @@ async function loadWorks() {
 
     const list = document.getElementById('workList');
     if (!data || data.length === 0) {
-        list.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-gray-400">هیچ کاری ثبت نشده است.</td></tr>`;
+        list.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-gray-400">هیچ کاری ثبت نشده است.</td></tr>';
         return;
     }
 
-    list.innerHTML = data.map(w => {
+    let html = '';
+    for (let i = 0; i < data.length; i++) {
+        const w = data[i];
         const typistName = w.typists ? getTypistFullName(w.typists) : 'ناشناس';
         const title = w.title || w.file_title || 'بدون عنوان';
         const pages = w.page_count || w.quantity || w.pages || 0;
         const dateStr = w.record_date || w.created_at;
         const isDelivered = w.is_delivered || w.completed || (w.status === 'completed');
         const isSettled = w.is_settled || false;
+        const dDate = new Date(dateStr).toLocaleDateString('fa-IR');
 
-        return `
-            <tr class="hover:bg-gray-50 transition-colors">
-                <td class="p-4 text-xs font-mono">${new Date(dateStr).toLocaleDateString('fa-IR')}</td>
-                <td class="p-4 font-bold text-gray-800">${typistName}</td>
-                <td class="p-4">${title}</td>
-                <td class="p-4 text-center font-bold text-blue-600">${pages}</td>
-                <td class="p-4 text-center">
-                    <button onclick="toggleDelivered('${w.id}', ${!isDelivered})" class="px-2.5 py-1 rounded-lg text-xs font-bold ${isDelivered ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">
-                        ${isDelivered ? '✔️ تحویل شد' : '❌ تحویل نشده'}
-                    </button>
-                </td>
-                <td class="p-4 text-center">
-                    <button onclick="toggleSettled('${w.id}', ${!isSettled})" class="px-2.5 py-1 rounded-lg text-xs font-bold ${isSettled ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}">
-                        ${isSettled ? '✔️ تسویه کامل' : '⏳ تسویه نشده'}
-                    </button>
-                </td>
-                <td class="p-4 text-center">
-                    <button onclick="deleteWork('${w.id}')" class="text-red-500 hover:text-red-700 p-1">🗑️</button>
-                </td>
-            </tr>
-        `;
-    }).join('');
+        const delClass = isDelivered ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500';
+        const delText = isDelivered ? '✔️ تحویل شد' : '❌ تحویل نشده';
+
+        const setClass = isSettled ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700';
+        const setText = isSettled ? '✔️ تسویه کامل' : '⏳ تسویه نشده';
+
+        html += '<tr class="hover:bg-gray-50 transition-colors">';
+        html += '<td class="p-4 text-xs font-mono">' + dDate + '</td>';
+        html += '<td class="p-4 font-bold text-gray-800">' + typistName + '</td>';
+        html += '<td class="p-4">' + title + '</td>';
+        html += '<td class="p-4 text-center font-bold text-blue-600">' + pages + '</td>';
+        html += '<td class="p-4 text-center"><button onclick="toggleDelivered(\'' + w.id + '\', ' + (!isDelivered) + ')" class="px-2.5 py-1 rounded-lg text-xs font-bold ' + delClass + '">' + delText + '</button></td>';
+        html += '<td class="p-4 text-center"><button onclick="toggleSettled(\'' + w.id + '\', ' + (!isSettled) + ')" class="px-2.5 py-1 rounded-lg text-xs font-bold ' + setClass + '">' + setText + '</button></td>';
+        html += '<td class="p-4 text-center"><button onclick="deleteWork(\'' + w.id + '\')" class="text-red-500 hover:text-red-700 p-1">🗑️</button></td>';
+        html += '</tr>';
+    }
+    list.innerHTML = html;
 }
 
 async function addWork() {
@@ -678,25 +689,25 @@ async function loadPayments() {
 
     const list = document.getElementById('paymentsList');
     if (!data || data.length === 0) {
-        list.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-gray-400">هیچ پرداخت مالی ثبت نشده است.</td></tr>`;
+        list.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-gray-400">هیچ پرداخت مالی ثبت نشده است.</td></tr>';
         return;
     }
 
-    list.innerHTML = data.map(p => {
+    let html = '';
+    for (let i = 0; i < data.length; i++) {
+        const p = data[i];
         const typistName = p.typists ? getTypistFullName(p.typists) : 'ناشناس';
         const dateStr = p.payment_date || p.created_at;
+        const dDate = new Date(dateStr).toLocaleDateString('fa-IR');
 
-        return `
-            <tr class="hover:bg-gray-50 transition-colors">
-                <td class="p-4 text-xs font-mono">${new Date(dateStr).toLocaleDateString('fa-IR')}</td>
-                <td class="p-4 font-bold text-gray-800">${typistName}</td>
-                <td class="p-4 text-center font-mono font-bold text-green-600">${formatCurrency(p.amount)} ریال</td>
-                <td class="p-4 text-center">
-                    <button onclick="deletePayment('${p.id}')" class="text-red-500 hover:text-red-700 p-1">🗑️</button>
-                </td>
-            </tr>
-        `;
-    }).join('');
+        html += '<tr class="hover:bg-gray-50 transition-colors">';
+        html += '<td class="p-4 text-xs font-mono">' + dDate + '</td>';
+        html += '<td class="p-4 font-bold text-gray-800">' + typistName + '</td>';
+        html += '<td class="p-4 text-center font-mono font-bold text-green-600">' + formatCurrency(p.amount) + ' ریال</td>';
+        html += '<td class="p-4 text-center"><button onclick="deletePayment(\'' + p.id + '\')" class="text-red-500 hover:text-red-700 p-1">🗑️</button></td>';
+        html += '</tr>';
+    }
+    list.innerHTML = html;
 }
 
 async function addPayment() {
@@ -746,24 +757,11 @@ async function loadAdminReport() {
 
     if (data && data[0]) {
         const r = data[0];
-        document.getElementById('adminReportResults').innerHTML = `
-            <div class="bg-blue-600 text-white p-6 rounded-2xl shadow-lg">
-                <p class="text-xs opacity-80 mb-1">کل صفحات تایپ شده</p>
-                <h3 class="text-3xl font-black">${formatCurrency(r.total_pages || 0)}</h3>
-            </div>
-            <div class="bg-indigo-600 text-white p-6 rounded-2xl shadow-lg">
-                <p class="text-xs opacity-80 mb-1">ارزش کل کارکرد (تومان)</p>
-                <h3 class="text-3xl font-black">${formatCurrency(r.total_work_value || 0)}</h3>
-            </div>
-            <div class="bg-green-600 text-white p-6 rounded-2xl shadow-lg">
-                <p class="text-xs opacity-80 mb-1">کل پرداختی‌ها (ریال)</p>
-                <h3 class="text-3xl font-black">${formatCurrency(r.total_paid || 0)}</h3>
-            </div>
-            <div class="bg-orange-500 text-white p-6 rounded-2xl shadow-lg">
-                <p class="text-xs opacity-80 mb-1">کل بدهی سامانه به تایپیست‌ها (ریال)</p>
-                <h3 class="text-3xl font-black">${formatCurrency(r.total_remaining || 0)}</h3>
-            </div>
-        `;
+        document.getElementById('adminReportResults').innerHTML = 
+            '<div class="bg-blue-600 text-white p-6 rounded-2xl shadow-lg"><p class="text-xs opacity-80 mb-1">کل صفحات تایپ شده</p><h3 class="text-3xl font-black">' + formatCurrency(r.total_pages || 0) + '</h3></div>' +
+            '<div class="bg-indigo-600 text-white p-6 rounded-2xl shadow-lg"><p class="text-xs opacity-80 mb-1">ارزش کل کارکرد (تومان)</p><h3 class="text-3xl font-black">' + formatCurrency(r.total_work_value || 0) + '</h3></div>' +
+            '<div class="bg-green-600 text-white p-6 rounded-2xl shadow-lg"><p class="text-xs opacity-80 mb-1">کل پرداختی‌ها (ریال)</p><h3 class="text-3xl font-black">' + formatCurrency(r.total_paid || 0) + '</h3></div>' +
+            '<div class="bg-orange-500 text-white p-6 rounded-2xl shadow-lg"><p class="text-xs opacity-80 mb-1">کل بدهی سامانه به تایپیست‌ها (ریال)</p><h3 class="text-3xl font-black">' + formatCurrency(r.total_remaining || 0) + '</h3></div>';
     }
 }
 
@@ -782,7 +780,7 @@ function sendGroupSMS() {
     }
 
     const body = encodeURIComponent("با سلام، لطفا وضعیت کارهای خود را در سامانه تایپ بررسی نمایید.");
-    window.location.href = `sms:${phones.join(',')}?body=${body}`;
+    window.location.href = 'sms:' + phones.join(',') + '?body=' + body;
 }
 
 async function exportPersonnelCSV() {
@@ -793,7 +791,8 @@ async function exportPersonnelCSV() {
     if (!data || data.length === 0) return alert("داده‌ای برای خروجی وجود ندارد.");
 
     let csvContent = "\uFEFFردیف,نام,نام خانوادگی,نام پدر,کد ملی,شماره تماس,شماره کارت,شماره شبا\n";
-    data.forEach((t, index) => {
+    for (let i = 0; i < data.length; i++) {
+        const t = data[i];
         const fName = t.first_name || (t.name ? t.name.split(' ')[0] : '');
         const lName = t.last_name || (t.name ? t.name.split(' ').slice(1).join(' ') : '');
         const father = t.father_name || '';
@@ -802,8 +801,8 @@ async function exportPersonnelCSV() {
         const card = getTypistCard(t);
         const sheba = getTypistSheba(t);
 
-        csvContent += `${index + 1},${fName},${lName},${father},${nationalId},${phone},${card},${sheba}\n`;
-    });
+        csvContent += (i + 1) + ',' + fName + ',' + lName + ',' + father + ',' + nationalId + ',' + phone + ',' + card + ',' + sheba + '\n';
+    }
 
     downloadCSVFile(csvContent, "Personnel_List.csv");
 }
@@ -824,7 +823,7 @@ async function exportBankCSV() {
     for (let i = 0; i < typists.length; i++) {
         const t = typists[i];
         const { data: stats } = await client.rpc('get_typist_report', { p_typist_id: t.id, p_start: null, p_end: null });
-        const balanceRial = stats && stats[0] ? ((stats[0].remaining_balance || 0) * 10) : 0; // تبدیل تومان/مانده به ریال
+        const balanceRial = stats && stats[0] ? ((stats[0].remaining_balance || 0) * 10) : 0;
 
         if (balanceRial > 0) {
             count++;
@@ -836,7 +835,7 @@ async function exportBankCSV() {
             const card = getTypistCard(t);
             const sheba = getTypistSheba(t);
 
-            csvContent += `${count},${fName},${lName},${father},${nationalId},${phone},${card},${sheba},${balanceRial}\n`;
+            csvContent += count + ',' + fName + ',' + lName + ',' + father + ',' + nationalId + ',' + phone + ',' + card + ',' + sheba + ',' + balanceRial + '\n';
         }
     }
 
@@ -878,7 +877,7 @@ async function exportFullDatabase() {
         };
         
         const jsonString = JSON.stringify(fullBackup, null, 4);
-        downloadCSVFile(jsonString, `Database_Backup_${new Date().toLocaleDateString('fa-IR')}.json`, "application/json;charset=utf-8");
+        downloadCSVFile(jsonString, "Database_Backup_" + new Date().toLocaleDateString('fa-IR') + ".json", "application/json;charset=utf-8;");
         
         alert("✅ بکاپ کامل دیتابیس دریافت شد.");
     } catch (error) {
