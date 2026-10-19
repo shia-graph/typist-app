@@ -6,6 +6,7 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
+
 let supabaseClient = null;
 let currentUser = null;
 let isAdmin = false;
@@ -137,7 +138,7 @@ async function checkSession() {
     } catch (e) {
         console.error("Session Check Error:", e);
         logoutSilent();
-    } fontally {
+    } finally {
         showLoading(false);
     }
 }
