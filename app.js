@@ -310,8 +310,18 @@ async function loadTypistDetailData(typistId) {
         safeSetValue('profile_rate_urgent', detail.rate_urgent);
         safeSetValue('profile_rate_math', detail.rate_math);
 
-        const reports = detail.reports || [];
-        const payments = detail.payments || [];
+        // Safe JSON Array Parsing
+        let reports = [];
+        try {
+            if (typeof detail.reports === 'string') reports = JSON.parse(detail.reports);
+            else if (Array.isArray(detail.reports)) reports = detail.reports;
+        } catch (e) { reports = []; }
+
+        let payments = [];
+        try {
+            if (typeof detail.payments === 'string') payments = JSON.parse(detail.payments);
+            else if (Array.isArray(detail.payments)) payments = detail.payments;
+        } catch (e) { payments = []; }
 
         let totalEarned = reports.reduce((sum, r) => sum + Number(r.total_price || 0), 0);
         let totalPaid = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
@@ -333,7 +343,7 @@ function renderReportsTable(reports) {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    if (reports.length === 0) {
+    if (!reports || reports.length === 0) {
         tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-400">هیچ گزارش کاری ثبت نشده است.</td></tr>`;
         return;
     }
@@ -367,7 +377,7 @@ function renderPaymentsTable(payments) {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    if (payments.length === 0) {
+    if (!payments || payments.length === 0) {
         tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-400">هیچ واریزی ثبت نشده است.</td></tr>`;
         return;
     }
@@ -473,7 +483,13 @@ window.openAddReportModal = function() {
 
 window.openEditReportModal = function(reportId) {
     if (!currentTypistData || !currentTypistData.reports) return;
-    const r = currentTypistData.reports.find(item => item.id === reportId);
+    
+    let reports = [];
+    try {
+        reports = typeof currentTypistData.reports === 'string' ? JSON.parse(currentTypistData.reports) : currentTypistData.reports;
+    } catch (e) { reports = []; }
+
+    const r = reports.find(item => item.id === reportId);
     if (!r) return;
 
     safeSetValue('report_id', r.id);
@@ -503,7 +519,7 @@ window.saveReport = async function(e) {
         _delivery_date: toEnglishDigits(getEl('report_delivery_date').value),
         _page_type: getEl('report_page_type').value,
         _page_count: Number(toEnglishDigits(getEl('report_page_count').value)),
-        _custom_rate: customRateVal ? Number(toEnglishDigits(customRateVal)) : null
+        _custom_rate: (currentUserRole === 'admin' && customRateVal) ? Number(toEnglishDigits(customRateVal)) : null
     };
 
     try {
@@ -548,7 +564,13 @@ window.openAddPaymentModal = function() {
 
 window.openEditPaymentModal = function(paymentId) {
     if (!currentTypistData || !currentTypistData.payments) return;
-    const p = currentTypistData.payments.find(item => item.id === paymentId);
+
+    let payments = [];
+    try {
+        payments = typeof currentTypistData.payments === 'string' ? JSON.parse(currentTypistData.payments) : currentTypistData.payments;
+    } catch (e) { payments = []; }
+
+    const p = payments.find(item => item.id === paymentId);
     if (!p) return;
 
     safeSetValue('payment_id', p.id);
