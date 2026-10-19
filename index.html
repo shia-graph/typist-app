@@ -51,11 +51,9 @@
                 </div>
             </div>
             <div class="flex items-center space-x-2 space-x-reverse">
-                <!-- Theme Toggle Button -->
                 <button type="button" onclick="window.toggleTheme()" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition">
                     <span id="theme-icon">🌙</span>
                 </button>
-                <!-- Logout Button -->
                 <button id="logout-btn" type="button" onclick="window.logout()" class="hidden px-3 py-1.5 text-sm bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60 rounded-lg font-medium transition flex items-center gap-1">
                     <span>خروج</span>
                 </button>
@@ -66,12 +64,10 @@
     <!-- Main Container -->
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
 
-        <!-- Notification Toast -->
         <div id="toast-container" class="fixed top-4 left-4 z-50 flex flex-col gap-2 max-w-sm"></div>
 
-        <!-- Section 1: Auth Screen (Login) -->
+        <!-- Section 1: Auth Screen -->
         <div id="auth-section" class="max-w-md mx-auto my-8 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700">
-            <!-- Auth Role Switch Tabs -->
             <div class="flex border-b border-gray-200 dark:border-gray-700 mb-6">
                 <button id="tab-admin" type="button" onclick="window.switchLoginTab('admin')" class="flex-1 py-3 text-center font-bold text-blue-600 border-b-2 border-blue-600 transition">
                     ورود مدیر سیستم
@@ -81,7 +77,6 @@
                 </button>
             </div>
 
-            <!-- Admin Login Form -->
             <form id="form-admin-login" onsubmit="window.loginAdmin(event); return false;" class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium mb-1">کلمه عبور مدیر</label>
@@ -92,7 +87,6 @@
                 </button>
             </form>
 
-            <!-- Typist Login Form -->
             <form id="form-typist-login" onsubmit="window.loginTypist(event); return false;" class="space-y-4 hidden">
                 <div>
                     <label class="block text-sm font-medium mb-1">کد ملی یا شماره موبایل</label>
@@ -110,7 +104,6 @@
 
         <!-- Section 2: Admin Dashboard -->
         <div id="admin-dashboard" class="hidden space-y-6">
-            <!-- Stats Overview Cards -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                     <div class="text-sm text-gray-500 dark:text-gray-400">تعداد کل تایپیست‌ها</div>
@@ -130,7 +123,6 @@
                 </div>
             </div>
 
-            <!-- Toolbar (Search & Action Buttons) -->
             <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col md:flex-row gap-3 justify-between items-center">
                 <div class="w-full md:w-1/3">
                     <input type="text" id="admin-search-input" oninput="window.filterTypists()" placeholder="جستجو نام، کد ملی یا شماره تماس..." class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
@@ -151,7 +143,6 @@
                 </div>
             </div>
 
-            <!-- Typists Table -->
             <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-right text-sm">
@@ -159,15 +150,15 @@
                             <tr>
                                 <th class="p-3">نام و نام خانوادگی</th>
                                 <th class="p-3">کد ملی</th>
-                                <th class="p-3">شماره تماس</th>
+                                <th class="p-3">تماس و پیامک</th>
                                 <th class="p-3">کل کارکرد (تومان)</th>
                                 <th class="p-3">دریافتی (تومان)</th>
                                 <th class="p-3">باقیمانده (تومان)</th>
+                                <th class="p-3 text-center">وضعیت تسویه</th>
                                 <th class="p-3 text-center">عملیات</th>
                             </tr>
                         </thead>
                         <tbody id="typists-table-body" class="divide-y divide-gray-100 dark:divide-gray-700">
-                            <!-- Dynamic Content -->
                         </tbody>
                     </table>
                 </div>
@@ -176,7 +167,6 @@
 
         <!-- Section 3: Detail View -->
         <div id="detail-view" class="hidden space-y-6">
-            <!-- Navigation Header -->
             <div class="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                 <div class="flex items-center space-x-3 space-x-reverse">
                     <button id="btn-back-dashboard" type="button" onclick="window.backToDashboard()" class="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-sm transition">
@@ -191,7 +181,6 @@
                 </div>
             </div>
 
-            <!-- Profile Info Card -->
             <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                 <h3 class="font-bold text-md mb-4 border-b border-gray-100 dark:border-gray-700 pb-2">اطلاعات شناسنامه‌ای و بانکی</h3>
                 <form id="form-typist-profile" onsubmit="window.saveTypist(event); return false;" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -224,7 +213,6 @@
                         <label class="block text-gray-500 mb-1">شماره شبا (بدون IR)</label>
                         <input type="text" id="profile_sheba_number" dir="ltr" placeholder="IR..." class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 text-left">
                     </div>
-                    <!-- Page Rates (Admin Only Section) -->
                     <div id="admin-rates-container" class="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-gray-100 dark:border-gray-700 pt-3 mt-2">
                         <div>
                             <label class="block text-gray-500 mb-1">نرخ صفحه عادی (تومان)</label>
@@ -247,7 +235,6 @@
                 </form>
             </div>
 
-            <!-- Financial Summary Card -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                     <div class="text-sm text-gray-500">مجموع درآمد تایپ</div>
@@ -263,7 +250,6 @@
                 </div>
             </div>
 
-            <!-- Work Reports Section -->
             <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
                 <div class="flex justify-between items-center">
                     <h3 class="font-bold text-md">جدول گزارش کارهای تایپ</h3>
@@ -278,20 +264,19 @@
                                 <th class="p-2.5">عنوان کار</th>
                                 <th class="p-2.5">تاریخ تحویل</th>
                                 <th class="p-2.5">نوع صفحه</th>
-                                <th class="p-2.5">تعداد کل صفحات</th>
-                                <th class="p-2.5 th-rate-column">نرخ محاسبه شده</th>
+                                <th class="p-2.5">تعداد صفحات</th>
+                                <th class="p-2.5 th-rate-column">نرخ صفحه</th>
                                 <th class="p-2.5">مبلغ کل (تومان)</th>
+                                <th class="p-2.5 text-center">وضعیت تحویل</th>
                                 <th class="p-2.5 text-center">عملیات</th>
                             </tr>
                         </thead>
                         <tbody id="reports-table-body" class="divide-y divide-gray-100 dark:divide-gray-700">
-                            <!-- Dynamic Content -->
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- Payments Section -->
             <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
                 <div class="flex justify-between items-center">
                     <h3 class="font-bold text-md">جدول واریزی‌ها و پرداختی‌ها</h3>
@@ -305,13 +290,13 @@
                             <tr>
                                 <th class="p-2.5">تاریخ واریز</th>
                                 <th class="p-2.5">مبلغ (تومان)</th>
-                                <th class="p-2.5">کد پیگیری / شماره سند</th>
+                                <th class="p-2.5">کد پیگیری</th>
                                 <th class="p-2.5">توضیحات</th>
+                                <th class="p-2.5 text-center">وضعیت واریز</th>
                                 <th class="p-2.5 text-center action-col-payment">عملیات</th>
                             </tr>
                         </thead>
                         <tbody id="payments-table-body" class="divide-y divide-gray-100 dark:divide-gray-700">
-                            <!-- Dynamic Content -->
                         </tbody>
                     </table>
                 </div>
@@ -320,7 +305,7 @@
 
     </main>
 
-    <!-- Modal 1: Add/Edit Typist -->
+    <!-- Modals -->
     <div id="typist-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
         <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
             <h3 id="typist-modal-title" class="font-bold text-lg border-b pb-2">افزودن تایپیست جدید</h3>
@@ -363,7 +348,6 @@
         </div>
     </div>
 
-    <!-- Modal 2: Add/Edit Report -->
     <div id="report-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
         <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
             <h3 id="report-modal-title" class="font-bold text-lg border-b pb-2">ثبت گزارش کار جدید</h3>
@@ -371,7 +355,7 @@
                 <input type="hidden" id="report_id">
                 <div>
                     <label class="block mb-1 text-gray-600 dark:text-gray-300">عنوان فایل / کار</label>
-                    <input type="text" id="report_title" required placeholder="مثال: تایپ کتاب ریاضی فصل اول" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                    <input type="text" id="report_title" required placeholder="مثال: تایپ کتاب ریاضی" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
                 </div>
                 <div>
                     <label class="block mb-1 text-gray-600 dark:text-gray-300">تاریخ تحویل (شمسی)</label>
@@ -394,7 +378,6 @@
                         <input type="number" id="report_page_count" required min="1" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
                     </div>
                 </div>
-                <!-- Admin Override Rate Optional Field -->
                 <div id="admin-custom-rate-field" class="hidden">
                     <label class="block mb-1 text-xs text-amber-600 dark:text-amber-400 font-bold">نرخ دستی برای این گزارش (اختیاری - تومان)</label>
                     <input type="number" id="report_custom_rate" placeholder="خالی بگذارید تا از نرخ پیش‌فرض استفاده شود" class="w-full p-2 border border-amber-300 rounded-lg dark:bg-gray-700 dark:border-amber-600">
@@ -407,7 +390,6 @@
         </div>
     </div>
 
-    <!-- Modal 3: Add/Edit Payment -->
     <div id="payment-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
         <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
             <h3 id="payment-modal-title" class="font-bold text-lg border-b pb-2">ثبت واریزی جدید</h3>
@@ -440,7 +422,6 @@
         </div>
     </div>
 
-    <!-- Modal 4: Shamsi DatePicker -->
     <div id="datepicker-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
         <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-xs w-full p-5 shadow-2xl space-y-4">
             <h4 class="font-bold text-center border-b pb-2">انتخاب تاریخ شمسی</h4>
@@ -478,7 +459,6 @@
         </div>
     </div>
 
-    <!-- Modal 5: Change Password Modal -->
     <div id="changepass-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
         <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
             <h3 class="font-bold text-md border-b pb-2">تغییر رمز عبور</h3>
@@ -495,10 +475,9 @@
         </div>
     </div>
 
-    <!-- Modal 6: Group SMS Modal -->
     <div id="sms-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
         <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
-            <h3 class="font-bold text-md border-b pb-2">ارسال پیامک گروهی به تایپیست‌ها</h3>
+            <h3 class="font-bold text-md border-b pb-2">ارسال پیامک اطلاع‌رسانی</h3>
             <div class="space-y-3 text-sm">
                 <div>
                     <label class="block mb-1 text-gray-500">متن پیامک</label>
@@ -513,10 +492,9 @@
     </div>
 
     <footer class="mt-auto py-4 text-center text-xs text-gray-400 border-t border-gray-200 dark:border-gray-800">
-        سیستم مدیریت تایپیست‌ها و محاسبه کارکرد - نسخه ۴.۰.۰
+        سیستم مدیریت تایپیست‌ها و محاسبه کارکرد - نسخه ۵.۰.۰
     </footer>
 
-    <!-- Application Logic Script -->
-    <script src="app.js?v=4.0.0"></script>
+    <script src="app.js?v=5.0.0"></script>
 </body>
 </html>
