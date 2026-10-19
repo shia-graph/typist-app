@@ -6,7 +6,6 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
-
 let supabaseClient = null;
 let currentUser = null;
 let isAdmin = false;
@@ -41,18 +40,18 @@ function showLoading(show) {
 // ۳. مدیریت ورود، خروج و جلسات کاربری (Auth)
 async function login() {
     const rawId = document.getElementById('loginId').value.trim();
-    const id = toEnglishDigits(rawId);
+    const id = toEnglishDigits(rawId).toLowerCase();
     const pass = toEnglishDigits(document.getElementById('loginPass').value.trim());
 
     if (!id || !pass) {
-        return alert("لطفاً کد ملی و رمز عبور را وارد کنید.");
+        return alert("لطفاً نام کاربری (کد ملی) و رمز عبور را وارد کنید.");
     }
 
     showLoading(true);
     const client = getSupabaseClient();
 
     try {
-        // ۱. بررسی ورود ادمین
+        // ۱. بررسی ورود ادمین (جدول admin_settings)
         const { data: adminData, error: adminErr } = await client
             .from('admin_settings')
             .select('*')
@@ -65,7 +64,7 @@ async function login() {
             }
         }
 
-        // ۲. بررسی ورود تایپیست
+        // ۲. بررسی ورود تایپیست (جدول typists)
         const { data: tData, error: tErr } = await client
             .from('typists')
             .select('*')
@@ -82,7 +81,7 @@ async function login() {
             }
         }
 
-        alert("کد ملی یا رمز عبور نامعتبر است.");
+        alert("نام کاربری (کد ملی) یا رمز عبور اشتباه است.");
     } catch (err) {
         console.error("Login Error:", err);
         alert("خطا در برقراری ارتباط با سرور.");
@@ -123,14 +122,12 @@ async function checkSession() {
                 logoutSilent();
             }
         } else {
-            // استفاده از آرایه بجای single برای جلوگیری از خطای ۴۰۶ کاربری که حذف شده
             const { data } = await client.from('typists').select('*').eq('id', session.id);
             if (data && data.length > 0) {
                 currentUser = data[0];
                 isAdmin = false;
                 initApp();
             } else {
-                // تایپیست در دیتابیس حذف شده اما حافظه مرورگر مانده
                 alert("تایپیست در سیستم یافت نشد یا حذف شده است.");
                 logoutSilent();
             }
@@ -207,7 +204,6 @@ async function loadTypistDashboard() {
     showLoading(true);
     const client = getSupabaseClient();
     try {
-        // ۱. آمار از طریق RPC
         const { data: stats, error: rpcErr } = await client.rpc('get_typist_report', { 
             p_typist_id: currentUser.id,
             p_start: null,
@@ -220,7 +216,6 @@ async function loadTypistDashboard() {
             document.getElementById('tBalance').innerText = formatCurrency(stats[0].remaining_balance || 0);
         }
 
-        // ۲. لیست کارهای شخصی
         const { data: works } = await client
             .from('work_records')
             .select('*')
@@ -242,7 +237,6 @@ async function loadTypistDashboard() {
             list.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-gray-400">هیچ کاری برای شما ثبت نشده است.</td></tr>`;
         }
 
-        // ۳. پر کردن اطلاعات پروفایل
         document.getElementById('p_name').value = currentUser.name || '';
         document.getElementById('p_family').value = currentUser.family || '';
         document.getElementById('p_father').value = currentUser.father_name || '';
@@ -567,7 +561,6 @@ async function addWork() {
     showLoading(true);
     const client = getSupabaseClient();
 
-    // گرفتن نرخ صفحه تایپیست در زمان ثبت
     const { data: tData } = await client.from('typists').select('page_rate').eq('id', typist_id);
     const currentRate = (tData && tData.length > 0) ? tData[0].page_rate : 0;
 
@@ -755,7 +748,6 @@ async function exportBankCSV() {
         const { data: stats } = await client.rpc('get_typist_report', { p_typist_id: t.id, p_start: null, p_end: null });
         const balanceRial = stats && stats[0] ? (stats[0].remaining_balance || 0) : 0;
 
-        // فقط تایپیست‌هایی که طلبکار هستند در خروجی بانک قرار می‌گیرند
         if (balanceRial > 0) {
             count++;
             csvContent += `${count},${t.name || ''},${t.family || ''},${t.father_name || ''},${t.id},${t.phone || ''},${t.card_number || ''},${t.shaba || ''},${balanceRial}\n`;
@@ -785,7 +777,6 @@ function downloadCSVFile(content, fileName) {
 document.addEventListener('DOMContentLoaded', () => {
     checkSession();
 
-    // بستن مودال‌ها با کلید ESC
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             closeEditModal();
