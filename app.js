@@ -110,7 +110,7 @@ function getTypistName(typist) {
     const fn = typist.first_name || '';
     const ln = typist.last_name || '';
     const combined = `${fn} ${ln}`.trim();
-    return combined || typist.phone || 'تایپیست';
+    return combined || typist.phone || 'مقرر';
 }
 
 function getTypistNationalId(typist) {
@@ -423,7 +423,7 @@ async function submitTypistReport(e) {
 
     const t = currentUser ? currentUser.data : null;
     if (!t || !t.id) {
-        showAlert('خطا: اطلاعات تایپیست یافت نشد. لطفا مجددا وارد شوید.', true);
+        showAlert('خطا: اطلاعات مقرر یافت نشد. لطفا مجددا وارد شوید.', true);
         return;
     }
 
@@ -567,7 +567,7 @@ function renderAdminTypistsTable(typistsList) {
     tbody.innerHTML = '';
 
     if (typistsList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-6 text-center text-slate-400">هیچ تایپیستی یافت نشد.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-6 text-center text-slate-400">هیچ مقرری یافت نشد.</td></tr>`;
         return;
     }
 
@@ -713,7 +713,7 @@ function renderAdminAllRecordsTable() {
 
         tr.innerHTML = `
             <td class="px-4 py-3 text-xs font-mono dir-ltr text-right">${formatJalali(getRecordDate(r))}</td>
-            <td class="px-4 py-3 font-medium text-slate-800">${typist ? getTypistName(typist) : 'تایپیست حذف شده'}</td>
+            <td class="px-4 py-3 font-medium text-slate-800">${typist ? getTypistName(typist) : 'مقرر حذف شده'}</td>
             <td class="px-4 py-3 text-xs text-indigo-700">${r.title || (typist ? typist.title : '---')}</td>
             <td class="px-4 py-3 font-bold text-indigo-600 text-xs">${formatNumber(getRecordWordsCount(r))} کلمه</td>
             <td class="px-4 py-3 text-xs">${formatNumber(getRecordPageCount(r))} صفحه</td>
@@ -753,7 +753,7 @@ function closeModal(id) {
 
 // Modal Handlers: Add / Edit Typist
 function openAddTypistModal() {
-    document.getElementById('typistModalTitle').textContent = 'افزودن تایپیست جدید';
+    document.getElementById('typistModalTitle').textContent = 'افزودن مقرر جدید';
     document.getElementById('editTypistId').value = '';
     document.getElementById('typistForm').reset();
     document.getElementById('typistRateWord').value = '15';
@@ -766,7 +766,7 @@ function openEditTypistModal(id) {
     const t = globalTypists.find(item => String(item.id) === String(id));
     if (!t) return;
 
-    document.getElementById('typistModalTitle').textContent = 'ویرایش اطلاعات تایپیست';
+    document.getElementById('typistModalTitle').textContent = 'ویرایش اطلاعات مقرر';
     document.getElementById('editTypistId').value = t.id;
     document.getElementById('typistFirstName').value = t.first_name || '';
     document.getElementById('typistLastName').value = t.last_name || '';
@@ -823,20 +823,20 @@ async function saveTypist(e) {
         if (id) {
             const { error } = await client.from('typists').update(payload).eq('id', id);
             if (error) throw error;
-            showAlert('اطلاعات تایپیست بروزرسانی شد.');
+            showAlert('اطلاعات مقرر بروزرسانی شد.');
         } else {
             payload.completed = false;
             payload.created_at = new Date().toISOString();
             const { error } = await client.from('typists').insert([payload]);
             if (error) throw error;
-            showAlert('تایپیست جدید با موفقیت اضافه شد.');
+            showAlert('مقرر جدید با موفقیت اضافه شد.');
         }
 
         closeModal('typistModal');
         await fetchAllDataForAdmin();
     } catch (err) {
         console.error('Error saving typist:', err);
-        showAlert('خطا در ذخیره اطلاعات تایپیست.', true);
+        showAlert('خطا در ذخیره اطلاعات مقرر.', true);
     }
 }
 
@@ -898,17 +898,17 @@ async function saveNewTask(e) {
 }
 
 async function deleteTypist(id) {
-    if (!confirm('آیا از حذف این تایپیست و تمامی سوابق او مطمئن هستید؟')) return;
+    if (!confirm('آیا از حذف این مقرر و تمامی سوابق او مطمئن هستید؟')) return;
 
     try {
         const client = getDb();
         const { error } = await client.from('typists').delete().eq('id', id);
         if (error) throw error;
-        showAlert('تایپیست حذف شد.');
+        showAlert('مقرر حذف شد.');
         await fetchAllDataForAdmin();
     } catch (err) {
         console.error('Error deleting typist:', err);
-        showAlert('خطا در حذف تایپیست.', true);
+        showAlert('خطا در حذف مقرر.', true);
     }
 }
 
@@ -1123,7 +1123,7 @@ function exportBankCSV() {
     });
 
     if (rows.length === 0) {
-        showAlert('تمامی تایپیست‌ها تسویه شده‌اند و هیچ شخصی برای پرداختی بانک موجود نیست.', true);
+        showAlert('تمامی مقرر‌ها تسویه شده‌اند و هیچ شخصی برای پرداختی بانک موجود نیست.', true);
         return;
     }
 
