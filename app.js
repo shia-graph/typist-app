@@ -6,7 +6,6 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
-
 const supabaseClient = (window.supabase && window.supabase.createClient) 
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) 
     : null;
@@ -85,17 +84,15 @@ function gregorianToJalali(g_y, g_m, g_d) {
 window.switchLoginTab = function(role) {
     const tabAdmin = getEl('tab-admin');
     const tabTypist = getEl('tab-typist');
-    const formAdmin = getEl('form-admin-login');
-    const formTypist = getEl('form-typist-login');
 
     if (role === 'admin') {
-        if (tabAdmin) tabAdmin.className = "flex-1 py-3 text-center font-bold text-blue-600 border-b-2 border-blue-600 transition";
-        if (tabTypist) tabTypist.className = "flex-1 py-3 text-center font-medium text-gray-500 border-b-2 border-transparent transition";
+        if (tabAdmin) tabAdmin.className = "flex-1 py-3.5 text-center font-bold text-blue-600 border-b-2 border-blue-600 transition";
+        if (tabTypist) tabTypist.className = "flex-1 py-3.5 text-center font-medium text-slate-500 border-b-2 border-transparent transition";
         safeShow('form-admin-login', 'block');
         safeHide('form-typist-login');
     } else {
-        if (tabTypist) tabTypist.className = "flex-1 py-3 text-center font-bold text-blue-600 border-b-2 border-blue-600 transition";
-        if (tabAdmin) tabAdmin.className = "flex-1 py-3 text-center font-medium text-gray-500 border-b-2 border-transparent transition";
+        if (tabTypist) tabTypist.className = "flex-1 py-3.5 text-center font-bold text-blue-600 border-b-2 border-blue-600 transition";
+        if (tabAdmin) tabAdmin.className = "flex-1 py-3.5 text-center font-medium text-slate-500 border-b-2 border-transparent transition";
         safeShow('form-typist-login', 'block');
         safeHide('form-admin-login');
     }
@@ -168,7 +165,7 @@ function renderAppView() {
         if (currentUserRole === 'admin') {
             safeSetText('user-status-text', 'مدیر سیستم (دسترسی کامل)');
         } else {
-            safeSetText('user-status-text', 'پنل کاربری تایپیست');
+            safeSetText('user-status-text', 'پنل اختصاصی کارکرد تایپیست');
         }
     }
 }
@@ -211,18 +208,18 @@ function renderTypistsTable(list) {
     tbody.innerHTML = '';
 
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-400">هیچ تایپیستی یافت نشد.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400">هیچ تایپیستی یافت نشد.</td></tr>`;
         return;
     }
 
     list.forEach(t => {
         const balance = Number(t.remaining_balance || 0);
         const statusBadge = balance <= 0 
-            ? `<span class="px-2 py-1 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 rounded-lg text-xs font-bold">✔️ تسویه کامل</span>`
-            : `<span class="px-2 py-1 bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 rounded-lg text-xs font-bold">⏳ دارای مانده</span>`;
+            ? `<span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 rounded-lg text-xs font-bold">✔️ تسویه کامل</span>`
+            : `<span class="px-2.5 py-1 bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 rounded-lg text-xs font-bold">⏳ دارای مانده</span>`;
 
         const tr = document.createElement('tr');
-        tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-750 transition';
+        tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-750 transition';
         tr.innerHTML = `
             <td class="p-3 font-medium">${t.first_name} ${t.last_name}</td>
             <td class="p-3">${t.national_id || '-'}</td>
@@ -230,7 +227,7 @@ function renderTypistsTable(list) {
                 <div class="flex items-center gap-1.5">
                     <span class="font-mono text-xs">${t.phone || '-'}</span>
                     ${t.phone ? `
-                        <a href="tel:${t.phone}" title="تماس تلفنی" class="p-1 bg-green-100 hover:bg-green-200 text-green-700 rounded transition text-xs">📞</a>
+                        <a href="tel:${t.phone}" title="تماس تلفنی" class="p-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded transition text-xs">📞</a>
                         <a href="sms:${t.phone}" title="ارسال پیامک" class="p-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded transition text-xs">💬</a>
                     ` : ''}
                 </div>
@@ -240,7 +237,7 @@ function renderTypistsTable(list) {
             <td class="p-3 text-amber-600 dark:text-amber-400 font-bold">${balance.toLocaleString('fa-IR')}</td>
             <td class="p-3 text-center">${statusBadge}</td>
             <td class="p-3 text-center">
-                <button type="button" onclick="window.viewTypistDetail('${t.id}')" class="px-3 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 rounded-lg text-xs font-bold hover:bg-blue-200 transition">
+                <button type="button" onclick="window.viewTypistDetail('${t.id}')" class="px-3 py-1 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition">
                     📋 مشاهده کارکرد
                 </button>
             </td>
@@ -310,7 +307,6 @@ async function loadTypistDetailData(typistId) {
         safeSetValue('profile_rate_urgent', detail.rate_urgent);
         safeSetValue('profile_rate_math', detail.rate_math);
 
-        // Safe JSON Array Parsing
         let reports = [];
         try {
             if (typeof detail.reports === 'string') reports = JSON.parse(detail.reports);
@@ -344,7 +340,7 @@ function renderReportsTable(reports) {
     tbody.innerHTML = '';
 
     if (!reports || reports.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-400">هیچ گزارش کاری ثبت نشده است.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400">هیچ گزارش کاری ثبت نشده است.</td></tr>`;
         return;
     }
 
@@ -352,20 +348,20 @@ function renderReportsTable(reports) {
 
     reports.forEach(r => {
         const tr = document.createElement('tr');
-        tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-750 transition';
+        tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-750 transition';
         const rateDisplay = currentUserRole === 'admin' ? `<td class="p-2.5 th-rate-column">${Number(r.applied_rate || 0).toLocaleString('fa-IR')}</td>` : '';
         
         tr.innerHTML = `
             <td class="p-2.5 font-medium">${r.title}</td>
-            <td class="p-2.5"><span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono">${r.delivery_date || '-'}</span></td>
+            <td class="p-2.5"><span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-xs font-mono">${r.delivery_date || '-'}</span></td>
             <td class="p-2.5">${pageTypeLabels[r.page_type] || r.page_type}</td>
             <td class="p-2.5 font-bold">${r.page_count}</td>
             ${rateDisplay}
             <td class="p-2.5 font-bold text-blue-600 dark:text-blue-400">${Number(r.total_price || 0).toLocaleString('fa-IR')}</td>
-            <td class="p-2.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 rounded text-xs">✔️ تحویل شد</span></td>
+            <td class="p-2.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 rounded text-xs font-bold">✔️ تحویل شد</span></td>
             <td class="p-2.5 text-center">
-                <button type="button" onclick="window.openEditReportModal('${r.id}')" class="text-blue-600 hover:text-blue-800 text-xs px-2 py-1">✏️ ویرایش</button>
-                <button type="button" onclick="window.deleteReport('${r.id}')" class="text-red-600 hover:text-red-800 text-xs px-2 py-1">🗑 حذف</button>
+                <button type="button" onclick="window.openEditReportModal('${r.id}')" class="text-blue-600 hover:text-blue-800 text-xs px-1.5 py-0.5">✏️ ویرایش</button>
+                <button type="button" onclick="window.deleteReport('${r.id}')" class="text-red-600 hover:text-red-800 text-xs px-1.5 py-0.5">🗑 حذف</button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -378,26 +374,26 @@ function renderPaymentsTable(payments) {
     tbody.innerHTML = '';
 
     if (!payments || payments.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-400">هیچ واریزی ثبت نشده است.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">هیچ واریزی ثبت نشده است.</td></tr>`;
         return;
     }
 
     payments.forEach(p => {
         const tr = document.createElement('tr');
-        tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-750 transition';
+        tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-750 transition';
         const actionCol = currentUserRole === 'admin' ? `
             <td class="p-2.5 text-center action-col-payment">
-                <button type="button" onclick="window.openEditPaymentModal('${p.id}')" class="text-blue-600 hover:text-blue-800 text-xs px-2 py-1">✏️ ویرایش</button>
-                <button type="button" onclick="window.deletePayment('${p.id}')" class="text-red-600 hover:text-red-800 text-xs px-2 py-1">🗑 حذف</button>
+                <button type="button" onclick="window.openEditPaymentModal('${p.id}')" class="text-blue-600 hover:text-blue-800 text-xs px-1.5 py-0.5">✏️ ویرایش</button>
+                <button type="button" onclick="window.deletePayment('${p.id}')" class="text-red-600 hover:text-red-800 text-xs px-1.5 py-0.5">🗑 حذف</button>
             </td>
         ` : '';
 
         tr.innerHTML = `
-            <td class="p-2.5"><span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono">${p.payment_date || '-'}</span></td>
+            <td class="p-2.5"><span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-xs font-mono">${p.payment_date || '-'}</span></td>
             <td class="p-2.5 font-bold text-emerald-600 dark:text-emerald-400">${Number(p.amount || 0).toLocaleString('fa-IR')}</td>
             <td class="p-2.5 font-mono text-xs">${p.ref_code || '-'}</td>
-            <td class="p-2.5 text-xs text-gray-500">${p.notes || '-'}</td>
-            <td class="p-2.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 rounded text-xs">✔️ واریز شد</span></td>
+            <td class="p-2.5 text-xs text-slate-500">${p.notes || '-'}</td>
+            <td class="p-2.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 rounded text-xs font-bold">✔️ واریز شد</span></td>
             ${actionCol}
         `;
         tbody.appendChild(tr);
@@ -705,22 +701,28 @@ window.exportBankCSV = function() {
 
     let csvContent = "\uFEFFردیف,نام,نام خانوادگی,نام پدر,کد ملی,شماره تماس,شماره کارت,شماره شبا,مبلغ پرداختی به ریال\n";
 
-    allTypistsList.forEach((t, idx) => {
+    let exportCount = 0;
+    allTypistsList.forEach((t) => {
         const balanceToman = Number(t.remaining_balance || 0);
-        const amountRial = balanceToman > 0 ? balanceToman * 10 : 0;
-        const row = [
-            idx + 1,
-            `"${t.first_name || ''}"`,
-            `"${t.last_name || ''}"`,
-            `"${t.father_name || ''}"`,
-            `"${t.national_id || ''}"`,
-            `"${t.phone || ''}"`,
-            `"${t.card_number || ''}"`,
-            `"${t.sheba_number || ''}"`,
-            amountRial
-        ].join(',');
-        csvContent += row + "\n";
+        if (balanceToman > 0) {
+            exportCount++;
+            const amountRial = balanceToman * 10;
+            const row = [
+                exportCount,
+                `"${t.first_name || ''}"`,
+                `"${t.last_name || ''}"`,
+                `"${t.father_name || ''}"`,
+                `"${t.national_id || ''}"`,
+                `"${t.phone || ''}"`,
+                `"${t.card_number || ''}"`,
+                `"${t.sheba_number || ''}"`,
+                amountRial
+            ].join(',');
+            csvContent += row + "\n";
+        }
     });
+
+    if (exportCount === 0) return showToast('هیچ تایپیستی دارای مانده طلب برای پرداخت نیست', 'info');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -762,5 +764,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.documentElement.classList.remove('dark');
         safeSetText('theme-icon', '🌙');
     }
+    renderAppView();
+});
     renderAppView();
 });
