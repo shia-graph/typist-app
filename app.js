@@ -6,7 +6,6 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
-
 const supabaseClient = (window.supabase && window.supabase.createClient) 
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) 
     : null;
@@ -174,6 +173,8 @@ function renderAppView() {
 async function loadAdminDashboard() {
     safeShow('admin-dashboard', 'block');
     safeHide('detail-view');
+    const selectAllCb = getEl('selectAllTypists');
+    if(selectAllCb) selectAllCb.checked = false;
 
     try {
         const { data, error } = await supabaseClient.rpc('get_dashboard_summary');
@@ -203,13 +204,17 @@ function calculateOverallStats(list) {
     safeSetText('stat-total-balance', totalBalance.toLocaleString('fa-IR'));
 }
 
+window.toggleAllTypists = function(el) {
+    document.querySelectorAll('.typist-row-cb').forEach(cb => cb.checked = el.checked);
+};
+
 function renderTypistsTable(list) {
     const tbody = getEl('typists-table-body');
     if (!tbody) return;
     tbody.innerHTML = '';
 
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400">هیچ تایپیستی یافت نشد.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-slate-400">هیچ تایپیستی یافت نشد.</td></tr>`;
         return;
     }
 
@@ -222,6 +227,7 @@ function renderTypistsTable(list) {
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-750 transition';
         tr.innerHTML = `
+            <td class="p-3 text-center"><input type="checkbox" class="typist-row-cb w-4 h-4 cursor-pointer rounded border-slate-300" value="${t.phone}"></td>
             <td class="p-3 font-medium">${t.first_name} ${t.last_name}</td>
             <td class="p-3">${t.national_id || '-'}</td>
             <td class="p-3">
@@ -266,12 +272,14 @@ window.viewTypistDetail = async function(typistId) {
         safeHide('btn-back-dashboard');
         safeHide('admin-rates-container');
         safeHide('btn-add-payment');
+        safeHide('btn-edit-profile');
         safeShow('typist-self-pass-btn-container', 'block');
         document.querySelectorAll('.th-rate-column, .action-col-payment').forEach(el => el.style.display = 'none');
     } else {
         safeShow('btn-back-dashboard', 'inline-block');
         safeShow('admin-rates-container', 'grid');
         safeShow('btn-add-payment', 'inline-block');
+        safeShow('btn-edit-profile', 'inline-block');
         safeHide('typist-self-pass-btn-container');
         document.querySelectorAll('.th-rate-column, .action-col-payment').forEach(el => el.style.display = '');
     }
@@ -285,7 +293,22 @@ window.backToDashboard = function() {
     }
 };
 
+window.enableProfileEdit = function() {
+    safeHide('btn-edit-profile');
+    safeShow('btn-save-profile', 'inline-block');
+    document.querySelectorAll('#profile-form input:not(#profile_id)').forEach(inp => {
+        inp.removeAttribute('readonly');
+    });
+};
+
 async function loadTypistDetailData(typistId) {
+    // قفل کردن مجدد فرم پروفایل در زمان بارگذاری
+    safeShow('btn-edit-profile', 'inline-block');
+    safeHide('btn-save-profile');
+    document.querySelectorAll('#profile-form input:not(#profile_id)').forEach(inp => {
+        inp.setAttribute('readonly', 'true');
+    });
+
     try {
         const { data, error } = await supabaseClient.rpc('get_typist_detail', { _typist_id: typistId });
         if (error) throw error;
@@ -309,16 +332,22 @@ async function loadTypistDetailData(typistId) {
         safeSetValue('profile_rate_math', detail.rate_math);
 
         let reports = [];
-        try {
-            if (typeof detail.reports === 'string') reports = JSON.parse(detail.reports);
-            else if (Array.isArray(detail.reports)) reports = detail.reports;
-        } catch (e) { reports = []; }
+        if (detail.reports) {
+            if (typeof detail.reports === 'string') {
+                try { reports = JSON.parse(detail.reports); } catch (e) { reports = []; }
+            } else if (Array.isArray(detail.reports)) {
+                reports = detail.reports;
+            }
+        }
 
         let payments = [];
-        try {
-            if (typeof detail.payments === 'string') payments = JSON.parse(detail.payments);
-            else if (Array.isArray(detail.payments)) payments = detail.payments;
-        } catch (e) { payments = []; }
+        if (detail.payments) {
+            if (typeof detail.payments === 'string') {
+                try { payments = JSON.parse(detail.payments); } catch (e) { payments = []; }
+            } else if (Array.isArray(detail.payments)) {
+                payments = detail.payments;
+            }
+        }
 
         let totalEarned = reports.reduce((sum, r) => sum + Number(r.total_price || 0), 0);
         let totalPaid = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
@@ -736,7 +765,42 @@ window.exportBankCSV = function() {
     showToast('فایل اکسل پایا با موفقیت دریافت شد', 'success');
 };
 
+window.exportPersonnelCSV = function() {
+    if (!allTypistsList || allTypistsList.length === 0) return showToast('اطلاعاتی برای خروجی یافت نشد', 'error');
+
+    let csvContent = "\uFEFFردیف,نام,نام خانوادگی,نام پدر,کد ملی,شماره تماس,شماره کارت,شماره شبا\n";
+
+    allTypistsList.forEach((t, idx) => {
+        const row = [
+            idx + 1,
+            `"${t.first_name || ''}"`,
+            `"${t.last_name || ''}"`,
+            `"${t.father_name || ''}"`,
+            `"${t.national_id || ''}"`,
+            `"${t.phone || ''}"`,
+            `"${t.card_number || ''}"`,
+            `"${t.sheba_number || ''}"`
+        ].join(',');
+        csvContent += row + "\n";
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `personnel_info_${getCurrentShamsiDate().replace(/\//g, '-')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('فایل مشخصات پرسنلی دریافت شد', 'success');
+};
+
 window.openSmsModal = function() {
+    const checkedBoxes = document.querySelectorAll('.typist-row-cb:checked');
+    if (checkedBoxes.length === 0) {
+        return showToast('لطفاً ابتدا تایپیست‌های مورد نظر را از جدول انتخاب کنید', 'error');
+    }
+    safeSetText('sms-target-count', `(ارسال به ${checkedBoxes.length} نفر)`);
     safeSetValue('sms_text', '');
     safeShow('sms-modal', 'flex');
 };
@@ -746,7 +810,7 @@ window.closeSmsModal = function() { safeHide('sms-modal'); };
 window.sendGroupSms = function() {
     const text = getEl('sms_text').value;
     if (!text) return showToast('متن پیامک را وارد کنید', 'error');
-    showToast('پیامک ارسال شد', 'success');
+    showToast('پیامک با موفقیت ارسال شد', 'success');
     window.closeSmsModal();
 };
 
