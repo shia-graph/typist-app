@@ -1,3 +1,7 @@
+/************************************************************************
+ * SAMANE MANAGEMENT TYPISTS - SUPABASE POWERED WEB APP
+ * Full code version with safe DOM fallbacks, Jalali dates & typist profile edit
+ ************************************************************************/
 
 
 // 1. Supabase Initialization with Safe non-conflicting variable name
@@ -6,7 +10,8 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 
 
-// Initialize Supabase Client
+
+// Initialize Supabase Client safely
 let db = null;
 if (window.supabase) {
     db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -150,20 +155,37 @@ function checkSavedSession() {
 
 function showLoginView() {
     currentUser = null;
-    document.getElementById('loginSection').classList.remove('hidden');
-    document.getElementById('typistDashboard').classList.add('hidden');
-    document.getElementById('adminDashboard').classList.add('hidden');
-    document.getElementById('userInfoHeader').classList.add('hidden');
+    const loginSec = document.getElementById('loginSection');
+    const typistDash = document.getElementById('typistDashboard');
+    const adminDash = document.getElementById('adminDashboard');
+    const userHeader = document.getElementById('userInfoHeader');
+
+    if (loginSec) loginSec.classList.remove('hidden');
+    if (typistDash) typistDash.classList.add('hidden');
+    if (adminDash) adminDash.classList.add('hidden');
+    if (userHeader) userHeader.classList.add('hidden');
 }
 
-// Authentication Logic
+// Defensive Authentication Logic (Solves Cannot read properties of null)
 async function handleLogin(e) {
-    e.preventDefault();
-    const rawUser = document.getElementById('loginUsername').value;
-    const rawPass = document.getElementById('loginPassword').value;
+    if (e) e.preventDefault();
 
-    const username = toEnglishDigits(rawUser).trim();
-    const password = toEnglishDigits(rawPass).trim();
+    // Safe Selector (supports fallback IDs)
+    const userInputEl = document.getElementById('loginUsername') || document.getElementById('username');
+    const passInputEl = document.getElementById('loginPassword') || document.getElementById('password');
+
+    if (!userInputEl || !passInputEl) {
+        showAlert('خطا: ورودی‌های فرم ورود یافت نشدند.', true);
+        return;
+    }
+
+    const username = toEnglishDigits(userInputEl.value || '').trim();
+    const password = toEnglishDigits(passInputEl.value || '').trim();
+
+    if (!username || !password) {
+        showAlert('لطفا نام کاربری و رمز عبور را وارد کنید.', true);
+        return;
+    }
 
     // 1. Admin Auth Check
     if ((username === 'admin' || username === '09127853421') && (password === 'admin123' || password === '3421')) {
@@ -183,7 +205,7 @@ async function handleLogin(e) {
         if (error) throw error;
 
         // Check if DB typist matches
-        const typist = typists.find(t => {
+        const typist = (typists || []).find(t => {
             const pPhone = toEnglishDigits(t.phone || '').trim();
             const pNational = toEnglishDigits(t.national_id || t.national_code || '').trim();
             const pPass = toEnglishDigits(t.password || '').trim();
@@ -224,9 +246,13 @@ function logout() {
 async function renderDashboard() {
     if (!currentUser) return showLoginView();
 
-    document.getElementById('loginSection').classList.add('hidden');
-    document.getElementById('userInfoHeader').classList.remove('hidden');
-    document.getElementById('userDisplayName').textContent = currentUser.data.name || getTypistName(currentUser.data);
+    const loginSec = document.getElementById('loginSection');
+    const userHeader = document.getElementById('userInfoHeader');
+    const userNameSpan = document.getElementById('userDisplayName');
+
+    if (loginSec) loginSec.classList.add('hidden');
+    if (userHeader) userHeader.classList.remove('hidden');
+    if (userNameSpan) userNameSpan.textContent = currentUser.data.name || getTypistName(currentUser.data);
 
     if (currentUser.type === 'admin') {
         document.getElementById('adminDashboard').classList.remove('hidden');
@@ -639,10 +665,12 @@ function switchAdminTab(tabName) {
 
 // Modal Toggle Helper
 function openModal(id) {
-    document.getElementById(id).classList.remove('hidden');
+    const modal = document.getElementById(id);
+    if (modal) modal.classList.remove('hidden');
 }
 function closeModal(id) {
-    document.getElementById(id).classList.add('hidden');
+    const modal = document.getElementById(id);
+    if (modal) modal.classList.add('hidden');
 }
 
 // Modal Handlers: Add / Edit Typist
