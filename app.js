@@ -8,6 +8,7 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
+
 let db = null;
 if (window.supabase) {
     db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -99,14 +100,14 @@ function showAlert(message, isError = false) {
     }, 4000);
 }
 
-// Schema Field Extractors (Supports Schema Variances)
+// Schema Field Extractors
 function getTypistName(typist) {
     if (!typist) return 'نامشخص';
     if (typist.name && typist.name.trim() !== '') return typist.name;
     const fn = typist.first_name || '';
     const ln = typist.last_name || '';
     const combined = `${fn} ${ln}`.trim();
-    return combined || typist.phone || 'مقرر';
+    return combined || typist.phone || 'تایپیست';
 }
 
 function getTypistNationalId(typist) {
@@ -453,7 +454,6 @@ async function fetchAllDataForAdmin() {
 
         if (typistsRes.error) throw typistsRes.error;
         if (recordsRes.error) throw recordsRes.error;
-        // Ignore table not found error for payments just in case it's newly created
         if (paymentsRes.error && paymentsRes.error.code !== '42P01') throw paymentsRes.error;
 
         globalTypists = typistsRes.data || [];
@@ -483,13 +483,14 @@ function renderAdminStats() {
     document.getElementById('statTotalReports').textContent = formatNumber(globalReports.length);
 }
 
+// Render Admin Typists Table (WITH DIRECT CALL & SMS ACTION BUTTONS)
 function renderAdminTypistsTable(typistsList) {
     const tbody = document.getElementById('adminTypistsTable');
     document.getElementById('typistsTableCount').textContent = `تعداد کل: ${formatNumber(typistsList.length)} نفر`;
     tbody.innerHTML = '';
 
     if (typistsList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-6 text-center text-slate-400">هیچ مقرری یافت نشد.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-6 text-center text-slate-400">هیچ تایپیستی یافت نشد.</td></tr>`;
         return;
     }
 
@@ -518,14 +519,24 @@ function renderAdminTypistsTable(typistsList) {
         const passStr = t.password || (t.phone && t.phone.length >= 4 ? t.phone.slice(-4) : '---');
         const newTaskBtn = t.completed ? `<button onclick="openNewTaskModal('${t.id}')" title="ارجاع کار جدید" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-800 hover:bg-blue-200">+ کار جدید</button>` : '';
 
+        const cleanPhone = toEnglishDigits(t.phone || '').trim();
+
         tr.innerHTML = `
             <td class="px-4 py-3">
                 <div class="font-bold text-slate-800">${getTypistName(t)}</div>
                 <div class="text-xs text-slate-400">کدملی: ${getTypistNationalId(t)}</div>
             </td>
             <td class="px-4 py-3 text-xs">
-                <div class="font-mono dir-ltr text-slate-700">${t.phone || '---'}</div>
-                <div class="text-slate-400 font-mono">رمز: ${passStr}</div>
+                <div class="flex items-center gap-1.5 dir-ltr justify-end">
+                    <a href="tel:${cleanPhone}" class="p-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg transition" title="تماس تلفنی با ${getTypistName(t)}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+                    </a>
+                    <a href="sms:${cleanPhone}" class="p-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition" title="ارسال پیامک به ${getTypistName(t)}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                    </a>
+                    <span class="font-mono text-slate-700">${cleanPhone || '---'}</span>
+                </div>
+                <div class="text-slate-400 font-mono mt-1 text-left dir-ltr">رمز: ${passStr}</div>
             </td>
             <td class="px-4 py-3">
                 <div class="font-medium text-indigo-700 text-xs">${t.title || '---'}</div>
@@ -567,7 +578,6 @@ function filterTypistsTable() {
     renderAdminTypistsTable(filtered);
 }
 
-// Render Admin Payroll Table (WITH MULTI-MONTH NET LOGIC)
 function renderAdminPayrollTable() {
     const tbody = document.getElementById('adminPayrollTable');
     tbody.innerHTML = '';
@@ -583,7 +593,6 @@ function renderAdminPayrollTable() {
         const myPayments = globalPayments.filter(p => String(p.typist_id) === String(t.id));
         const totalPaid = myPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
-        // Payroll Formula: Gross - Payments
         const grossAmount = (totalWords * wordRate) + (totalPages * pageRate);
         const netPayable = grossAmount - totalPaid;
 
@@ -627,7 +636,7 @@ function renderAdminAllRecordsTable() {
 
         tr.innerHTML = `
             <td class="px-4 py-3 text-xs font-mono dir-ltr text-right">${formatJalali(getRecordDate(r))}</td>
-            <td class="px-4 py-3 font-medium text-slate-800">${typist ? getTypistName(typist) : 'مقرر حذف شده'}</td>
+            <td class="px-4 py-3 font-medium text-slate-800">${typist ? getTypistName(typist) : 'تایپیست حذف شده'}</td>
             <td class="px-4 py-3 text-xs text-indigo-700">${r.title || (typist ? typist.title : '---')}</td>
             <td class="px-4 py-3 font-bold text-indigo-600 text-xs">${formatNumber(getRecordWordsCount(r))} کلمه</td>
             <td class="px-4 py-3 text-xs">${formatNumber(getRecordPageCount(r))} صفحه</td>
@@ -667,7 +676,7 @@ function closeModal(id) {
 
 // Modal Handlers: Add / Edit Typist
 function openAddTypistModal() {
-    document.getElementById('typistModalTitle').textContent = 'افزودن مقرر جدید';
+    document.getElementById('typistModalTitle').textContent = 'افزودن تایپیست جدید';
     document.getElementById('editTypistId').value = '';
     document.getElementById('typistForm').reset();
     document.getElementById('typistRateWord').value = '15';
@@ -680,7 +689,7 @@ function openEditTypistModal(id) {
     const t = globalTypists.find(item => String(item.id) === String(id));
     if (!t) return;
 
-    document.getElementById('typistModalTitle').textContent = 'ویرایش اطلاعات مقرر';
+    document.getElementById('typistModalTitle').textContent = 'ویرایش اطلاعات تایپیست';
     document.getElementById('editTypistId').value = t.id;
     document.getElementById('typistFirstName').value = t.first_name || '';
     document.getElementById('typistLastName').value = t.last_name || '';
@@ -736,20 +745,20 @@ async function saveTypist(e) {
         if (id) {
             const { error } = await db.from('typists').update(payload).eq('id', id);
             if (error) throw error;
-            showAlert('اطلاعات مقرر بروزرسانی شد.');
+            showAlert('اطلاعات تایپیست بروزرسانی شد.');
         } else {
             payload.completed = false;
             payload.created_at = new Date().toISOString();
             const { error } = await db.from('typists').insert([payload]);
             if (error) throw error;
-            showAlert('مقرر جدید با موفقیت اضافه شد.');
+            showAlert('تایپیست جدید با موفقیت اضافه شد.');
         }
 
         closeModal('typistModal');
         await fetchAllDataForAdmin();
     } catch (err) {
         console.error('Error saving typist:', err);
-        showAlert('خطا در ذخیره اطلاعات مقرر.', true);
+        showAlert('خطا در ذخیره اطلاعات تایپیست.', true);
     }
 }
 
@@ -794,7 +803,7 @@ async function saveNewTask(e) {
             delivery_date: deliveryDate,
             completed: false,
             completed_at: null,
-            last_report_date: nowIso // Reset 10-day deadline
+            last_report_date: nowIso
         }).eq('id', id);
 
         if (error) throw error;
@@ -809,16 +818,16 @@ async function saveNewTask(e) {
 }
 
 async function deleteTypist(id) {
-    if (!confirm('آیا از حذف این مقرر و تمامی سوابق او مطمئن هستید؟')) return;
+    if (!confirm('آیا از حذف این تایپیست و تمامی سوابق او مطمئن هستید؟')) return;
 
     try {
         const { error } = await db.from('typists').delete().eq('id', id);
         if (error) throw error;
-        showAlert('مقرر حذف شد.');
+        showAlert('تایپیست حذف شد.');
         await fetchAllDataForAdmin();
     } catch (err) {
         console.error('Error deleting typist:', err);
-        showAlert('خطا در حذف مقرر.', true);
+        showAlert('خطا در حذف تایپیست.', true);
     }
 }
 
@@ -879,7 +888,7 @@ async function deleteWorkRecord(id) {
     }
 }
 
-// Settlement Action (Updated to use Multi-Month Logging)
+// Settlement Action
 async function settleTypistPayroll(typistId, netPayable) {
     if (netPayable <= 0) {
         showAlert('مبلغ قابل پرداختی وجود ندارد (کارکرد صفر یا تسویه شده است).', true);
@@ -905,31 +914,93 @@ async function settleTypistPayroll(typistId, netPayable) {
     }
 }
 
+// ----------------------------------------------------------------------
+// REAL SMS & DIRECT COMMUNICATION LOGIC (تماس و پیامک واقعی)
+// ----------------------------------------------------------------------
 function openSmsModal() {
+    document.getElementById('smsText').value = '';
+    document.getElementById('smsResultArea').classList.add('hidden');
     openModal('smsModal');
 }
 
-function sendSmsAction() {
+function getTargetTypists() {
     const target = document.getElementById('smsTargetSelect').value;
-    const text = document.getElementById('smsText').value.trim();
+    if (target === 'overdue') {
+        return globalTypists.filter(t => {
+            if (!t.last_report_date) return true;
+            const diff = Math.floor(Math.abs(new Date() - new Date(t.last_report_date)) / (1000 * 60 * 60 * 24));
+            return diff > 10;
+        });
+    }
+    return globalTypists;
+}
 
+function sendSmsAction() {
+    const text = document.getElementById('smsText').value.trim();
     if (!text) {
         showAlert('لطفا متن پیامک را وارد کنید.', true);
         return;
     }
 
-    let count = globalTypists.length;
-    if (target === 'overdue') {
-        count = globalTypists.filter(t => {
-            if (!t.last_report_date) return true;
-            const diff = Math.floor(Math.abs(new Date() - new Date(t.last_report_date)) / (1000 * 60 * 60 * 24));
-            return diff > 10;
-        }).length;
+    const typists = getTargetTypists();
+    const phoneNumbers = typists
+        .map(t => toEnglishDigits(t.phone || '').trim())
+        .filter(p => p.length >= 10);
+
+    if (phoneNumbers.length === 0) {
+        showAlert('هیچ شماره موبایل معتبری برای گیرندگان پیدا نشد.', true);
+        return;
     }
 
-    showAlert(`پیامک با موفقیت به ${count} مقرر ارسال شد.`);
-    closeModal('smsModal');
-    document.getElementById('smsText').value = '';
+    // 1. Trigger Direct Native SMS Scheme (sms:PHONE1,PHONE2?body=TEXT)
+    const smsUrl = `sms:${phoneNumbers.join(',')}?body=${encodeURIComponent(text)}`;
+    window.location.href = smsUrl;
+
+    // 2. Render List for Individual Backup or Panel Copy
+    renderSmsRecipientsList(typists, text);
+    showAlert(`دستور ارسال پیامک برای ${phoneNumbers.length} شماره فراخوانی شد.`);
+}
+
+function renderSmsRecipientsList(typists, text) {
+    const container = document.getElementById('smsRecipientsContainer');
+    const resultArea = document.getElementById('smsResultArea');
+    container.innerHTML = '';
+
+    typists.forEach(t => {
+        const phone = toEnglishDigits(t.phone || '').trim();
+        if (!phone) return;
+
+        const div = document.createElement('div');
+        div.className = 'flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-100';
+        div.innerHTML = `
+            <span class="font-medium text-slate-800">${getTypistName(t)} (<span class="font-mono dir-ltr inline-block">${phone}</span>)</span>
+            <a href="sms:${phone}?body=${encodeURIComponent(text)}" class="bg-blue-600 hover:bg-blue-700 text-white text-[11px] px-2.5 py-1 rounded-md font-bold transition">
+                ارسال پیامک تکی
+            </a>
+        `;
+        container.appendChild(div);
+    });
+
+    resultArea.classList.remove('hidden');
+}
+
+function copySmsNumbers() {
+    const typists = getTargetTypists();
+    const phoneNumbers = typists
+        .map(t => toEnglishDigits(t.phone || '').trim())
+        .filter(p => p.length >= 10);
+
+    if (phoneNumbers.length === 0) {
+        showAlert('هیچ شماره‌ای برای کپی وجود ندارد.', true);
+        return;
+    }
+
+    const numbersText = phoneNumbers.join('\n');
+    navigator.clipboard.writeText(numbersText).then(() => {
+        showAlert(`${phoneNumbers.length} شماره موبایل در حافظه کپی شد.`);
+    }).catch(err => {
+        showAlert('خطا در کپی کردن شماره‌ها.', true);
+    });
 }
 
 // ----------------------------------------------------------------------
@@ -941,7 +1012,6 @@ function exportBankCSV() {
         return;
     }
 
-    // MANDATORY HEADERS
     const headers = ['ردیف', 'نام', 'نام خانوادگی', 'شماره ملی', 'شماره تماس', 'شماره شبا', 'مبلغ قابل واریز (ریال)'];
     const rows = [];
     let currentRowIndex = 1;
@@ -960,7 +1030,6 @@ function exportBankCSV() {
         const grossAmount = (totalWords * wordRate) + (totalPages * pageRate);
         const netPayable = grossAmount - totalPaid;
 
-        // فقط افرادی که خالص پرداختی بالای 0 دارند وارد فایل خروجی می‌شوند
         if (netPayable > 0) {
             const fn = t.first_name || getTypistName(t).split(' ')[0] || '';
             const ln = t.last_name || getTypistName(t).split(' ').slice(1).join(' ') || '';
@@ -981,7 +1050,7 @@ function exportBankCSV() {
     });
 
     if (rows.length === 0) {
-        showAlert('تمامی مقرر‌ها تسویه شده‌اند و هیچ شخصی برای پرداختی بانک موجود نیست.', true);
+        showAlert('تمامی تایپیست‌ها تسویه شده‌اند و هیچ شخصی برای پرداختی بانک موجود نیست.', true);
         return;
     }
 
