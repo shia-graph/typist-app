@@ -637,42 +637,109 @@ async function saveProfileEdit() {
     }
 }
 
+// ۱. تابع رندر کردن جدول گزارش‌های کار در صفحه جزئیات
 function renderDetailReportsTable(reports) {
-    const tbody = getEl('detailReportsTableBody');
+    const tbody = document.getElementById('detailReportsTableBody') || document.querySelector('#detailReportsTable tbody');
     if (!tbody) return;
-    tbody.innerHTML = '';
 
     if (!reports || reports.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-gray-500">هیچ گزارش کاری ثبت نشده است</td></tr>`;
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-6 text-gray-500 text-sm">
+                    هیچ گزارش کاری ثبت نشده است
+                </td>
+            </tr>`;
         return;
     }
 
-    const typeLabels = { normal: 'معمولی', urgent: 'فوری', math: 'فرمول/ریاضی' };
+    tbody.innerHTML = reports.map((r, index) => {
+        const title = r.title || r.project_title || 'بدون عنوان';
+        const date = r.delivery_date || r.record_date || '-';
+        const type = r.page_type || r.unit_type || 'عادی';
+        const count = r.page_count ?? r.quantity ?? 0;
+        const total = Number(r.total_amount) || Number(r.total_price) || 0;
 
-    reports.forEach((r, idx) => {
-        const count = r.page_count || r.quantity || 1;
-        const pType = r.page_type || r.unit_type || 'normal';
-        const total = r.total_amount || r.total_price || 0;
-        const dDate = r.delivery_date || r.record_date || r.created_at;
-
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800';
-        tr.innerHTML = `
-            <td class="px-4 py-3 text-center">${idx + 1}</td>
-            <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">${r.title || '-'}</td>
-            <td class="px-4 py-3 text-center">${formatDateShamsi(dDate)}</td>
-            <td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 text-xs">${typeLabels[pType] || pType}</span></td>
-            <td class="px-4 py-3 text-center font-bold">${count}</td>
-            <td class="px-4 py-3 text-center font-medium text-emerald-600">${formatMoney(total)}</td>
-            <td class="px-4 py-3 text-center">
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 ml-2">✔️ تحویل شد</span>
-                <button onclick="editReport('${r.id}', '${encodeURIComponent(r.title || '')}', '${dDate}', '${pType}', ${count}, ${r.custom_rate || r.unit_rate || 'null'})" class="text-indigo-600 hover:text-indigo-800 text-xs ml-2">✏️ ویرایش</button>
-                <button onclick="deleteReport('${r.id}')" class="text-red-600 hover:text-red-800 text-xs">🗑️ حذف</button>
-            </td>
+        return `
+            <tr class="border-b border-gray-100 hover:bg-gray-50 text-sm">
+                <td class="py-3 px-4 text-center font-medium">${index + 1}</td>
+                <td class="py-3 px-4 font-semibold text-gray-800">${title}</td>
+                <td class="py-3 px-4 text-center text-gray-600">${date}</td>
+                <td class="py-3 px-4 text-center">
+                    <span class="px-2.5 py-1 rounded-full text-xs bg-blue-50 text-blue-700 font-medium">${type}</span>
+                </td>
+                <td class="py-3 px-4 text-center font-medium">${count}</td>
+                <td class="py-3 px-4 text-center font-bold text-emerald-600">${formatMoney(total)} تومان</td>
+                <td class="py-3 px-4 text-center">
+                    <button onclick="deleteWorkRecord('${r.id}')" class="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 rounded hover:bg-red-50 transition">
+                        حذف
+                    </button>
+                </td>
+            </tr>
         `;
-        tbody.appendChild(tr);
-    });
+    }).join('');
 }
+
+// ۲. تابع ذخیره گزارش کار جدید هماهنگ با ساختار دیتابیس
+async function handleSaveWorkRecord(event) {
+    if (event) event.preventDefault();
+    try {
+        const typistId = currentTypistData ? currentTypistData.id : null;
+        if (!typistId) {
+            showToast('تایپیست انتخاب نشده است', 'danger');
+            return;
+        }
+
+        const title = document.getElementById('workTitle')?.value?.trim() || 'پروژه تایپ';
+        const pageType = document.getElementById('workPageType')?.value || 'عادی';
+        const pageCount = Number(document.getElementById('workPageCount')?.value) || 0;
+        const deliveryDate = document.getElementById('workDeliveryDate')?.value || new Date().toISOString().slice(0, 10);
+        
+        // محاسبه مبلغ کل بر اساس نرخ
+        let rate = Number(currentTypistData.rate_normal || currentTypistData.page_rate || 0);
+        if (pageType === 'فوری') rate = Number(currentTypistData.rate_urgent || rate);
+        if (pageType === 'ریاضی' || pageType === 'فرمول') rate = Number(currentTypistData.rate_math || rate);
+        
+        const totalAmount = pageCount * rate;
+
+        const newRecord = {
+            typist_id: typistId,
+            person_id: typistId,
+            title: title,
+            page_type: pageType,
+            unit_type: pageType,
+            page_count: pageCount,
+            quantity: pageCount,
+            unit_rate: rate,
+            total_amount: totalAmount,
+            delivery_date: deliveryDate,
+            record_date: deliveryDate,
+            status: 'completed'
+        };
+
+        showLoading();
+        const client = getSupabaseClient();
+        const { data, error } = await client.from('work_records').insert([newRecord]).select();
+
+        hideLoading();
+        if (error) {
+            console.error('Error inserting work_record:', error);
+            showToast('خطا در ذخیره گزارش کار: ' + error.message, 'danger');
+            return;
+        }
+
+        showToast('گزارش کار با موفقیت ثبت شد', 'success');
+        closeModal('workRecordModal'); // بستن مدال در صورت وجود
+        
+        // بازخوانی مجدد اطلاعات صفحه
+        await loadTypistDetailData(typistId);
+
+    } catch (err) {
+        hideLoading();
+        console.error('Unexpected error:', err);
+        showToast('خطای غیرمنتظره در ثبت کارکرد', 'danger');
+    }
+}
+
 
 function renderDetailPaymentsTable(payments) {
     const tbody = getEl('detailPaymentsTableBody');
