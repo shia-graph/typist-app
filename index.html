@@ -23,6 +23,15 @@
     <style>
         * { font-family: 'Vazirmatn', sans-serif; touch-action: manipulation; }
         body { -webkit-tap-highlight-color: transparent; }
+        /* قفل بودن فیلدها */
+        input[readonly] {
+            opacity: 0.7;
+            cursor: not-allowed;
+            background-color: rgba(241, 245, 249, 0.6);
+        }
+        .dark input[readonly] {
+            background-color: rgba(30, 41, 59, 0.6);
+        }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen transition-colors duration-200">
@@ -120,9 +129,10 @@
                         <span class="absolute right-3 top-3 text-slate-400">🔍</span>
                     </div>
                     <div class="flex items-center gap-2 flex-wrap">
-                        <button onclick="openAddTypistModal()" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm">+ افزودن تایپیست</button>
-                        <button onclick="exportBankCSV()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm">📥 خروجی بانک (ریال)</button>
-                        <button onclick="openSmsModal()" class="px-4 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition">💬 پیامک گروهی</button>
+                        <button onclick="openAddTypistModal()" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm">+ تایپیست</button>
+                        <button onclick="exportBankCSV()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm">📥 خروجی بانک</button>
+                        <button onclick="exportPersonnelCSV()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm">📥 خروجی مشخصات</button>
+                        <button onclick="openSmsModal()" class="px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition">💬 پیامک گروهی</button>
                     </div>
                 </div>
 
@@ -130,6 +140,7 @@
                     <table class="w-full text-right text-xs">
                         <thead class="bg-slate-50 dark:bg-slate-750 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700">
                             <tr>
+                                <th class="p-3.5 w-10 text-center"><input type="checkbox" id="selectAllTypists" onchange="toggleAllTypists(this)" class="w-4 h-4 cursor-pointer rounded border-slate-300"></th>
                                 <th class="p-3.5">نام تایپیست</th>
                                 <th class="p-3.5">کد ملی</th>
                                 <th class="p-3.5">شماره تماس / ارتباط</th>
@@ -160,38 +171,41 @@
             <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
                 <div class="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-700/60 pb-3">
                     <h3 class="font-bold text-sm">👤 مشخصات فردی و بانکی</h3>
-                    <button onclick="saveTypist(event)" class="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition">💾 ذخیره تغییرات پروفایل</button>
+                    <div>
+                        <button type="button" id="btn-edit-profile" onclick="enableProfileEdit()" class="px-4 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold hover:bg-slate-200 transition">✏️ ویرایش مشخصات</button>
+                        <button type="button" id="btn-save-profile" onclick="saveTypist(event)" class="hidden px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition">💾 ذخیره تغییرات</button>
+                    </div>
                 </div>
                 <form id="profile-form" class="space-y-4">
                     <input type="hidden" id="profile_id">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
                         <div>
                             <label class="block text-slate-500 mb-1">نام</label>
-                            <input type="text" id="profile_first_name" required class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900">
+                            <input type="text" id="profile_first_name" required readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
                         </div>
                         <div>
                             <label class="block text-slate-500 mb-1">نام خانوادگی</label>
-                            <input type="text" id="profile_last_name" required class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900">
+                            <input type="text" id="profile_last_name" required readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
                         </div>
                         <div>
                             <label class="block text-slate-500 mb-1">نام پدر</label>
-                            <input type="text" id="profile_father_name" placeholder="نام پدر" class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900">
+                            <input type="text" id="profile_father_name" placeholder="نام پدر" readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
                         </div>
                         <div>
                             <label class="block text-slate-500 mb-1">کد ملی</label>
-                            <input type="text" id="profile_national_id" required class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900">
+                            <input type="text" id="profile_national_id" required readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
                         </div>
                         <div>
                             <label class="block text-slate-500 mb-1">شماره تماس</label>
-                            <input type="text" id="profile_phone" required class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900">
+                            <input type="text" id="profile_phone" required readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
                         </div>
                         <div>
                             <label class="block text-slate-500 mb-1">شماره کارت</label>
-                            <input type="text" id="profile_card_number" placeholder="۶۰۳۷..." class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900">
+                            <input type="text" id="profile_card_number" placeholder="۶۰۳۷..." readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
                         </div>
                         <div class="md:col-span-2">
                             <label class="block text-slate-500 mb-1">شماره شبا (بدون IR)</label>
-                            <input type="text" id="profile_sheba_number" placeholder="0123..." class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 font-mono">
+                            <input type="text" id="profile_sheba_number" placeholder="0123..." readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 font-mono outline-none">
                         </div>
                     </div>
 
@@ -199,15 +213,15 @@
                     <div id="admin-rates-container" class="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100 dark:border-slate-700/60 text-xs">
                         <div>
                             <label class="block text-slate-500 mb-1">نرخ صفحه عادی (تومان)</label>
-                            <input type="number" id="profile_rate_normal" class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900">
+                            <input type="number" id="profile_rate_normal" readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
                         </div>
                         <div>
                             <label class="block text-slate-500 mb-1">نرخ صفحه فوری (تومان)</label>
-                            <input type="number" id="profile_rate_urgent" class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900">
+                            <input type="number" id="profile_rate_urgent" readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
                         </div>
                         <div>
                             <label class="block text-slate-500 mb-1">نرخ صفحه فرمول/ریاضی (تومان)</label>
-                            <input type="number" id="profile_rate_math" class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900">
+                            <input type="number" id="profile_rate_math" readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
                         </div>
                     </div>
                 </form>
@@ -449,7 +463,10 @@
     <!-- Modal: Group SMS -->
     <div id="sms-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4">
-            <h3 class="font-bold text-sm">ارسال پیامک گروهی به تایپیست‌ها</h3>
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-sm">ارسال پیامک گروهی</h3>
+                <span id="sms-target-count" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg font-bold"></span>
+            </div>
             <textarea id="sms_text" rows="4" placeholder="متن پیامک خود را تایپ کنید..." class="w-full p-3 rounded-xl border dark:border-slate-700 dark:bg-slate-900 text-xs outline-none"></textarea>
             <div class="flex items-center gap-2 justify-end">
                 <button onclick="closeSmsModal()" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl text-xs">انصراف</button>
@@ -458,6 +475,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=6.3.0"></script>
+    <script src="app.js?v=7.0.0"></script>
 </body>
 </html>
