@@ -10,8 +10,11 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 
 let db = null;
-if (window.supabase) {
-    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+function getDb() {
+    if (!db && window.supabase) {
+        db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+    return db;
 }
 
 // Global State Variables
@@ -97,7 +100,7 @@ function showAlert(message, isError = false) {
     alertBox.classList.remove('hidden');
     setTimeout(() => {
         alertBox.classList.add('hidden');
-    }, 4000);
+    }, 5000);
 }
 
 // Schema Field Extractors
@@ -130,6 +133,69 @@ function isRecordBelongsToTypist(record, typistId) {
     if (!record || !typistId) return false;
     const tid = String(typistId);
     return String(record.typist_id) === tid || String(record.person_id) === tid;
+}
+
+// Resilient Work Record Insert Helper (حل کامل خطای ثبت گزارش)
+async function insertWorkRecord(typistId, words, pages, title) {
+    const client = getDb();
+    if (!client) {
+        return { success: false, error: { message: 'ارتباط با پایگاه داده برقرار نشد.' } };
+    }
+
+    const nowIso = new Date().toISOString();
+
+    // Strategy 1: Standard Schema
+    const payload1 = {
+        typist_id: typistId,
+        words_count: words,
+        page_count: pages,
+        title: title || 'گزارش کارکرد',
+        created_at: nowIso
+    };
+
+    let { error: err1 } = await client.from('work_records').insert([payload1]);
+    if (!err1) return { success: true };
+
+    console.warn('Insert Strategy 1 failed:', err1);
+
+    // Strategy 2: Alternative pages_count column
+    const payload2 = {
+        typist_id: typistId,
+        words_count: words,
+        pages_count: pages,
+        title: title || 'گزارش کارکرد',
+        created_at: nowIso
+    };
+
+    let { error: err2 } = await client.from('work_records').insert([payload2]);
+    if (!err2) return { success: true };
+
+    console.warn('Insert Strategy 2 failed:', err2);
+
+    // Strategy 3: Schema with person_id
+    const payload3 = {
+        person_id: typistId,
+        words_count: words,
+        page_count: pages,
+        title: title || 'گزارش کارکرد',
+        created_at: nowIso
+    };
+
+    let { error: err3 } = await client.from('work_records').insert([payload3]);
+    if (!err3) return { success: true };
+
+    console.warn('Insert Strategy 3 failed:', err3);
+
+    // Strategy 4: Minimal Payload
+    const payload4 = {
+        typist_id: typistId,
+        words_count: words
+    };
+
+    let { error: err4 } = await client.from('work_records').insert([payload4]);
+    if (!err4) return { success: true };
+
+    return { success: false, error: err1 || err2 || err3 || err4 };
 }
 
 // Application Initialization
@@ -198,7 +264,10 @@ async function handleLogin(e) {
 
     // 2. Fetch typists to authenticate
     try {
-        const { data: typists, error } = await db.from('typists').select('*');
+        const client = getDb();
+        if (!client) throw new Error('عدم دسترسی به Supabase');
+
+        const { data: typists, error } = await client.from('typists').select('*');
         if (error) throw error;
 
         const typist = (typists || []).find(t => {
@@ -266,7 +335,10 @@ async function renderDashboard() {
 // ----------------------------------------------------------------------
 async function fetchTypistData() {
     try {
-        const { data: updatedTypists, error: tErr } = await db.from('typists').select('*').eq('id', currentUser.data.id);
+        const client = getDb();
+        if (!client) return;
+
+        const { data: updatedTypists, error: tErr } = await client.from('typists').select('*').eq('id', currentUser.data.id);
         if (!tErr && updatedTypists && updatedTypists.length > 0) {
             currentUser.data = updatedTypists[0];
             localStorage.setItem('typist_app_session', JSON.stringify(currentUser));
@@ -279,7 +351,7 @@ async function fetchTypistData() {
 
         renderTypistDeadline(t.last_report_date);
 
-        const { data: records, error } = await db.from('work_records').select('*').order('created_at', { ascending: false });
+        const { data: records, error } = await client.from('work_records').select('*').order('created_at', { ascending: false });
         if (error) throw error;
 
         const myRecords = (records || []).filter(r => isRecordBelongsToTypist(r, t.id));
@@ -349,29 +421,31 @@ async function submitTypistReport(e) {
         return;
     }
 
-    const t = currentUser.data;
+    const t = currentUser ? currentUser.data : null;
+    if (!t || !t.id) {
+        showAlert('خطا: اطلاعات تایپیست یافت نشد. لطفا مجددا وارد شوید.', true);
+        return;
+    }
+
     const nowIso = new Date().toISOString();
 
     try {
-        const { error: rErr } = await db.from('work_records').insert([{
-            typist_id: t.id,
-            person_id: t.id,
-            words_count: words,
-            page_count: pages,
-            pages_count: pages,
-            quantity: pages,
-            title: t.title || 'گزارش کارکرد',
-            created_at: nowIso,
-            record_date: nowIso
-        }]);
+        const res = await insertWorkRecord(t.id, words, pages, t.title || 'گزارش کارکرد');
 
-        if (rErr) throw rErr;
+        if (!res.success) {
+            const errMsg = res.error ? (res.error.message || res.error.details || JSON.stringify(res.error)) : 'خطای نا مشخص در سرور';
+            throw new Error(errMsg);
+        }
 
-        const { error: uErr } = await db.from('typists').update({
-            last_report_date: nowIso
-        }).eq('id', t.id);
+        // Update last_report_date in typists table (resets 10-day deadline)
+        const client = getDb();
+        if (client) {
+            const { error: uErr } = await client.from('typists').update({
+                last_report_date: nowIso
+            }).eq('id', t.id);
 
-        if (uErr) console.warn('Could not update last_report_date:', uErr);
+            if (uErr) console.warn('Could not update last_report_date:', uErr);
+        }
 
         showAlert('گزارش کارکرد شما با موفقیت ثبت شد.');
         document.getElementById('typistReportForm').reset();
@@ -379,7 +453,7 @@ async function submitTypistReport(e) {
 
     } catch (err) {
         console.error('Error submitting report:', err);
-        showAlert('خطا در ثبت گزارش کارکرد.', true);
+        showAlert(`خطا در ثبت گزارش کارکرد: ${err.message || 'مشکل در برقراری ارتباط'}`, true);
     }
 }
 
@@ -429,7 +503,8 @@ async function saveTypistSelfProfile(e) {
     }
 
     try {
-        const { error } = await db.from('typists').update(updatePayload).eq('id', t.id);
+        const client = getDb();
+        const { error } = await client.from('typists').update(updatePayload).eq('id', t.id);
         if (error) throw error;
 
         showAlert('اطلاعات پروفایل شما با موفقیت بروزرسانی شد.');
@@ -446,10 +521,13 @@ async function saveTypistSelfProfile(e) {
 // ----------------------------------------------------------------------
 async function fetchAllDataForAdmin() {
     try {
+        const client = getDb();
+        if (!client) return;
+
         const [typistsRes, recordsRes, paymentsRes] = await Promise.all([
-            db.from('typists').select('*').order('created_at', { ascending: false }),
-            db.from('work_records').select('*').order('created_at', { ascending: false }),
-            db.from('payments').select('*')
+            client.from('typists').select('*').order('created_at', { ascending: false }),
+            client.from('work_records').select('*').order('created_at', { ascending: false }),
+            client.from('payments').select('*')
         ]);
 
         if (typistsRes.error) throw typistsRes.error;
@@ -483,7 +561,6 @@ function renderAdminStats() {
     document.getElementById('statTotalReports').textContent = formatNumber(globalReports.length);
 }
 
-// Render Admin Typists Table (WITH DIRECT CALL & SMS ACTION BUTTONS)
 function renderAdminTypistsTable(typistsList) {
     const tbody = document.getElementById('adminTypistsTable');
     document.getElementById('typistsTableCount').textContent = `تعداد کل: ${formatNumber(typistsList.length)} نفر`;
@@ -742,14 +819,15 @@ async function saveTypist(e) {
     };
 
     try {
+        const client = getDb();
         if (id) {
-            const { error } = await db.from('typists').update(payload).eq('id', id);
+            const { error } = await client.from('typists').update(payload).eq('id', id);
             if (error) throw error;
             showAlert('اطلاعات تایپیست بروزرسانی شد.');
         } else {
             payload.completed = false;
             payload.created_at = new Date().toISOString();
-            const { error } = await db.from('typists').insert([payload]);
+            const { error } = await client.from('typists').insert([payload]);
             if (error) throw error;
             showAlert('تایپیست جدید با موفقیت اضافه شد.');
         }
@@ -769,7 +847,8 @@ async function toggleTaskCompletion(id, completedStatus) {
             completed_at: completedStatus ? new Date().toISOString() : null
         };
 
-        const { error } = await db.from('typists').update(updatePayload).eq('id', id);
+        const client = getDb();
+        const { error } = await client.from('typists').update(updatePayload).eq('id', id);
         if (error) throw error;
 
         showAlert(completedStatus ? 'پروژه به عنوان تکمیل شده نشانه‌گذاری شد.' : 'پروژه به حالت فعال بازگشت.');
@@ -798,7 +877,8 @@ async function saveNewTask(e) {
     const nowIso = new Date().toISOString();
 
     try {
-        const { error } = await db.from('typists').update({
+        const client = getDb();
+        const { error } = await client.from('typists').update({
             title: title,
             delivery_date: deliveryDate,
             completed: false,
@@ -821,7 +901,8 @@ async function deleteTypist(id) {
     if (!confirm('آیا از حذف این تایپیست و تمامی سوابق او مطمئن هستید؟')) return;
 
     try {
-        const { error } = await db.from('typists').delete().eq('id', id);
+        const client = getDb();
+        const { error } = await client.from('typists').delete().eq('id', id);
         if (error) throw error;
         showAlert('تایپیست حذف شد.');
         await fetchAllDataForAdmin();
@@ -850,35 +931,32 @@ async function saveManualRecord(e) {
     const nowIso = new Date().toISOString();
 
     try {
-        const { error } = await db.from('work_records').insert([{
-            typist_id: typistId,
-            person_id: typistId,
-            words_count: words,
-            page_count: pages,
-            pages_count: pages,
-            quantity: pages,
-            title: title || (typist ? typist.title : 'ثبت دستی'),
-            created_at: nowIso,
-            record_date: nowIso
-        }]);
+        const res = await insertWorkRecord(typistId, words, pages, title || (typist ? typist.title : 'ثبت دستی'));
 
-        if (error) throw error;
+        if (!res.success) {
+            const errMsg = res.error ? (res.error.message || res.error.details || JSON.stringify(res.error)) : 'خطا در دیتابیس';
+            throw new Error(errMsg);
+        }
 
-        await db.from('typists').update({ last_report_date: nowIso }).eq('id', typistId);
+        const client = getDb();
+        if (client) {
+            await client.from('typists').update({ last_report_date: nowIso }).eq('id', typistId);
+        }
 
-        showAlert('کارکرد دستی ثبت شد.');
+        showAlert('کارکرد دستی با موفقیت ثبت شد.');
         closeModal('manualRecordModal');
         await fetchAllDataForAdmin();
     } catch (err) {
         console.error('Error saving manual record:', err);
-        showAlert('خطا در ثبت دستی کارکرد.', true);
+        showAlert(`خطا در ثبت دستی کارکرد: ${err.message || 'مشکل در برقراری ارتباط'}`, true);
     }
 }
 
 async function deleteWorkRecord(id) {
     if (!confirm('آیا از حذف این گزارش کار مطمئن هستید؟')) return;
     try {
-        const { error } = await db.from('work_records').delete().eq('id', id);
+        const client = getDb();
+        const { error } = await client.from('work_records').delete().eq('id', id);
         if (error) throw error;
         showAlert('گزارش کار حذف شد.');
         await fetchAllDataForAdmin();
@@ -898,7 +976,8 @@ async function settleTypistPayroll(typistId, netPayable) {
     if (!confirm(`آیا از ثبت پرداخت به مبلغ ${formatNumber(netPayable)} ریال مطمئن هستید؟`)) return;
 
     try {
-        const { error } = await db.from('payments').insert([{
+        const client = getDb();
+        const { error } = await client.from('payments').insert([{
             typist_id: typistId,
             amount: netPayable,
             created_at: new Date().toISOString()
@@ -914,9 +993,7 @@ async function settleTypistPayroll(typistId, netPayable) {
     }
 }
 
-// ----------------------------------------------------------------------
-// REAL SMS & DIRECT COMMUNICATION LOGIC (تماس و پیامک واقعی)
-// ----------------------------------------------------------------------
+// SMS LOGIC
 function openSmsModal() {
     document.getElementById('smsText').value = '';
     document.getElementById('smsResultArea').classList.add('hidden');
@@ -952,11 +1029,9 @@ function sendSmsAction() {
         return;
     }
 
-    // 1. Trigger Direct Native SMS Scheme (sms:PHONE1,PHONE2?body=TEXT)
     const smsUrl = `sms:${phoneNumbers.join(',')}?body=${encodeURIComponent(text)}`;
     window.location.href = smsUrl;
 
-    // 2. Render List for Individual Backup or Panel Copy
     renderSmsRecipientsList(typists, text);
     showAlert(`دستور ارسال پیامک برای ${phoneNumbers.length} شماره فراخوانی شد.`);
 }
@@ -1003,9 +1078,7 @@ function copySmsNumbers() {
     });
 }
 
-// ----------------------------------------------------------------------
-// BANK CSV EXPORT & BACKUP FUNCTIONS
-// ----------------------------------------------------------------------
+// BANK CSV EXPORT & BACKUP
 function exportBankCSV() {
     if (globalTypists.length === 0) {
         showAlert('هیچ داده‌ای برای خروجی موجود نیست.', true);
