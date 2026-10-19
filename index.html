@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>سامانه مدیریت کارکرد مقررها</title>
+    <title>سامانه مدیریت کارکرد تایپیست‌ها</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Vazirmatn Font -->
@@ -28,7 +28,7 @@
         <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <svg class="w-6 h-6 text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-                <h1 class="text-lg font-black tracking-tight">پنل مدیریت مقرر‌ها</h1>
+                <h1 class="text-lg font-black tracking-tight">پنل مدیریت تایپیست‌ها</h1>
             </div>
             <div id="userInfoHeader" class="hidden flex items-center gap-4">
                 <span id="userDisplayName" class="text-sm font-medium bg-indigo-700 px-3 py-1 rounded-full hidden sm:inline-block"></span>
@@ -52,7 +52,7 @@
                 <div>
                     <label class="block text-sm font-bold text-slate-700 mb-1">رمز عبور</label>
                     <input type="password" id="loginPassword" class="w-full border border-slate-300 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition outline-none dir-ltr text-left font-mono" required>
-                    <p class="text-xs text-slate-400 mt-2">رمز عبور پیش‌فرض مقرر‌ها: ۴ رقم آخر موبایل</p>
+                    <p class="text-xs text-slate-400 mt-2">رمز عبور پیش‌فرض تایپیست‌ها: ۴ رقم آخر موبایل</p>
                 </div>
                 <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold p-3 rounded-xl transition shadow-sm">ورود</button>
             </form>
@@ -127,7 +127,7 @@
             <!-- Stats -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center">
-                    <div class="text-xs text-slate-500 font-bold mb-1">کل مقرر‌ها</div>
+                    <div class="text-xs text-slate-500 font-bold mb-1">کل تایپیست‌ها</div>
                     <div id="statTotalTypists" class="text-2xl font-black text-indigo-600 font-mono">0</div>
                 </div>
                 <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center">
@@ -146,9 +146,12 @@
 
             <!-- Admin Actions -->
             <div class="flex flex-wrap gap-2 justify-center sm:justify-start">
-                <button onclick="openAddTypistModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm">+ مقرر جدید</button>
+                <button onclick="openAddTypistModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm">+ تایپیست جدید</button>
                 <button onclick="openManualRecordModal()" class="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm">ثبت کارکرد دستی</button>
-                <button onclick="openSmsModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm">ارسال پیامک گروهی</button>
+                <button onclick="openSmsModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                    ارسال پیامک گروهی
+                </button>
                 <button onclick="exportBankCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm">خروجی CSV بانک</button>
                 <button onclick="downloadBackupJSON()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm">بکاپ Database</button>
             </div>
@@ -156,7 +159,7 @@
             <!-- Tabs -->
             <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                 <div class="flex border-b border-slate-100 bg-slate-50">
-                    <button id="tabTypistsBtn" onclick="switchAdminTab('typists')" class="flex-1 py-3 px-4 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 transition">لیست مقرر‌ها</button>
+                    <button id="tabTypistsBtn" onclick="switchAdminTab('typists')" class="flex-1 py-3 px-4 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 transition">لیست تایپیست‌ها</button>
                     <button id="tabPayrollBtn" onclick="switchAdminTab('payroll')" class="flex-1 py-3 px-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition">مالی و تسویه‌حساب</button>
                     <button id="tabRecordsBtn" onclick="switchAdminTab('records')" class="flex-1 py-3 px-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition">همه گزارشات</button>
                 </div>
@@ -172,7 +175,7 @@
                             <thead class="text-xs text-slate-500 bg-slate-50 uppercase">
                                 <tr>
                                     <th class="px-4 py-3 font-bold">نام و کدملی</th>
-                                    <th class="px-4 py-3 font-bold">موبایل / رمز</th>
+                                    <th class="px-4 py-3 font-bold">ارتباط / موبایل</th>
                                     <th class="px-4 py-3 font-bold">موضوع فعال</th>
                                     <th class="px-4 py-3 font-bold">تاریخ تحویل</th>
                                     <th class="px-4 py-3 font-bold">وضعیت گزارش</th>
@@ -194,7 +197,7 @@
                         <table class="w-full text-sm text-right whitespace-nowrap">
                             <thead class="text-xs text-slate-500 bg-slate-50 uppercase">
                                 <tr>
-                                    <th class="px-4 py-3 font-bold">نام مقرر</th>
+                                    <th class="px-4 py-3 font-bold">نام تایپیست</th>
                                     <th class="px-4 py-3 font-bold">اطلاعات حساب</th>
                                     <th class="px-4 py-3 font-bold">کارکرد کلمه/صفحه</th>
                                     <th class="px-4 py-3 font-bold">نرخ کلمه/صفحه</th>
@@ -216,7 +219,7 @@
                             <thead class="text-xs text-slate-500 bg-slate-50 uppercase">
                                 <tr>
                                     <th class="px-4 py-3 font-bold text-right">تاریخ و زمان</th>
-                                    <th class="px-4 py-3 font-bold">مقرر</th>
+                                    <th class="px-4 py-3 font-bold">تایپیست</th>
                                     <th class="px-4 py-3 font-bold">موضوع</th>
                                     <th class="px-4 py-3 font-bold">کلمات</th>
                                     <th class="px-4 py-3 font-bold">صفحات</th>
@@ -237,7 +240,7 @@
     <div id="typistModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
             <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
-                <h3 id="typistModalTitle" class="text-lg font-black text-slate-800">مقرر جدید</h3>
+                <h3 id="typistModalTitle" class="text-lg font-black text-slate-800">تایپیست جدید</h3>
                 <button onclick="closeModal('typistModal')" class="text-slate-400 hover:text-red-500 transition">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
@@ -270,7 +273,7 @@
                     <div><label class="block text-xs font-bold text-slate-700 mb-1">نرخ هر کلمه (ریال)</label><input type="text" inputmode="numeric" id="typistRateWord" class="w-full border p-2.5 rounded-xl text-sm dir-ltr text-left font-mono" value="15"></div>
                     <div><label class="block text-xs font-bold text-slate-700 mb-1">نرخ هر صفحه (ریال)</label><input type="text" inputmode="numeric" id="typistRatePage" class="w-full border p-2.5 rounded-xl text-sm dir-ltr text-left font-mono" value="0"></div>
                     <div class="md:col-span-2"><label class="block text-xs font-bold text-slate-700 mb-1">شماره شبا</label><input type="text" id="typistSheba" class="w-full border p-2.5 rounded-xl text-sm dir-ltr text-left font-mono" placeholder="IR..."></div>
-                    <div class="md:col-span-2"><label class="block text-xs font-bold text-slate-700 mb-1">رمز عبور اختصاصی (اختیاری)</label><input type="text" id="typistPassword" class="w-full border p-2.5 rounded-xl text-sm dir-ltr text-left font-mono" placeholder="در صورت خالی بودن، 4 رقم آخر موبایل"><p class="text-[10px] text-slate-400 mt-1">جهت ورود مقرر استفاده می‌شود.</p></div>
+                    <div class="md:col-span-2"><label class="block text-xs font-bold text-slate-700 mb-1">رمز عبور اختصاصی (اختیاری)</label><input type="text" id="typistPassword" class="w-full border p-2.5 rounded-xl text-sm dir-ltr text-left font-mono" placeholder="در صورت خالی بودن، 4 رقم آخر موبایل"><p class="text-[10px] text-slate-400 mt-1">جهت ورود تایپیست استفاده می‌شود.</p></div>
                 </div>
                 <div class="pt-4 border-t border-slate-100 flex gap-3">
                     <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition">ذخیره اطلاعات</button>
@@ -280,7 +283,7 @@
         </div>
     </div>
 
-    <!-- New Task Modal (برای ارجاع کار جدید به مقرر) -->
+    <!-- New Task Modal -->
     <div id="newTaskModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl">
             <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -302,7 +305,7 @@
                         <button type="button" onclick="setTodayShamsi('newTaskDeliveryDate')" class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-3 py-2 rounded-xl text-xs font-bold transition">امروز</button>
                     </div>
                 </div>
-                <p class="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg leading-relaxed">ثبت این فرم باعث فعال شدن مجدد پروژه مقرر و شروع مجدد مهلت ۱۰ روزه ارسال گزارش می‌گردد.</p>
+                <p class="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg leading-relaxed">ثبت این فرم باعث فعال شدن مجدد پروژه تایپیست و شروع مجدد مهلت ۱۰ روزه ارسال گزارش می‌گردد.</p>
                 <div class="pt-4 flex gap-3">
                     <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition">ارجاع کار</button>
                     <button type="button" onclick="closeModal('newTaskModal')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition">انصراف</button>
@@ -319,7 +322,7 @@
                 <button onclick="closeModal('manualRecordModal')" class="text-slate-400 hover:text-red-500 transition"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             </div>
             <form id="manualRecordForm" onsubmit="saveManualRecord(event)" class="p-6 space-y-4">
-                <div><label class="block text-sm font-bold text-slate-700 mb-1">انتخاب مقرر</label><select id="manualTypistSelect" class="w-full border p-3 rounded-xl bg-white" required></select></div>
+                <div><label class="block text-sm font-bold text-slate-700 mb-1">انتخاب تایپیست</label><select id="manualTypistSelect" class="w-full border p-3 rounded-xl bg-white" required></select></div>
                 <div><label class="block text-sm font-bold text-slate-700 mb-1">تعداد کلمات</label><input type="text" inputmode="numeric" id="manualWords" class="w-full border p-3 rounded-xl dir-ltr text-left font-mono" required></div>
                 <div><label class="block text-sm font-bold text-slate-700 mb-1">تعداد صفحات</label><input type="text" inputmode="numeric" id="manualPages" class="w-full border p-3 rounded-xl dir-ltr text-left font-mono" placeholder="0"></div>
                 <div><label class="block text-sm font-bold text-slate-700 mb-1">عنوان گزارش (اختیاری)</label><input type="text" id="manualTitle" class="w-full border p-3 rounded-xl" placeholder="ثبت توسط مدیر"></div>
@@ -328,17 +331,49 @@
         </div>
     </div>
 
-    <!-- SMS Modal -->
+    <!-- SMS Modal (ارسال واقعی پیامک) -->
     <div id="smsModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 class="text-lg font-black text-slate-800">ارسال پیامک گروهی</h3>
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+                <h3 class="text-lg font-black text-slate-800 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                    ارسال پیامک گروهی / مستقیم
+                </h3>
                 <button onclick="closeModal('smsModal')" class="text-slate-400 hover:text-red-500 transition"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             </div>
             <div class="p-6 space-y-4">
-                <div><label class="block text-sm font-bold text-slate-700 mb-1">گیرندگان</label><select id="smsTargetSelect" class="w-full border p-3 rounded-xl bg-white"><option value="all">همه مقرر‌ها</option><option value="overdue">مقرر‌های دارای تاخیر</option></select></div>
-                <div><label class="block text-sm font-bold text-slate-700 mb-1">متن پیامک</label><textarea id="smsText" rows="4" class="w-full border p-3 rounded-xl resize-none" placeholder="متن پیامک خود را بنویسید..."></textarea></div>
-                <div class="pt-4 flex gap-3"><button onclick="sendSmsAction()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition">ارسال پیامک</button><button type="button" onclick="closeModal('smsModal')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition">انصراف</button></div>
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">گیرندگان پیامک</label>
+                    <select id="smsTargetSelect" class="w-full border p-3 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="all">همه تایپیست‌ها</option>
+                        <option value="overdue">تایپیست‌های دارای تاخیر در گزارش (بیش از ۱۰ روز)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">متن پیامک</label>
+                    <textarea id="smsText" rows="4" class="w-full border p-3 rounded-xl resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="متن پیامک خود را اینجا وارد کنید..."></textarea>
+                </div>
+
+                <div id="smsActionButtons" class="pt-2 space-y-2">
+                    <button onclick="sendSmsAction()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-sm">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                        ارسال پیامک با نرم‌افزار گوشی (SMS Protocol)
+                    </button>
+                    <button onclick="copySmsNumbers()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl transition text-xs flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+                        کپی شماره‌ها برای استفاده در پنل پیامک (کاوه‌نگار / IPPanel)
+                    </button>
+                </div>
+
+                <!-- Recipient List Output -->
+                <div id="smsResultArea" class="hidden mt-4 pt-4 border-t border-slate-100">
+                    <h4 class="text-xs font-bold text-slate-500 mb-2">لیست گیرندگان آماده ارسال:</h4>
+                    <div id="smsRecipientsContainer" class="max-h-40 overflow-y-auto space-y-1.5 text-xs"></div>
+                </div>
+
+                <div class="pt-2 border-t border-slate-100 text-left">
+                    <button type="button" onclick="closeModal('smsModal')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-5 py-2 rounded-xl transition text-xs">بستن</button>
+                </div>
             </div>
         </div>
     </div>
