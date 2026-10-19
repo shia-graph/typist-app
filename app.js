@@ -1,15 +1,17 @@
 /* ==========================================================================
-   Typist Payroll & Task Management Application Logic (v3.1.0)
+   Typist Payroll & Task Management Application Logic (v4.0.0)
    ========================================================================== */
 
-// 1. Supabase Initialization (Safe variable declaration avoiding global collisions)
+// 1. Supabase Initialization with Safe non-conflicting variable name
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyMzg2NjYsImV4cCI6MjA1NjgxNDY2Nn0.2O5_N4MSpPBygOnT2XN65O9C4Y7I47b8s6R3H6R3g7U';
 
-// Initialize Supabase client under 'db' object to avoid namespace conflicts
-const db = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+// Access Supabase from window.supabase and name client 'supabaseClient'
+const supabaseClient = (window.supabase && window.supabase.createClient) 
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) 
+    : null;
 
-// 2. Global Application State
+// 2. Global State
 let currentUserRole = null; // 'admin' | 'typist'
 let currentTypistId = null;
 let currentTypistData = null;
@@ -101,7 +103,7 @@ function gregorianToJalali(g_y, g_m, g_d) {
     return `${jy}/${pad(jm)}/${pad(jd)}`;
 }
 
-// 5. Auth & Login Logic
+// 5. Auth & Login Functions Bound directly to window
 window.switchLoginTab = function(role) {
     const tabAdmin = getEl('tab-admin');
     const tabTypist = getEl('tab-typist');
@@ -126,8 +128,10 @@ window.loginAdmin = async function(e) {
     const pass = toEnglishDigits(getEl('admin_password')?.value || '');
     if (!pass) return showToast('لطفاً رمز عبور را وارد کنید', 'error');
 
+    if (!supabaseClient) return showToast('خطا در اتصال به Supabase', 'error');
+
     try {
-        const { data, error } = await db.rpc('verify_admin_password', { _pass: pass });
+        const { data, error } = await supabaseClient.rpc('verify_admin_password', { _pass: pass });
         if (error) throw error;
         if (data === true) {
             currentUserRole = 'admin';
@@ -149,8 +153,10 @@ window.loginTypist = async function(e) {
     const pass = toEnglishDigits(getEl('typist_password')?.value || '');
     if (!loginId || !pass) return showToast('شناسه و کلمه عبور را وارد کنید', 'error');
 
+    if (!supabaseClient) return showToast('خطا در اتصال به Supabase', 'error');
+
     try {
-        const { data, error } = await db.rpc('verify_typist_password', { _login_id: loginId, _pass: pass });
+        const { data, error } = await supabaseClient.rpc('verify_typist_password', { _login_id: loginId, _pass: pass });
         if (error) throw error;
         if (data && data.length > 0) {
             currentUserRole = 'typist';
@@ -199,13 +205,13 @@ function renderAppView() {
     }
 }
 
-// 6. Admin Dashboard Functions
+// 6. Admin Dashboard Logic
 async function loadAdminDashboard() {
     safeShow('admin-dashboard', 'block');
     safeHide('detail-view');
 
     try {
-        const { data, error } = await db.rpc('get_dashboard_summary');
+        const { data, error } = await supabaseClient.rpc('get_dashboard_summary');
         if (error) throw error;
         allTypistsList = data || [];
         renderTypistsTable(allTypistsList);
@@ -278,7 +284,6 @@ window.viewTypistDetail = async function(typistId) {
     safeHide('admin-dashboard');
     safeShow('detail-view', 'block');
 
-    // Control visibility based on role
     if (currentUserRole === 'typist') {
         safeHide('btn-back-dashboard');
         safeHide('admin-rates-container');
@@ -304,7 +309,7 @@ window.backToDashboard = function() {
 
 async function loadTypistDetailData(typistId) {
     try {
-        const { data, error } = await db.rpc('get_typist_detail', { _typist_id: typistId });
+        const { data, error } = await supabaseClient.rpc('get_typist_detail', { _typist_id: typistId });
         if (error) throw error;
         if (!data || data.length === 0) return showToast('اطلاعات یافت نشد', 'error');
 
@@ -313,7 +318,6 @@ async function loadTypistDetailData(typistId) {
 
         safeSetText('detail-typist-name', `کارنامه کارکرد: ${detail.first_name} ${detail.last_name}`);
         
-        // Fill Profile Form
         safeSetValue('profile_id', detail.id);
         safeSetValue('profile_first_name', detail.first_name);
         safeSetValue('profile_last_name', detail.last_name);
@@ -326,7 +330,6 @@ async function loadTypistDetailData(typistId) {
         safeSetValue('profile_rate_urgent', detail.rate_urgent);
         safeSetValue('profile_rate_math', detail.rate_math);
 
-        // Summaries
         const reports = detail.reports || [];
         const payments = detail.payments || [];
 
@@ -429,7 +432,6 @@ window.closeTypistModal = function() {
 window.saveTypist = async function(e) {
     if (e && e.preventDefault) e.preventDefault();
     
-    // Check if saving profile from detail view or modal
     const isModal = getEl('typist-modal')?.style.display === 'flex';
     let payload = {};
 
@@ -464,7 +466,7 @@ window.saveTypist = async function(e) {
     }
 
     try {
-        const { data, error } = await db.rpc('upsert_typist', payload);
+        const { data, error } = await supabaseClient.rpc('upsert_typist', payload);
         if (error) throw error;
         showToast('اطلاعات تایپیست با موفقیت ذخیره شد', 'success');
         window.closeTypistModal();
@@ -493,7 +495,7 @@ window.openAddReportModal = function() {
         safeHide('admin-custom-rate-field');
     }
     
-    safeSetText('report_modal-title', 'ثبت گزارش کار جدید');
+    safeSetText('report-modal-title', 'ثبت گزارش کار جدید');
     safeShow('report-modal', 'flex');
 };
 
@@ -515,7 +517,7 @@ window.openEditReportModal = function(reportId) {
         safeHide('admin-custom-rate-field');
     }
 
-    safeSetText('report_modal-title', 'ویرایش گزارش کار');
+    safeSetText('report-modal-title', 'ویرایش گزارش کار');
     safeShow('report-modal', 'flex');
 };
 
@@ -541,11 +543,11 @@ window.saveReport = async function(e) {
     try {
         if (reportId) {
             payload._report_id = reportId;
-            const { error } = await db.rpc('update_typist_report', payload);
+            const { error } = await supabaseClient.rpc('update_typist_report', payload);
             if (error) throw error;
             showToast('گزارش کار بروزرسانی شد', 'success');
         } else {
-            const { error } = await db.rpc('add_typist_report', payload);
+            const { error } = await supabaseClient.rpc('add_typist_report', payload);
             if (error) throw error;
             showToast('گزارش کار جدید ثبت شد', 'success');
         }
@@ -559,7 +561,7 @@ window.saveReport = async function(e) {
 window.deleteReport = async function(reportId) {
     if (!confirm('آیا از حذف این گزارش کار مطمئن هستید؟')) return;
     try {
-        const { error } = await db.rpc('delete_typist_report', { _report_id: reportId });
+        const { error } = await supabaseClient.rpc('delete_typist_report', { _report_id: reportId });
         if (error) throw error;
         showToast('گزارش کار حذف شد', 'info');
         loadTypistDetailData(currentTypistId);
@@ -612,11 +614,11 @@ window.savePayment = async function(e) {
     try {
         if (paymentId) {
             payload._payment_id = paymentId;
-            const { error } = await db.rpc('update_payment', payload);
+            const { error } = await supabaseClient.rpc('update_payment', payload);
             if (error) throw error;
             showToast('پرداختی بروزرسانی شد', 'success');
         } else {
-            const { error } = await db.rpc('add_payment', payload);
+            const { error } = await supabaseClient.rpc('add_payment', payload);
             if (error) throw error;
             showToast('پرداختی جدید ثبت شد', 'success');
         }
@@ -630,7 +632,7 @@ window.savePayment = async function(e) {
 window.deletePayment = async function(paymentId) {
     if (!confirm('آیا از حذف این واریزی مطمئن هستید؟')) return;
     try {
-        const { error } = await db.rpc('delete_payment', { _payment_id: paymentId });
+        const { error } = await supabaseClient.rpc('delete_payment', { _payment_id: paymentId });
         if (error) throw error;
         showToast('پرداختی حذف شد', 'info');
         loadTypistDetailData(currentTypistId);
@@ -710,11 +712,11 @@ window.saveNewPassword = async function(e) {
 
     try {
         if (currentUserRole === 'admin') {
-            const { error } = await db.rpc('change_admin_password', { _new_pass: newPass });
+            const { error } = await supabaseClient.rpc('change_admin_password', { _new_pass: newPass });
             if (error) throw error;
             showToast('رمز عبور مدیر با موفقیت تغییر یافت', 'success');
         } else {
-            const { error } = await db.rpc('change_typist_password', { _typist_id: currentTypistId, _new_pass: newPass });
+            const { error } = await supabaseClient.rpc('change_typist_password', { _typist_id: currentTypistId, _new_pass: newPass });
             if (error) throw error;
             showToast('رمز عبور شما با موفقیت تغییر یافت', 'success');
         }
@@ -730,7 +732,6 @@ window.exportBankCSV = function() {
         return showToast('اطلاعاتی برای خروجی یافت نشد', 'error');
     }
 
-    // Required Exact Headers: ردیف,نام,نام خانوادگی,نام پدر,کد ملی,شماره تماس,شماره کارت,شماره شبا,مبلغ پرداختی به ریال
     let csvContent = "\uFEFFردیف,نام,نام خانوادگی,نام پدر,کد ملی,شماره تماس,شماره کارت,شماره شبا,مبلغ پرداختی به ریال\n";
 
     allTypistsList.forEach((t, idx) => {
@@ -777,14 +778,14 @@ window.sendGroupSms = function() {
     window.closeSmsModal();
 };
 
-// 14. Dark / Light Mode Toggle
+// 14. Theme Switcher
 window.toggleTheme = function() {
     const isDark = document.documentElement.classList.toggle('dark');
     safeSetText('theme-icon', isDark ? '☀️' : '🌙');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
 };
 
-// Initialize Theme & View on Load
+// Initialize App Setup
 document.addEventListener('DOMContentLoaded', () => {
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
