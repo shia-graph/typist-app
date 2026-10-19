@@ -245,7 +245,7 @@
                         مدیریت تایپیست‌ها و پروژه‌ها
                     </button>
                     <button id="tabPayrollBtn" onclick="switchAdminTab('payroll')" class="py-3 px-4 text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition">
-                        محاسبه حقوق و کارکردها
+                        محاسبه حقوق و تسویه‌ها
                     </button>
                     <button id="tabRecordsBtn" onclick="switchAdminTab('records')" class="py-3 px-4 text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition">
                         لیست کلی گزارش کارها
@@ -282,9 +282,11 @@
 
             <!-- TAB 2: PAYROLL CALCULATOR -->
             <div id="adminPayrollTab" class="hidden space-y-4">
-                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80">
-                    <h3 class="font-bold text-slate-800 mb-2">محاسبه کارکرد و حقوق قابل پرداخت</h3>
-                    <p class="text-xs text-slate-500">فرمول حقوق: (تعداد کلمات × نرخ هر کلمه) + (تعداد صفحات × نرخ هر صفحه)</p>
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 flex justify-between items-center flex-wrap gap-3">
+                    <div>
+                        <h3 class="font-bold text-slate-800 mb-1">محاسبه مانده کارکرد و تسویه حساب</h3>
+                        <p class="text-xs text-slate-500">فرمول تسویه: (جمع کل کارکرد تاکنون) − (مجموع پرداختی‌ها و تسویه‌های قبلی)</p>
+                    </div>
                 </div>
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
                     <div class="table-scroll">
@@ -292,12 +294,11 @@
                             <thead class="bg-slate-50 text-slate-500 text-xs uppercase border-b border-slate-100">
                                 <tr>
                                     <th class="px-4 py-3">تایپیست</th>
-                                    <th class="px-4 py-3">شماره شبا / کدملی</th>
-                                    <th class="px-4 py-3">جمع کلمات</th>
-                                    <th class="px-4 py-3">جمع صفحات</th>
-                                    <th class="px-4 py-3">نرخ پایه (کلمه/صفحه)</th>
-                                    <th class="px-4 py-3">مبلغ کل قابل پرداخت</th>
-                                    <th class="px-4 py-3 text-center">تسویه</th>
+                                    <th class="px-4 py-3">جمع کلمات/صفحات</th>
+                                    <th class="px-4 py-3">جمع کل کارکرد</th>
+                                    <th class="px-4 py-3">تسویه شده قبلی</th>
+                                    <th class="px-4 py-3">مانده قابل پرداخت (ریال)</th>
+                                    <th class="px-4 py-3 text-center">عملیات تسویه</th>
                                 </tr>
                             </thead>
                             <tbody id="adminPayrollTable" class="divide-y divide-slate-100">
