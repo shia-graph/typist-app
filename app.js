@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Typist Payroll & Task Management Application Logic (v4.0.0)
+   Typist Payroll & Task Management Application Logic (v4.2.0)
    ========================================================================== */
 
 // 1. Supabase Initialization with Safe non-conflicting variable name
@@ -139,7 +139,7 @@ async function handleAdminLogin(e) {
         const client = getSupabaseClient();
         if (!client) {
             hideLoading();
-            showLoginError('کتابخانه Supabase هنوز بارگذاری نشده است. لطفاً چند لحظه بعد دوباره تلاش کنید.');
+            showLoginError('کتابخانه Supabase هنوز بارگذاری نشده است.');
             return;
         }
 
@@ -261,20 +261,35 @@ async function loadAdminDashboardData() {
         showLoading();
         const client = getSupabaseClient();
         if (!client) return;
+
+        // تلاش برای RPC
         const { data, error } = await client.rpc('get_dashboard_summary');
-        hideLoading();
-
-        if (error) {
-            showToast('خطا در دریافت اطلاعات دشبورد: ' + (error.message || ''), 'danger');
-            return;
-        }
-
+        
         let summary = data;
         if (typeof summary === 'string') {
             try { summary = JSON.parse(summary); } catch (e) {}
         }
 
-        if (!summary) return;
+        // اگر RPC کار نکرد، مستقیماً از جداول محاسبه می‌کنیم
+        if (error || !summary) {
+            const { data: typists } = await client.from('typists').select('*').order('created_at', { ascending: false });
+            const { data: records } = await client.from('work_records').select('total_amount');
+            const { data: payments } = await client.from('payments').select('amount');
+
+            const totalEarned = (records || []).reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0);
+            const totalPaid = (payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+            summary = {
+                total_typists: typists ? typists.length : 0,
+                total_reports: records ? records.length : 0,
+                total_earned: totalEarned,
+                total_paid: totalPaid,
+                total_remaining: totalEarned - totalPaid,
+                typists: typists || []
+            };
+        }
+
+        hideLoading();
 
         safeSetText('statTotalTypists', summary.total_typists || 0);
         safeSetText('statTotalReports', summary.total_reports || 0);
@@ -307,16 +322,19 @@ function renderAdminTypistsTable(typists) {
             ? `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">✔️ تسویه کامل</span>`
             : `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">⏳ دارای مانده</span>`;
 
+        const displayName = (t.first_name || t.last_name) ? `${t.first_name || ''} ${t.last_name || ''}`.trim() : (t.name || 'بدون نام');
+        const nationalId = t.national_id || t.national_code || '-';
+
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-100 dark:border-gray-800';
         tr.innerHTML = `
             <td class="px-4 py-3 text-center">
-                <input type="checkbox" class="typist-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" data-id="${t.id}" data-phone="${t.phone || ''}" data-name="${t.first_name || ''} ${t.last_name || ''}" onchange="updateSMSCount()">
+                <input type="checkbox" class="typist-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" data-id="${t.id}" data-phone="${t.phone || ''}" data-name="${displayName}" onchange="updateSMSCount()">
             </td>
             <td class="px-4 py-3 font-semibold text-gray-900 dark:text-gray-100 text-center">${idx + 1}</td>
             <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
-                ${t.first_name || ''} ${t.last_name || ''}
-                <div class="text-xs text-gray-400 font-normal">کدملی: ${t.national_id || '-'}</div>
+                ${displayName}
+                <div class="text-xs text-gray-400 font-normal">کدملی: ${nationalId}</div>
             </td>
             <td class="px-4 py-3 text-center">
                 <div class="flex items-center justify-center space-x-2 space-x-reverse">
@@ -327,8 +345,8 @@ function renderAdminTypistsTable(typists) {
                     ` : ''}
                 </div>
             </td>
-            <td class="px-4 py-3 text-center font-medium text-emerald-600 dark:text-emerald-400">${formatMoney(t.total_earned)}</td>
-            <td class="px-4 py-3 text-center font-medium text-indigo-600 dark:text-indigo-400">${formatMoney(t.total_paid)}</td>
+            <td class="px-4 py-3 text-center font-medium text-emerald-600 dark:text-emerald-400">${formatMoney(t.total_earned || 0)}</td>
+            <td class="px-4 py-3 text-center font-medium text-indigo-600 dark:text-indigo-400">${formatMoney(t.total_paid || 0)}</td>
             <td class="px-4 py-3 text-center font-bold ${remaining > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500'}">${formatMoney(remaining)}</td>
             <td class="px-4 py-3 text-center">${settledBadge}</td>
             <td class="px-4 py-3 text-center">
@@ -350,7 +368,9 @@ function searchTypists() {
     const filtered = allTypistsData.filter(t => 
         (t.first_name && t.first_name.toLowerCase().includes(q)) ||
         (t.last_name && t.last_name.toLowerCase().includes(q)) ||
+        (t.name && t.name.toLowerCase().includes(q)) ||
         (t.national_id && t.national_id.includes(q)) ||
+        (t.national_code && t.national_code.includes(q)) ||
         (t.phone && t.phone.includes(q))
     );
     renderAdminTypistsTable(filtered);
@@ -398,23 +418,40 @@ async function saveTypist(e) {
         showLoading();
         const client = getSupabaseClient();
         if (!client) return;
-        const { error } = await client.rpc('upsert_typist', {
-            _id: id,
-            _first_name: first_name,
-            _last_name: last_name,
-            _father_name: father_name,
-            _national_id: national_id,
-            _phone: phone,
-            _card_number: card_number,
-            _sheba_number: sheba_number,
-            _rate_normal: rate_normal,
-            _rate_urgent: rate_urgent,
-            _rate_math: rate_math
-        });
+
+        // ثبت با RPC یا فال‌بک به Direct Insert
+        const typistPayload = {
+            name: `${first_name} ${last_name}`,
+            first_name: first_name,
+            last_name: last_name,
+            father_name: father_name,
+            national_id: national_id,
+            national_code: national_id,
+            phone: phone,
+            card_number: card_number,
+            sheba_number: sheba_number,
+            iban: sheba_number,
+            rate_normal: rate_normal,
+            rate_urgent: rate_urgent,
+            rate_math: rate_math,
+            page_rate: rate_normal,
+            default_page_rate: rate_normal,
+            is_active: true
+        };
+
+        let dbError = null;
+        if (id) {
+            const res = await client.from('typists').update(typistPayload).eq('id', id);
+            dbError = res.error;
+        } else {
+            const res = await client.from('typists').insert([typistPayload]);
+            dbError = res.error;
+        }
+
         hideLoading();
 
-        if (error) {
-            showToast('خطا در ثبت اطلاعات: ' + (error.message || ''), 'danger');
+        if (dbError) {
+            showToast('خطا در ثبت اطلاعات: ' + dbError.message, 'danger');
             return;
         }
 
@@ -428,7 +465,7 @@ async function saveTypist(e) {
 }
 
 // ----------------------------------------------------
-// Typist Detail View (Admin)
+// Typist Detail View (Admin) - با لود مستقیم و ضدگلوله گزارش‌ها
 // ----------------------------------------------------
 async function viewTypistDetail(typistId) {
     currentTypistId = typistId;
@@ -442,58 +479,77 @@ async function loadTypistDetailData(typistId) {
         showLoading();
         const client = getSupabaseClient();
         if (!client) return;
-        const { data, error } = await client.rpc('get_typist_detail', { _typist_id: typistId });
+
+        // 1. دریافت اطلاعات مشخصات تایپیست
+        const { data: typist, error: typistErr } = await client
+            .from('typists')
+            .select('*')
+            .eq('id', typistId)
+            .single();
+
+        if (typistErr || !typist) {
+            hideLoading();
+            showToast('مشخصات تایپیست یافت نشد', 'danger');
+            return;
+        }
+
+        // 2. دریافت لیست کارکردها (پوشش هوشمند typist_id یا person_id)
+        const { data: reports, error: reportsErr } = await client
+            .from('work_records')
+            .select('*')
+            .or(`typist_id.eq.${typistId},person_id.eq.${typistId}`)
+            .order('created_at', { ascending: false });
+
+        // 3. دریافت لیست پرداخت‌ها
+        const { data: payments, error: paymentsErr } = await client
+            .from('payments')
+            .select('*')
+            .or(`typist_id.eq.${typistId},person_id.eq.${typistId}`)
+            .order('created_at', { ascending: false });
+
         hideLoading();
 
-        if (error) {
-            showToast('خطا در دریافت جزئیات: ' + (error.message || ''), 'danger');
-            return;
-        }
+        currentTypistData = typist;
 
-        let detail = data;
-        if (typeof detail === 'string') {
-            try { detail = JSON.parse(detail); } catch (e) {}
-        }
+        // پر کردن فیلدهای پروفایل
+        safeSetValue('detailTypistId', typist.id);
+        safeSetValue('detailFirstName', typist.first_name || '');
+        safeSetValue('detailLastName', typist.last_name || '');
+        safeSetValue('detailFatherName', typist.father_name || '');
+        safeSetValue('detailNationalId', typist.national_id || typist.national_code || '');
+        safeSetValue('detailPhone', typist.phone || '');
+        safeSetValue('detailCardNumber', typist.card_number || '');
+        safeSetValue('detailShebaNumber', typist.sheba_number || typist.iban || '');
+        safeSetValue('detailRateNormal', typist.rate_normal || typist.page_rate || 0);
+        safeSetValue('detailRateUrgent', typist.rate_urgent || 0);
+        safeSetValue('detailRateMath', typist.rate_math || 0);
 
-        if (!detail || detail.error) {
-            showToast(detail?.error || 'اطلاعات یافت نشد', 'danger');
-            return;
-        }
+        const fullName = (typist.first_name || typist.last_name) 
+            ? `${typist.first_name || ''} ${typist.last_name || ''}`.trim() 
+            : (typist.name || 'کاربر سیستم');
 
-        currentTypistData = detail.typist;
+        safeSetText('detailHeaderName', fullName);
+        safeSetText('detailHeaderPhone', typist.phone || '-');
 
-        // Populate Locked Profile Inputs
-        safeSetValue('detailTypistId', detail.typist.id);
-        safeSetValue('detailFirstName', detail.typist.first_name || '');
-        safeSetValue('detailLastName', detail.typist.last_name || '');
-        safeSetValue('detailFatherName', detail.typist.father_name || '');
-        safeSetValue('detailNationalId', detail.typist.national_id || '');
-        safeSetValue('detailPhone', detail.typist.phone || '');
-        safeSetValue('detailCardNumber', detail.typist.card_number || '');
-        safeSetValue('detailShebaNumber', detail.typist.sheba_number || '');
-        safeSetValue('detailRateNormal', detail.typist.rate_normal || 0);
-        safeSetValue('detailRateUrgent', detail.typist.rate_urgent || 0);
-        safeSetValue('detailRateMath', detail.typist.rate_math || 0);
+        // محاسبات مالی گزارش‌ها و پرداختی‌ها
+        const totalEarned = (reports || []).reduce((acc, r) => acc + (Number(r.total_amount) || Number(r.total_price) || 0), 0);
+        const totalPaid = (payments || []).reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+        const remainingBalance = totalEarned - totalPaid;
 
-        safeSetText('detailHeaderName', `${detail.typist.first_name || ''} ${detail.typist.last_name || ''}`);
-        safeSetText('detailHeaderPhone', detail.typist.phone || '-');
+        safeSetText('detailTotalEarned', formatMoney(totalEarned));
+        safeSetText('detailTotalPaid', formatMoney(totalPaid));
+        safeSetText('detailRemainingBalance', formatMoney(remainingBalance));
 
-        // Financial Summary
-        safeSetText('detailTotalEarned', formatMoney(detail.total_earned));
-        safeSetText('detailTotalPaid', formatMoney(detail.total_paid));
-        safeSetText('detailRemainingBalance', formatMoney(detail.remaining_balance));
-
-        // Lock inputs by default
         toggleProfileEdit(false);
 
-        // Render Reports and Payments
-        renderDetailReportsTable(detail.reports || []);
-        renderDetailPaymentsTable(detail.payments || []);
+        // رندر کردن جداول گزارش کار و پرداخت
+        renderDetailReportsTable(reports || []);
+        renderDetailPaymentsTable(payments || []);
 
     } catch (err) {
         hideLoading();
         console.error('Detail load error:', err);
-        showToast('خطا در بارگذاری جزئیات', 'danger');
+        showToast('خطا در بارگذاری جزئیات گزارش‌ها', 'danger');
     }
 }
 
@@ -547,23 +603,28 @@ async function saveProfileEdit() {
         showLoading();
         const client = getSupabaseClient();
         if (!client) return;
-        const { error } = await client.rpc('upsert_typist', {
-            _id: id,
-            _first_name: first_name,
-            _last_name: last_name,
-            _father_name: father_name,
-            _national_id: national_id,
-            _phone: phone,
-            _card_number: card_number,
-            _sheba_number: sheba_number,
-            _rate_normal: rate_normal,
-            _rate_urgent: rate_urgent,
-            _rate_math: rate_math
-        });
+
+        const { error } = await client.from('typists').update({
+            name: `${first_name} ${last_name}`,
+            first_name,
+            last_name,
+            father_name,
+            national_id,
+            national_code: national_id,
+            phone,
+            card_number,
+            sheba_number,
+            iban: sheba_number,
+            rate_normal,
+            rate_urgent,
+            rate_math,
+            page_rate: rate_normal
+        }).eq('id', id);
+
         hideLoading();
 
         if (error) {
-            showToast('خطا در ذخیره مشخصات: ' + (error.message || ''), 'danger');
+            showToast('خطا در ذخیره مشخصات: ' + error.message, 'danger');
             return;
         }
 
@@ -589,18 +650,23 @@ function renderDetailReportsTable(reports) {
     const typeLabels = { normal: 'معمولی', urgent: 'فوری', math: 'فرمول/ریاضی' };
 
     reports.forEach((r, idx) => {
+        const count = r.page_count || r.quantity || 1;
+        const pType = r.page_type || r.unit_type || 'normal';
+        const total = r.total_amount || r.total_price || 0;
+        const dDate = r.delivery_date || r.record_date || r.created_at;
+
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800';
         tr.innerHTML = `
             <td class="px-4 py-3 text-center">${idx + 1}</td>
             <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">${r.title || '-'}</td>
-            <td class="px-4 py-3 text-center">${formatDateShamsi(r.delivery_date)}</td>
-            <td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 text-xs">${typeLabels[r.page_type] || r.page_type}</span></td>
-            <td class="px-4 py-3 text-center font-bold">${r.page_count}</td>
-            <td class="px-4 py-3 text-center font-medium text-emerald-600">${formatMoney(r.total_price)}</td>
+            <td class="px-4 py-3 text-center">${formatDateShamsi(dDate)}</td>
+            <td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 text-xs">${typeLabels[pType] || pType}</span></td>
+            <td class="px-4 py-3 text-center font-bold">${count}</td>
+            <td class="px-4 py-3 text-center font-medium text-emerald-600">${formatMoney(total)}</td>
             <td class="px-4 py-3 text-center">
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 ml-2">✔️ تحویل شد</span>
-                <button onclick="editReport('${r.id}', '${encodeURIComponent(r.title)}', '${r.delivery_date}', '${r.page_type}', ${r.page_count}, ${r.custom_rate || 'null'})" class="text-indigo-600 hover:text-indigo-800 text-xs ml-2">✏️ ویرایش</button>
+                <button onclick="editReport('${r.id}', '${encodeURIComponent(r.title || '')}', '${dDate}', '${pType}', ${count}, ${r.custom_rate || r.unit_rate || 'null'})" class="text-indigo-600 hover:text-indigo-800 text-xs ml-2">✏️ ویرایش</button>
                 <button onclick="deleteReport('${r.id}')" class="text-red-600 hover:text-red-800 text-xs">🗑️ حذف</button>
             </td>
         `;
@@ -624,12 +690,12 @@ function renderDetailPaymentsTable(payments) {
         tr.innerHTML = `
             <td class="px-4 py-3 text-center">${idx + 1}</td>
             <td class="px-4 py-3 text-center font-bold text-indigo-600">${formatMoney(p.amount)}</td>
-            <td class="px-4 py-3 text-center">${formatDateShamsi(p.payment_date)}</td>
-            <td class="px-4 py-3 text-center font-mono text-xs">${p.ref_code || '-'}</td>
-            <td class="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">${p.notes || '-'}</td>
+            <td class="px-4 py-3 text-center">${formatDateShamsi(p.payment_date || p.created_at)}</td>
+            <td class="px-4 py-3 text-center font-mono text-xs">${p.ref_code || p.tracking_code || '-'}</td>
+            <td class="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">${p.notes || p.description || '-'}</td>
             <td class="px-4 py-3 text-center">
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 ml-2">✔️ واریز شد</span>
-                <button onclick="editPayment('${p.id}', ${p.amount}, '${p.payment_date}', '${encodeURIComponent(p.ref_code || '')}', '${encodeURIComponent(p.notes || '')}')" class="text-indigo-600 hover:text-indigo-800 text-xs ml-2">✏️ ویرایش</button>
+                <button onclick="editPayment('${p.id}', ${p.amount}, '${p.payment_date || ''}', '${encodeURIComponent(p.ref_code || p.tracking_code || '')}', '${encodeURIComponent(p.notes || p.description || '')}')" class="text-indigo-600 hover:text-indigo-800 text-xs ml-2">✏️ ویرایش</button>
                 <button onclick="deletePayment('${p.id}')" class="text-red-600 hover:text-red-800 text-xs">🗑️ حذف</button>
             </td>
         `;
@@ -638,7 +704,7 @@ function renderDetailPaymentsTable(payments) {
 }
 
 // ----------------------------------------------------
-// Work Report CRUD Modals
+// Work Report CRUD Modals (هماهنگ با work_records)
 // ----------------------------------------------------
 function openAddReportModal() {
     safeSetValue('reportId', '');
@@ -661,7 +727,7 @@ function openAddReportModal() {
 function editReport(id, titleEnc, date, type, count, customRate) {
     safeSetValue('reportId', id);
     safeSetValue('reportTitle', decodeURIComponent(titleEnc));
-    safeSetValue('reportDeliveryDate', date);
+    safeSetValue('reportDeliveryDate', date ? date.split('T')[0] : '');
     safeSetValue('reportPageType', type);
     safeSetValue('reportPageCount', count);
     safeSetValue('reportCustomRate', customRate !== null && customRate !== 'null' ? customRate : '');
@@ -696,33 +762,45 @@ async function saveReport(e) {
         const client = getSupabaseClient();
         if (!client) return;
 
-        let error = null;
-        if (reportId) {
-            const res = await client.rpc('update_typist_report', {
-                _report_id: reportId,
-                _typist_id: currentTypistId,
-                _title: title,
-                _delivery_date: date,
-                _page_type: pageType,
-                _page_count: pageCount,
-                _custom_rate: customRate
-            });
-            error = res.error;
-        } else {
-            const res = await client.rpc('add_typist_report', {
-                _typist_id: currentTypistId,
-                _title: title,
-                _delivery_date: date,
-                _page_type: pageType,
-                _page_count: pageCount,
-                _custom_rate: customRate
-            });
-            error = res.error;
+        // محاسبه نرخ هر صفحه
+        let unitRate = customRate;
+        if (!unitRate && currentTypistData) {
+            if (pageType === 'urgent') unitRate = currentTypistData.rate_urgent || 0;
+            else if (pageType === 'math') unitRate = currentTypistData.rate_math || 0;
+            else unitRate = currentTypistData.rate_normal || currentTypistData.page_rate || 0;
         }
+        unitRate = Number(unitRate) || 0;
+        const totalAmount = unitRate * pageCount;
+
+        const payload = {
+            typist_id: currentTypistId,
+            person_id: currentTypistId,
+            title: title,
+            delivery_date: date,
+            record_date: date,
+            page_type: pageType,
+            unit_type: pageType,
+            page_count: pageCount,
+            quantity: pageCount,
+            unit_rate: unitRate,
+            custom_rate: customRate,
+            total_amount: totalAmount,
+            status: 'completed'
+        };
+
+        let dbError = null;
+        if (reportId) {
+            const res = await client.from('work_records').update(payload).eq('id', reportId);
+            dbError = res.error;
+        } else {
+            const res = await client.from('work_records').insert([payload]);
+            dbError = res.error;
+        }
+
         hideLoading();
 
-        if (error) {
-            showToast('خطا در ثبت گزارش: ' + (error.message || ''), 'danger');
+        if (dbError) {
+            showToast('خطا در ثبت گزارش: ' + dbError.message, 'danger');
             return;
         }
 
@@ -746,11 +824,11 @@ async function deleteReport(reportId) {
         showLoading();
         const client = getSupabaseClient();
         if (!client) return;
-        const { error } = await client.rpc('delete_typist_report', { _report_id: reportId });
+        const { error } = await client.from('work_records').delete().eq('id', reportId);
         hideLoading();
 
         if (error) {
-            showToast('خطا در حذف گزارش: ' + (error.message || ''), 'danger');
+            showToast('خطا در حذف گزارش: ' + error.message, 'danger');
             return;
         }
 
@@ -767,7 +845,7 @@ async function deleteReport(reportId) {
 }
 
 // ----------------------------------------------------
-// Payment CRUD Modals (Admin)
+// Payment CRUD Modals (Admin - هماهنگ با payments)
 // ----------------------------------------------------
 function openAddPaymentModal() {
     safeSetValue('paymentId', '');
@@ -782,7 +860,7 @@ function openAddPaymentModal() {
 function editPayment(id, amount, date, refEnc, notesEnc) {
     safeSetValue('paymentId', id);
     safeSetValue('paymentAmount', amount);
-    safeSetValue('paymentDate', date);
+    safeSetValue('paymentDate', date ? date.split('T')[0] : '');
     safeSetValue('paymentRefCode', decodeURIComponent(refEnc));
     safeSetValue('paymentNotes', decodeURIComponent(notesEnc));
     safeSetText('paymentModalTitle', 'ویرایش پرداخت');
@@ -807,31 +885,31 @@ async function savePayment(e) {
         const client = getSupabaseClient();
         if (!client) return;
 
-        let error = null;
+        const payload = {
+            typist_id: currentTypistId,
+            person_id: currentTypistId,
+            amount: amount,
+            payment_date: date,
+            ref_code: refCode,
+            tracking_code: refCode,
+            notes: notes,
+            description: notes,
+            status: 'paid'
+        };
+
+        let dbError = null;
         if (paymentId) {
-            const res = await client.rpc('update_payment', {
-                _payment_id: paymentId,
-                _typist_id: currentTypistId,
-                _amount: amount,
-                _payment_date: date,
-                _ref_code: refCode,
-                _notes: notes
-            });
-            error = res.error;
+            const res = await client.from('payments').update(payload).eq('id', paymentId);
+            dbError = res.error;
         } else {
-            const res = await client.rpc('add_payment', {
-                _typist_id: currentTypistId,
-                _amount: amount,
-                _payment_date: date,
-                _ref_code: refCode,
-                _notes: notes
-            });
-            error = res.error;
+            const res = await client.from('payments').insert([payload]);
+            dbError = res.error;
         }
+
         hideLoading();
 
-        if (error) {
-            showToast('خطا در ثبت پرداخت: ' + (error.message || ''), 'danger');
+        if (dbError) {
+            showToast('خطا در ثبت پرداخت: ' + dbError.message, 'danger');
             return;
         }
 
@@ -850,11 +928,11 @@ async function deletePayment(paymentId) {
         showLoading();
         const client = getSupabaseClient();
         if (!client) return;
-        const { error } = await client.rpc('delete_payment', { _payment_id: paymentId });
+        const { error } = await client.from('payments').delete().eq('id', paymentId);
         hideLoading();
 
         if (error) {
-            showToast('خطا در حذف پرداخت: ' + (error.message || ''), 'danger');
+            showToast('خطا در حذف پرداخت: ' + error.message, 'danger');
             return;
         }
 
@@ -867,7 +945,7 @@ async function deletePayment(paymentId) {
 }
 
 // ----------------------------------------------------
-// Typist Self-Service Dashboard
+// Typist Self-Service Dashboard (داشبورد خود تایپیست)
 // ----------------------------------------------------
 function showTypistDashboard() {
     safeHide('loginView');
@@ -883,37 +961,49 @@ async function loadTypistSelfDashboardData() {
         showLoading();
         const client = getSupabaseClient();
         if (!client) return;
-        const { data, error } = await client.rpc('get_typist_detail', { _typist_id: currentTypistId });
+
+        // مشخصات
+        const { data: typist } = await client.from('typists').select('*').eq('id', currentTypistId).single();
+        if (typist) currentTypistData = typist;
+
+        // گزارش کارها
+        const { data: reports } = await client
+            .from('work_records')
+            .select('*')
+            .or(`typist_id.eq.${currentTypistId},person_id.eq.${currentTypistId}`)
+            .order('created_at', { ascending: false });
+
+        // پرداخت‌ها
+        const { data: payments } = await client
+            .from('payments')
+            .select('*')
+            .or(`typist_id.eq.${currentTypistId},person_id.eq.${currentTypistId}`)
+            .order('created_at', { ascending: false });
+
         hideLoading();
 
-        if (error) {
-            showToast('خطا در دریافت اطلاعات: ' + (error.message || ''), 'danger');
-            return;
-        }
+        const t = typist || currentTypistData || {};
+        const fullName = (t.first_name || t.last_name) ? `${t.first_name || ''} ${t.last_name || ''}`.trim() : (t.name || '-');
 
-        let detail = data;
-        if (typeof detail === 'string') {
-            try { detail = JSON.parse(detail); } catch (e) {}
-        }
+        safeSetText('typistSelfHeaderName', fullName);
+        safeSetText('typistSelfName', fullName);
+        safeSetText('typistSelfFatherName', t.father_name || '-');
+        safeSetText('typistSelfNationalId', t.national_id || t.national_code || '-');
+        safeSetText('typistSelfPhone', t.phone || '-');
+        safeSetText('typistSelfCardNumber', t.card_number || '-');
+        safeSetText('typistSelfShebaNumber', t.sheba_number || t.iban || '-');
 
-        if (!detail || detail.error) return;
+        // مبالغ
+        const totalEarned = (reports || []).reduce((acc, r) => acc + (Number(r.total_amount) || Number(r.total_price) || 0), 0);
+        const totalPaid = (payments || []).reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+        const remaining = totalEarned - totalPaid;
 
-        // Profile details (Page rates hidden)
-        safeSetText('typistSelfHeaderName', `${detail.typist.first_name || ''} ${detail.typist.last_name || ''}`);
-        safeSetText('typistSelfName', `${detail.typist.first_name || ''} ${detail.typist.last_name || ''}`);
-        safeSetText('typistSelfFatherName', detail.typist.father_name || '-');
-        safeSetText('typistSelfNationalId', detail.typist.national_id || '-');
-        safeSetText('typistSelfPhone', detail.typist.phone || '-');
-        safeSetText('typistSelfCardNumber', detail.typist.card_number || '-');
-        safeSetText('typistSelfShebaNumber', detail.typist.sheba_number || '-');
+        safeSetText('typistSelfTotalEarned', formatMoney(totalEarned));
+        safeSetText('typistSelfTotalPaid', formatMoney(totalPaid));
+        safeSetText('typistSelfRemainingBalance', formatMoney(remaining));
 
-        // Financial Summary
-        safeSetText('typistSelfTotalEarned', formatMoney(detail.total_earned));
-        safeSetText('typistSelfTotalPaid', formatMoney(detail.total_paid));
-        safeSetText('typistSelfRemainingBalance', formatMoney(detail.remaining_balance));
-
-        renderTypistSelfReports(detail.reports || []);
-        renderTypistSelfPayments(detail.payments || []);
+        renderTypistSelfReports(reports || []);
+        renderTypistSelfPayments(payments || []);
 
     } catch (err) {
         hideLoading();
@@ -934,18 +1024,23 @@ function renderTypistSelfReports(reports) {
     const typeLabels = { normal: 'معمولی', urgent: 'فوری', math: 'فرمول/ریاضی' };
 
     reports.forEach((r, idx) => {
+        const count = r.page_count || r.quantity || 1;
+        const pType = r.page_type || r.unit_type || 'normal';
+        const total = r.total_amount || r.total_price || 0;
+        const dDate = r.delivery_date || r.record_date || r.created_at;
+
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800';
         tr.innerHTML = `
             <td class="px-4 py-3 text-center">${idx + 1}</td>
             <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">${r.title || '-'}</td>
-            <td class="px-4 py-3 text-center">${formatDateShamsi(r.delivery_date)}</td>
-            <td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 text-xs">${typeLabels[r.page_type] || r.page_type}</span></td>
-            <td class="px-4 py-3 text-center font-bold">${r.page_count}</td>
-            <td class="px-4 py-3 text-center font-medium text-emerald-600">${formatMoney(r.total_price)}</td>
+            <td class="px-4 py-3 text-center">${formatDateShamsi(dDate)}</td>
+            <td class="px-4 py-3 text-center"><span class="px-2 py-1 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 text-xs">${typeLabels[pType] || pType}</span></td>
+            <td class="px-4 py-3 text-center font-bold">${count}</td>
+            <td class="px-4 py-3 text-center font-medium text-emerald-600">${formatMoney(total)}</td>
             <td class="px-4 py-3 text-center">
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 ml-2">✔️ تحویل شد</span>
-                <button onclick="editReport('${r.id}', '${encodeURIComponent(r.title)}', '${r.delivery_date}', '${r.page_type}', ${r.page_count}, null)" class="text-indigo-600 hover:text-indigo-800 text-xs">✏️ ویرایش</button>
+                <button onclick="editReport('${r.id}', '${encodeURIComponent(r.title || '')}', '${dDate}', '${pType}', ${count}, null)" class="text-indigo-600 hover:text-indigo-800 text-xs">✏️ ویرایش</button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -968,8 +1063,8 @@ function renderTypistSelfPayments(payments) {
         tr.innerHTML = `
             <td class="px-4 py-3 text-center">${idx + 1}</td>
             <td class="px-4 py-3 text-center font-bold text-indigo-600">${formatMoney(p.amount)}</td>
-            <td class="px-4 py-3 text-center">${formatDateShamsi(p.payment_date)}</td>
-            <td class="px-4 py-3 text-center font-mono text-xs">${p.ref_code || '-'}</td>
+            <td class="px-4 py-3 text-center">${formatDateShamsi(p.payment_date || p.created_at)}</td>
+            <td class="px-4 py-3 text-center font-mono text-xs">${p.ref_code || p.tracking_code || '-'}</td>
             <td class="px-4 py-3 text-center">
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">✔️ واریز شد</span>
             </td>
@@ -1015,7 +1110,7 @@ async function saveNewPassword(e) {
         hideLoading();
 
         if (error) {
-            showToast('خطا در تغییر رمز: ' + (error.message || ''), 'danger');
+            showToast('خطا در تغییر رمز: ' + error.message, 'danger');
             return;
         }
 
@@ -1044,7 +1139,7 @@ function exportBankCSV() {
         if (remainingToman > 0) {
             count++;
             const amountRial = remainingToman * 10;
-            csv += `${count},"${t.first_name || ''}","${t.last_name || ''}","${t.father_name || ''}","${t.national_id || ''}","${t.phone || ''}","${t.card_number || ''}","${t.sheba_number || ''}",${amountRial}\n`;
+            csv += `${count},"${t.first_name || ''}","${t.last_name || ''}","${t.father_name || ''}","${t.national_id || t.national_code || ''}","${t.phone || ''}","${t.card_number || ''}","${t.sheba_number || t.iban || ''}",${amountRial}\n`;
         }
     });
 
@@ -1069,7 +1164,7 @@ function exportPersonnelCSV() {
 
     let csv = '\uFEFFردیف,نام,نام خانوادگی,نام پدر,کد ملی,شماره تماس,شماره کارت,شماره شبا\n';
     allTypistsData.forEach((t, idx) => {
-        csv += `${idx + 1},"${t.first_name || ''}","${t.last_name || ''}","${t.father_name || ''}","${t.national_id || ''}","${t.phone || ''}","${t.card_number || ''}","${t.sheba_number || ''}"\n`;
+        csv += `${idx + 1},"${t.first_name || ''}","${t.last_name || ''}","${t.father_name || ''}","${t.national_id || t.national_code || ''}","${t.phone || ''}","${t.card_number || ''}","${t.sheba_number || t.iban || ''}"\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
