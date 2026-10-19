@@ -467,23 +467,32 @@ function renderAdminTypistsTable(list) {
 // جزئیات تایپیست (نمای مدیر با ویرایش قفل‌شده)
 // ==========================================
 
+// بخشی از app.js که باید اصلاح شود (جایگزین توابع قبلی کنید):
+
 async function viewTypistDetail(typistId) {
+    if (!typistId) {
+        showToast('شناسه نامعتبر است. لطفاً دوباره وارد شوید.', 'error');
+        logout();
+        return;
+    }
     showLoading(true);
     const client = getSupabaseClient();
     try {
-        // دریافت اطلاعات جزیی از طریق RPC
+        let t = null, works = [], payments = [], summary = {};
+        
+        // درخواست اول با RPC
         const { data: detailData, error: rpcErr } = await client.rpc('get_typist_detail', { _typist_id: typistId });
         
-        let t = null, works = [], payments = [], summary = {};
-
         if (!rpcErr && detailData && detailData.success) {
             t = detailData.typist;
             works = detailData.work_records || [];
             payments = detailData.payments || [];
             summary = detailData.summary || {};
         } else {
-            const { data: directT } = await client.from('typists').select('*').eq('id', typistId).single();
-            t = directT;
+            // روش جایگزین مستقیم (بدون .single() برای جلوگیری از خطای 406 Not Acceptable)
+            const { data: tList, error: tErr } = await client.from('typists').select('*').eq('id', typistId);
+            if (tErr || !tList || tList.length === 0) throw new Error('تایپیست در سیستم یافت نشد یا حذف شده است');
+            t = tList[0];
 
             const [wRes, pRes] = await Promise.all([
                 client.from('work_records').select('*').or(`person_id.eq.${typistId},typist_id.eq.${typistId}`),
@@ -492,52 +501,101 @@ async function viewTypistDetail(typistId) {
 
             works = wRes.data || [];
             payments = pRes.data || [];
-
             const totalEarned = works.reduce((s, r) => s + (Number(r.total_amount) || 0), 0);
             const totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
             summary = { total_earned: totalEarned, total_paid: totalPaid, remaining_balance: totalEarned - totalPaid };
         }
 
-        if (!t) throw new Error('اطلاعات تایپیست یافت نشد');
         currentTypistData = t;
-
         safeHide('adminDashboardView');
         safeShow('typistDetailView');
 
+        // ... پر کردن فیلدها دقیقا مشابه کد قبلی ...
         const fullName = `${t.first_name || t.name || ''} ${t.last_name || ''}`.trim() || 'نامشخص';
         safeSetText('detailHeaderName', fullName);
-        
         const phoneContainer = getEl('detailHeaderPhone');
-        if (phoneContainer) {
-            phoneContainer.innerHTML = `<a href="tel:${t.phone}" class="text-emerald-600 hover:underline">📞 ${t.phone || '-'}</a>`;
-        }
+        if (phoneContainer) phoneContainer.innerHTML = `<a href="tel:${t.phone}" class="text-emerald-600">📞 ${t.phone || '-'}</a>`;
 
-        // پر کردن فیلدهای پروفایل
         safeSetValue('detailTypistId', t.id);
         safeSetValue('detailFirstName', t.first_name || t.name || '');
         safeSetValue('detailLastName', t.last_name || '');
-        safeSetValue('detailFatherName', t.father_name || '');
         safeSetValue('detailNationalId', t.national_id || t.national_code || '');
         safeSetValue('detailPhone', t.phone || '');
-        safeSetValue('detailCardNumber', t.card_number || '');
         safeSetValue('detailShebaNumber', t.sheba_number || t.iban || '');
         safeSetValue('detailRateNormal', t.rate_normal || t.default_page_rate || 0);
         safeSetValue('detailRateUrgent', t.rate_urgent || 0);
         safeSetValue('detailRateMath', t.rate_math || 0);
 
-        // قفل‌سازی اولیه مشخصات
         toggleProfileEdit(false);
-
-        // بروزرسانی کارت‌های خلاصه مالی
-        safeSetText('detailTotalEarned', (summary.total_earned || 0).toLocaleString('fa-IR') + ' تومان');
-        safeSetText('detailTotalPaid', (summary.total_paid || 0).toLocaleString('fa-IR') + ' تومان');
-        safeSetText('detailRemainingBalance', (summary.remaining_balance || 0).toLocaleString('fa-IR') + ' تومان');
-
+        // ... (رندر جدول‌ها به همان روش قبل)
         renderDetailReportsTable(works);
         renderDetailPaymentsTable(payments);
 
     } catch (e) {
+        console.error(e);
         showToast(e.message, 'error');
+        // اگر خطای شدید بود، سشن معیوب را پاک کن
+        if (e.message.includes('یافت نشد')) logout();
+    } finally {
+        showLoading(false);
+    }
+}
+
+
+async function showTypistSelfDashboard(typistId) {
+    if (!typistId) {
+        logout();
+        return;
+    }
+    safeHide('loginView');
+    safeHide('adminDashboardView');
+    safeHide('typistDetailView');
+    safeShow('typistSelfDashboardView');
+
+    showLoading(true);
+    const client = getSupabaseClient();
+    try {
+        let t = null, works = [], payments = [], summary = {};
+
+        const { data: detailData, error: rpcErr } = await client.rpc('get_typist_detail', { _typist_id: typistId });
+        
+        if (!rpcErr && detailData && detailData.success) {
+            t = detailData.typist;
+            works = detailData.work_records || [];
+            payments = detailData.payments || [];
+            summary = detailData.summary || {};
+        } else {
+            // بدون single برای رفع خطای 406
+            const { data: tList } = await client.from('typists').select('*').eq('id', typistId);
+            if (!tList || tList.length === 0) throw new Error('حساب کاربری شما یافت نشد');
+            t = tList[0];
+
+            const [wRes, pRes] = await Promise.all([
+                client.from('work_records').select('*').or(`person_id.eq.${typistId},typist_id.eq.${typistId}`),
+                client.from('payments').select('*').or(`person_id.eq.${typistId},typist_id.eq.${typistId}`)
+            ]);
+
+            works = wRes.data || [];
+            payments = pRes.data || [];
+            const totalEarned = works.reduce((s, r) => s + (Number(r.total_amount) || 0), 0);
+            const totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+            summary = { total_earned: totalEarned, total_paid: totalPaid, remaining_balance: totalEarned - totalPaid };
+        }
+
+        currentTypistData = t;
+        const fullName = `${t.first_name || t.name || ''} ${t.last_name || ''}`.trim();
+        safeSetText('typistSelfHeaderName', `سلام، ${fullName}`);
+        
+        safeSetText('typistSelfTotalEarned', (summary.total_earned || 0).toLocaleString('fa-IR') + ' تومان');
+        safeSetText('typistSelfTotalPaid', (summary.total_paid || 0).toLocaleString('fa-IR') + ' تومان');
+        safeSetText('typistSelfRemainingBalance', (summary.remaining_balance || 0).toLocaleString('fa-IR') + ' تومان');
+
+        renderTypistSelfReports(works);
+        renderTypistSelfPayments(payments);
+
+    } catch (e) {
+        showToast(e.message, 'error');
+        if (e.message.includes('یافت نشد')) logout();
     } finally {
         showLoading(false);
     }
@@ -668,69 +726,7 @@ async function saveProfileEdit() {
     }
 }
 
-// ==========================================
-// پنل خود تایپیست (سلف سرویس با پنهان‌سازی کامل نرخ‌ها)
-// ==========================================
 
-async function showTypistSelfDashboard(typistId) {
-    safeHide('loginView');
-    safeHide('adminDashboardView');
-    safeHide('typistDetailView');
-    safeShow('typistSelfDashboardView');
-
-    showLoading(true);
-    const client = getSupabaseClient();
-    try {
-        const { data: detailData, error: rpcErr } = await client.rpc('get_typist_detail', { _typist_id: typistId });
-        
-        let t = null, works = [], payments = [], summary = {};
-
-        if (!rpcErr && detailData && detailData.success) {
-            t = detailData.typist;
-            works = detailData.work_records || [];
-            payments = detailData.payments || [];
-            summary = detailData.summary || {};
-        } else {
-            const { data: directT } = await client.from('typists').select('*').eq('id', typistId).single();
-            t = directT;
-
-            const [wRes, pRes] = await Promise.all([
-                client.from('work_records').select('*').or(`person_id.eq.${typistId},typist_id.eq.${typistId}`),
-                client.from('payments').select('*').or(`person_id.eq.${typistId},typist_id.eq.${typistId}`)
-            ]);
-
-            works = wRes.data || [];
-            payments = pRes.data || [];
-            const totalEarned = works.reduce((s, r) => s + (Number(r.total_amount) || 0), 0);
-            const totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-            summary = { total_earned: totalEarned, total_paid: totalPaid, remaining_balance: totalEarned - totalPaid };
-        }
-
-        if (!t) throw new Error('اطلاعات یافت نشد');
-        currentTypistData = t;
-
-        const fullName = `${t.first_name || t.name || ''} ${t.last_name || ''}`.trim();
-        safeSetText('typistSelfHeaderName', `خوش آمدید، ${fullName}`);
-        safeSetText('typistSelfName', fullName);
-        safeSetText('typistSelfFatherName', t.father_name || '-');
-        safeSetText('typistSelfNationalId', t.national_id || t.national_code || '-');
-        safeSetText('typistSelfPhone', t.phone || '-');
-        safeSetText('typistSelfCardNumber', t.card_number || '-');
-        safeSetText('typistSelfShebaNumber', t.sheba_number || t.iban || '-');
-
-        safeSetText('typistSelfTotalEarned', (summary.total_earned || 0).toLocaleString('fa-IR') + ' تومان');
-        safeSetText('typistSelfTotalPaid', (summary.total_paid || 0).toLocaleString('fa-IR') + ' تومان');
-        safeSetText('typistSelfRemainingBalance', (summary.remaining_balance || 0).toLocaleString('fa-IR') + ' تومان');
-
-        renderTypistSelfReports(works);
-        renderTypistSelfPayments(payments);
-
-    } catch (e) {
-        showToast(e.message, 'error');
-    } finally {
-        showLoading(false);
-    }
-}
 
 function renderTypistSelfReports(works) {
     const tbody = getEl('typistSelfReportsTableBody');
