@@ -1177,8 +1177,8 @@ async function saveNewPassword(e) {
         hideLoading();
 
         if (error) {
-            showToast('خطا در تغییر رمز: ' + error.message, 'danger');
-            return;
+showToast('خطا در تغییر رمز: ' + err.message, 'danger');
+           return;
         }
 
         safeHide('changePasswordModal');
