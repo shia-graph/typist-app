@@ -766,5 +766,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     renderAppView();
 });
-    renderAppView();
-});
+
