@@ -13,6 +13,8 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+
+
 // ==========================================
 // SHAMSI / JALALI DATE CONVERTER ENGINE
 // ==========================================
@@ -50,7 +52,7 @@ function formatJalali(isoString) {
 function toEnglishDigits(str) {
     if (!str) return '';
     const persianDigits = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
-    const arabicDigits = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
+    const arabicDigits = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /۷/g, /۸/g, /۹/g];
     let result = String(str);
     for (let i = 0; i < 10; i++) {
         result = result.replace(persianDigits[i], i).replace(arabicDigits[i], i);
@@ -86,23 +88,41 @@ function calculate10DayStatus(lastReportDateISO) {
     }
 }
 
-// Fallback Schema Getters
+// Comprehensive Fallback Schema Getters for Old & New Data
 function getTypistFullName(t) {
+    if (!t) return 'تایپیست نامشخص';
     if (t.first_name || t.last_name) return `${t.first_name || ''} ${t.last_name || ''}`.trim();
     if (t.name) return t.name;
+    if (t.full_name) return t.full_name;
     return 'تایپیست بدون نام';
 }
 
 function getTypistNationalId(t) {
+    if (!t) return '-';
     return t.national_id || t.national_code || '-';
 }
 
 function getTypistShaba(t) {
+    if (!t) return '-';
     return t.sheba_number || t.shaba || t.iban || t.account_number || '-';
 }
 
 function getTypistPageRate(t) {
-    return t.page_rate || t.default_page_rate || 0;
+    if (!t) return 0;
+    return Number(t.page_rate || t.default_page_rate || 0);
+}
+
+// Extract page count from any schema variant (page_count, pages_count, quantity)
+function getRecordPageCount(r) {
+    if (r.page_count !== undefined && r.page_count !== null) return Number(r.page_count);
+    if (r.pages_count !== undefined && r.pages_count !== null) return Number(r.pages_count);
+    if (r.quantity !== undefined && r.quantity !== null) return Number(r.quantity);
+    return 0;
+}
+
+// Extract record date from any schema variant
+function getRecordDate(r) {
+    return r.created_at || r.record_date || r.delivery_date || null;
 }
 
 // ==========================================
@@ -134,7 +154,7 @@ async function handleLogin(e) {
     loginBtn.innerText = 'در حال بررسی...';
 
     try {
-        // 1. Admin Login
+        // 1. Admin Auth
         if ((usernameInput === 'admin' || usernameInput === 'مدیر') && passwordInput === 'admin123') {
             currentUser = { role: 'admin', full_name: 'مدیر سیستم' };
             localStorage.setItem('payroll_user', JSON.stringify(currentUser));
@@ -143,7 +163,7 @@ async function handleLogin(e) {
             return;
         }
 
-        // 2. Fetch Typists to authenticate by Phone or National ID
+        // 2. Fetch Typists to authenticate
         const { data: typists, error } = await db.from('typists').select('*');
         if (error) throw error;
 
@@ -153,7 +173,6 @@ async function handleLogin(e) {
             const uid = t.id || '';
             const matchUser = (usernameInput === phone || usernameInput === nid || usernameInput === uid);
             
-            // Password fallback: t.password -> last 4 digits of phone -> '1234'
             const defaultPass = phone.length >= 4 ? phone.slice(-4) : '1234';
             const userPass = t.password || defaultPass;
             return matchUser && (passwordInput === userPass);
@@ -208,11 +227,10 @@ function setupUserUI() {
 // ADMIN DASHBOARD
 // ==========================================
 async function loadAdminData() {
-    await Promise.all([
-        fetchTypists(),
-        fetchProjects(),
-        loadAdminReports()
-    ]);
+    // Sequential execution to ensure typists are loaded BEFORE rendering reports
+    await fetchTypists();
+    await fetchProjects();
+    await loadAdminReports();
 }
 
 async function fetchTypists() {
@@ -274,13 +292,14 @@ async function loadAdminReports() {
         const startDate = document.getElementById('admin-filter-start').value;
         const endDate = document.getElementById('admin-filter-end').value;
 
-        let query = db.from('work_records').select('*').order('created_at', { ascending: false });
+        let query = db.from('work_records').select('*');
 
         if (startDate) query = query.gte('created_at', new Date(startDate).toISOString());
         if (endDate) query = query.lte('created_at', new Date(endDate).toISOString());
 
         const { data, error } = await query;
         if (error) throw error;
+
         globalReports = data || [];
 
         const tbody = document.getElementById('admin-reports-tbody');
@@ -293,20 +312,22 @@ async function loadAdminReports() {
 
         globalReports.forEach(r => {
             const typistId = r.typist_id || r.person_id;
-            const typist = globalTypists.find(t => t.id === typistId) || {};
+            const typist = globalTypists.find(t => t.id === typistId);
             const typistName = getTypistFullName(typist);
             const pageRate = getTypistPageRate(typist);
-            const pagesCount = r.page_count !== undefined ? r.page_count : (r.pages_count || 0);
+            
+            const pagesCount = getRecordPageCount(r);
             const wordsCount = r.words_count || 0;
             const totalPayable = pagesCount * pageRate;
+            const recordDate = getRecordDate(r);
 
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-50 transition-colors';
             tr.innerHTML = `
-                <td class="p-3 font-mono text-slate-500">${formatJalali(r.created_at || r.record_date)}</td>
+                <td class="p-3 font-mono text-slate-500">${formatJalali(recordDate)}</td>
                 <td class="p-3 font-medium text-slate-900">${typistName}</td>
                 <td class="p-3 font-bold text-slate-800">${r.title || 'عنوان ثبت نشده'}</td>
-                <td class="p-3 font-bold text-blue-600">${Number(pagesCount).toLocaleString()} صفحه</td>
+                <td class="p-3 font-bold text-blue-600">${pagesCount.toLocaleString()} صفحه</td>
                 <td class="p-3 font-bold text-slate-700">${Number(wordsCount).toLocaleString()} کلمه</td>
                 <td class="p-3 font-bold text-emerald-600">${totalPayable.toLocaleString()} ریال</td>
                 <td class="p-3 text-center">
@@ -432,7 +453,6 @@ function sendSmsAction() {
         return;
     }
 
-    // Open standard device SMS link
     const phones = phonesStr.split(',').map(p => p.trim()).join(',');
     window.location.href = `sms:${phones}?body=${encodeURIComponent(message)}`;
     showToast('سامانه پیامک دستگاه فراخوانی شد', 'success');
@@ -701,8 +721,7 @@ async function loadTypistHistory() {
     try {
         const { data, error } = await db.from('work_records')
             .select('*')
-            .or(`typist_id.eq.${currentUser.id},person_id.eq.${currentUser.id}`)
-            .order('created_at', { ascending: false });
+            .or(`typist_id.eq.${currentUser.id},person_id.eq.${currentUser.id}`);
 
         if (error) throw error;
 
@@ -715,15 +734,16 @@ async function loadTypistHistory() {
         }
 
         data.forEach(r => {
-            const pagesCount = r.page_count !== undefined ? r.page_count : (r.pages_count || 0);
+            const pagesCount = getRecordPageCount(r);
             const wordsCount = r.words_count || 0;
+            const recordDate = getRecordDate(r);
 
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-50 transition-colors';
             tr.innerHTML = `
-                <td class="p-3 font-mono text-slate-500">${formatJalali(r.created_at || r.record_date)}</td>
+                <td class="p-3 font-mono text-slate-500">${formatJalali(recordDate)}</td>
                 <td class="p-3 font-bold text-slate-800">${r.title || '-'}</td>
-                <td class="p-3 font-bold text-blue-600">${Number(pagesCount).toLocaleString()} صفحه</td>
+                <td class="p-3 font-bold text-blue-600">${pagesCount.toLocaleString()} صفحه</td>
                 <td class="p-3 font-bold text-slate-700">${Number(wordsCount).toLocaleString()} کلمه</td>
             `;
             tbody.appendChild(tr);
@@ -752,10 +772,7 @@ async function exportBankExcel() {
         let rowNum = 1;
         typists.forEach(t => {
             const tRecords = (records || []).filter(r => (r.typist_id === t.id || r.person_id === t.id));
-            const totalPages = tRecords.reduce((sum, r) => {
-                const p = r.page_count !== undefined ? r.page_count : (r.pages_count || 0);
-                return sum + (Number(p) || 0);
-            }, 0);
+            const totalPages = tRecords.reduce((sum, r) => sum + getRecordPageCount(r), 0);
             
             const pageRate = getTypistPageRate(t);
             const totalPayableRials = totalPages * pageRate;
