@@ -12,11 +12,11 @@ var _cachedClient = null;
 function getSupabaseClient() {
     if (_cachedClient) return _cachedClient;
     if (window.supabase && typeof window.supabase.createClient === 'function') {
-        _cachedClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        _cachedClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         return _cachedClient;
     }
     if (window.createClient && typeof window.createClient === 'function') {
-        _cachedClient = window.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        _cachedClient = window.createClient(SUPABASE_URL, SUPABASE_KEY);
         return _cachedClient;
     }
     return null;
@@ -265,7 +265,7 @@ async function loadAdminDashboardData() {
         hideLoading();
 
         if (error) {
-            showToast('خطا در دریافت اطلاعات دشبورد: ' + error.message, 'danger');
+            showToast('خطا در دریافت اطلاعات دشبورد: ' + (error.message || ''), 'danger');
             return;
         }
 
@@ -414,7 +414,7 @@ async function saveTypist(e) {
         hideLoading();
 
         if (error) {
-            showToast('خطا در ثبت اطلاعات: ' + error.message, 'danger');
+            showToast('خطا در ثبت اطلاعات: ' + (error.message || ''), 'danger');
             return;
         }
 
@@ -446,7 +446,7 @@ async function loadTypistDetailData(typistId) {
         hideLoading();
 
         if (error) {
-            showToast('خطا در دریافت جزئیات: ' + error.message, 'danger');
+            showToast('خطا در دریافت جزئیات: ' + (error.message || ''), 'danger');
             return;
         }
 
@@ -563,7 +563,7 @@ async function saveProfileEdit() {
         hideLoading();
 
         if (error) {
-            showToast('خطا در ذخیره مشخصات: ' + error.message, 'danger');
+            showToast('خطا در ذخیره مشخصات: ' + (error.message || ''), 'danger');
             return;
         }
 
@@ -722,7 +722,7 @@ async function saveReport(e) {
         hideLoading();
 
         if (error) {
-            showToast('خطا در ثبت گزارش: ' + error.message, 'danger');
+            showToast('خطا در ثبت گزارش: ' + (error.message || ''), 'danger');
             return;
         }
 
@@ -750,7 +750,7 @@ async function deleteReport(reportId) {
         hideLoading();
 
         if (error) {
-            showToast('خطا در حذف گزارش: ' + error.message, 'danger');
+            showToast('خطا در حذف گزارش: ' + (error.message || ''), 'danger');
             return;
         }
 
@@ -831,7 +831,7 @@ async function savePayment(e) {
         hideLoading();
 
         if (error) {
-            showToast('خطا در ثبت پرداخت: ' + error.message, 'danger');
+            showToast('خطا در ثبت پرداخت: ' + (error.message || ''), 'danger');
             return;
         }
 
@@ -854,7 +854,7 @@ async function deletePayment(paymentId) {
         hideLoading();
 
         if (error) {
-            showToast('خطا در حذف پرداخت: ' + error.message, 'danger');
+            showToast('خطا در حذف پرداخت: ' + (error.message || ''), 'danger');
             return;
         }
 
@@ -887,7 +887,7 @@ async function loadTypistSelfDashboardData() {
         hideLoading();
 
         if (error) {
-            showToast('خطا در دریافت اطلاعات: ' + error.message, 'danger');
+            showToast('خطا در دریافت اطلاعات: ' + (error.message || ''), 'danger');
             return;
         }
 
@@ -1015,7 +1015,7 @@ async function saveNewPassword(e) {
         hideLoading();
 
         if (error) {
-            showToast('خطا در تغییر رمز: ' + error.message, 'danger');
+            showToast('خطا در تغییر رمز: ' + (error.message || ''), 'danger');
             return;
         }
 
@@ -1123,8 +1123,34 @@ function sendGroupSMS() {
 }
 
 // ----------------------------------------------------
-// Shamsi DatePicker Modal Helpers
+// Shamsi DatePicker Modal Helpers (With Persian to Gregorian converter)
 // ----------------------------------------------------
+function jalaliToGregorian(jy, jm, jd) {
+    let gy = (jy <= 979) ? 621 : 1600;
+    jy -= (jy <= 979) ? 0 : 979;
+    let days = (365 * jy) + (Math.floor(jy / 33) * 8) + Math.floor(((jy % 33) + 3) / 4) + 78 + jd + ((jm < 7) ? (jm - 1) * 31 : (((jm - 7) * 30) + 186));
+    gy += 400 * Math.floor(days / 146097);
+    days %= 146097;
+    if (days > 36524) {
+        gy += 100 * Math.floor(--days / 36524);
+        days %= 36524;
+        if (days >= 365) days++;
+    }
+    gy += 4 * Math.floor(days / 1461);
+    days %= 1461;
+    gy += Math.floor((days - 1) / 365);
+    if (days > 365) days = (days - 1) % 365;
+    let gd = days + 1;
+    let sal_a = [0, 31, ((gy % 4 === 0 && gy % 100 !== 0) || (gy % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let gm;
+    for (gm = 0; gm < 13; gm++) {
+        let v = sal_a[gm];
+        if (gd <= v) break;
+        gd -= v;
+    }
+    return [gy, gm, gd];
+}
+
 function openDatePicker(targetId) {
     targetDateInputId = targetId;
     const daySelect = getEl('pickerDay');
@@ -1145,7 +1171,16 @@ function closeDatePicker() {
 
 function applyDatePicker() {
     if (targetDateInputId) {
-        safeSetValue(targetDateInputId, new Date().toISOString().split('T')[0]);
+        const jy = parseInt(getEl('pickerYear')?.value || '1403');
+        const jm = parseInt(getEl('pickerMonth')?.value || '1');
+        const jd = parseInt(getEl('pickerDay')?.value || '1');
+
+        const [gy, gm, gd] = jalaliToGregorian(jy, jm, jd);
+        const mm = String(gm).padStart(2, '0');
+        const dd = String(gd).padStart(2, '0');
+        const standardDate = `${gy}-${mm}-${dd}`;
+
+        safeSetValue(targetDateInputId, standardDate);
     }
     closeDatePicker();
 }
