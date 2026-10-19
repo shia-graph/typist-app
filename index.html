@@ -3,498 +3,209 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>سیستم مدیریت تایپیست‌ها و محاسبه دستمزد</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Supabase JS Client -->
+    <title>سیستم مدیریت مالی تایپیست‌ها</title>
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Vazirmatn Font -->
-    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
     <style>
-        * {
-            font-family: 'Vazirmatn', sans-serif;
-            touch-action: manipulation;
-            -webkit-tap-highlight-color: transparent;
+        :root {
+            --bg-color: #f8fafc; --card-bg: #ffffff; --text-main: #1e293b;
+            --primary: #2563eb; --primary-hover: #1d4ed8; --border: #e2e8f0;
+            --success: #10b981; --danger: #ef4444; --warning: #f59e0b;
         }
-        body {
-            transition: background-color 0.3s, color 0.3s;
+        [data-theme="dark"] {
+            --bg-color: #0f172a; --card-bg: #1e293b; --text-main: #f1f5f9;
+            --border: #334155; --primary: #3b82f6;
         }
-        .modal-backdrop {
-            background-color: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(4px);
+        * { box-sizing: border-box; font-family: 'Vazirmatn', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); margin: 0; transition: 0.3s; touch-action: manipulation; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+        
+        /* Utility */
+        .hidden { display: none !important; }
+        .flex { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .card { background: var(--card-bg); border: 1px solid var(--border); padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        input, select, textarea { 
+            width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; 
+            background: var(--card-bg); color: var(--text-main); font-size: 14px;
         }
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+        button { 
+            cursor: pointer; border: none; padding: 10px 18px; border-radius: 8px; 
+            font-weight: 500; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
         }
-        ::-webkit-scrollbar-track {
-            background: rgba(0,0,0,0.05);
-        }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(0,0,0,0.2);
-            border-radius: 3px;
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+        /* Login */
+        .login-box { max-width: 400px; margin: 80px auto; }
+        .tab-buttons { display: flex; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+        .tab-btn { flex: 1; padding: 10px; background: none; border: none; color: var(--text-main); opacity: 0.6; cursor: pointer; }
+        .tab-btn.active { opacity: 1; border-bottom: 3px solid var(--primary); font-weight: bold; }
+
+        /* Table */
+        .table-wrapper { overflow-x: auto; border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: right; border-bottom: 1px solid var(--border); font-size: 13px; }
+        th { background: rgba(0,0,0,0.02); }
+
+        /* Badge & Icons */
+        .badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; }
+        .badge-success { background: #dcfce7; color: #15803d; }
+        .badge-warning { background: #fef9c3; color: #a16207; }
+        .settled { color: var(--success); font-weight: bold; }
+        .unsettled { color: var(--danger); font-weight: bold; }
+
+        /* Modal */
+        .modal { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 15px; }
+        .modal-content { background: var(--card-bg); padding: 25px; border-radius: 15px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; position: relative; }
+        .close-btn { position: absolute; top: 15px; left: 15px; font-size: 24px; cursor: pointer; }
+
+        /* Dash Stats */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { padding: 15px; border-radius: 10px; border: 1px solid var(--border); text-align: center; }
+        .stat-val { font-size: 20px; font-weight: bold; display: block; margin-top: 5px; }
+
+        .tel-link { color: var(--primary); text-decoration: none; font-weight: bold; border-bottom: 1px dashed var(--primary); }
+        .btn-comm { display: inline-flex; gap: 4px; align-items: center; margin-right: 5px; }
+
+        @media (max-width: 600px) {
+            .flex { flex-direction: column; align-items: stretch; }
+            .stat-card { padding: 10px; }
+            th, td { font-size: 12px; padding: 8px; }
         }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 dark:bg-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+<body>
 
-    <!-- Header / Navbar -->
-    <header class="bg-white dark:bg-gray-800 shadow-md border-b border-gray-200 dark:border-gray-700">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center space-x-3 space-x-reverse">
-                <div class="bg-blue-600 text-white p-2 rounded-lg font-bold text-lg shadow-sm">
-                    ⌨️
+    <div id="app">
+        <!-- Login Screen -->
+        <div id="loginScreen" class="container login-box">
+            <div class="card">
+                <h2 style="text-align:center; margin-top:0;">ورود به سیستم</h2>
+                <div class="tab-buttons">
+                    <button class="tab-btn active" onclick="switchLoginTab('admin')">مدیر</button>
+                    <button class="tab-btn" onclick="switchLoginTab('typist')">تایپیست</button>
                 </div>
-                <div>
-                    <h1 class="font-bold text-lg md:text-xl text-gray-800 dark:text-white">سیستم دستمزد و کارکرد تایپیست‌ها</h1>
-                    <p id="user-status-text" class="text-xs text-gray-500 dark:text-gray-400">لطفاً وارد حساب کاربری خود شوید</p>
-                </div>
-            </div>
-            <div class="flex items-center space-x-2 space-x-reverse">
-                <button type="button" onclick="window.toggleTheme()" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition">
-                    <span id="theme-icon">🌙</span>
-                </button>
-                <button id="logout-btn" type="button" onclick="window.logout()" class="hidden px-3 py-1.5 text-sm bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60 rounded-lg font-medium transition flex items-center gap-1">
-                    <span>خروج</span>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Container -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
-
-        <div id="toast-container" class="fixed top-4 left-4 z-50 flex flex-col gap-2 max-w-sm"></div>
-
-        <!-- Section 1: Auth Screen -->
-        <div id="auth-section" class="max-w-md mx-auto my-8 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700">
-            <div class="flex border-b border-gray-200 dark:border-gray-700 mb-6">
-                <button id="tab-admin" type="button" onclick="window.switchLoginTab('admin')" class="flex-1 py-3 text-center font-bold text-blue-600 border-b-2 border-blue-600 transition">
-                    ورود مدیر سیستم
-                </button>
-                <button id="tab-typist" type="button" onclick="window.switchLoginTab('typist')" class="flex-1 py-3 text-center font-medium text-gray-500 border-b-2 border-transparent transition">
-                    ورود تایپیست
-                </button>
-            </div>
-
-            <form id="form-admin-login" onsubmit="window.loginAdmin(event); return false;" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1">کلمه عبور مدیر</label>
-                    <input type="password" id="admin_password" required placeholder="رمز عبور مدیر را وارد کنید" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none">
-                </div>
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl shadow-md transition">
-                    ورود به پنل مدیریت
-                </button>
-            </form>
-
-            <form id="form-typist-login" onsubmit="window.loginTypist(event); return false;" class="space-y-4 hidden">
-                <div>
-                    <label class="block text-sm font-medium mb-1">کد ملی یا شماره موبایل</label>
-                    <input type="text" id="typist_login_id" required placeholder="مثلاً: 0012345678" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">کلمه عبور (پیش‌فرض ۴ رقم آخر موبایل)</label>
-                    <input type="password" id="typist_password" required placeholder="رمز عبور" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none">
-                </div>
-                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-xl shadow-md transition">
-                    ورود به حساب شخصی
-                </button>
-            </form>
-        </div>
-
-        <!-- Section 2: Admin Dashboard -->
-        <div id="admin-dashboard" class="hidden space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <div class="text-sm text-gray-500 dark:text-gray-400">تعداد کل تایپیست‌ها</div>
-                    <div id="stat-total-typists" class="text-2xl font-bold mt-1">0 نفر</div>
-                </div>
-                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <div class="text-sm text-gray-500 dark:text-gray-400">مجموع کارکرد کل (تومان)</div>
-                    <div id="stat-total-earned" class="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">0</div>
-                </div>
-                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <div class="text-sm text-gray-500 dark:text-gray-400">مجموع پرداختی‌ها (تومان)</div>
-                    <div id="stat-total-paid" class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">0</div>
-                </div>
-                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <div class="text-sm text-gray-500 dark:text-gray-400">مانده تسویه نشده (تومان)</div>
-                    <div id="stat-total-balance" class="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">0</div>
-                </div>
-            </div>
-
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col md:flex-row gap-3 justify-between items-center">
-                <div class="w-full md:w-1/3">
-                    <input type="text" id="admin-search-input" oninput="window.filterTypists()" placeholder="جستجو نام، کد ملی یا شماره تماس..." class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                </div>
-                <div class="flex flex-wrap gap-2 w-full md:w-auto justify-end">
-                    <button type="button" onclick="window.exportBankCSV()" class="px-3 py-2 text-sm bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg shadow transition flex items-center gap-1">
-                        <span>📥 خروجی اکسل پایا (ریال)</span>
-                    </button>
-                    <button type="button" onclick="window.openSmsModal()" class="px-3 py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow transition flex items-center gap-1">
-                        <span>💬 پیامک گروهی</span>
-                    </button>
-                    <button type="button" onclick="window.openChangePassModal()" class="px-3 py-2 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-lg shadow transition flex items-center gap-1">
-                        <span>🔑 تغییر رمز مدیر</span>
-                    </button>
-                    <button type="button" onclick="window.openAddTypistModal()" class="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition flex items-center gap-1">
-                        <span>➕ افزودن تایپیست جدید</span>
-                    </button>
-                </div>
-            </div>
-
-            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-right text-sm">
-                        <thead class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-medium">
-                            <tr>
-                                <th class="p-3">نام و نام خانوادگی</th>
-                                <th class="p-3">کد ملی</th>
-                                <th class="p-3">تماس و پیامک</th>
-                                <th class="p-3">کل کارکرد (تومان)</th>
-                                <th class="p-3">دریافتی (تومان)</th>
-                                <th class="p-3">باقیمانده (تومان)</th>
-                                <th class="p-3 text-center">وضعیت تسویه</th>
-                                <th class="p-3 text-center">عملیات</th>
-                            </tr>
-                        </thead>
-                        <tbody id="typists-table-body" class="divide-y divide-gray-100 dark:divide-gray-700">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Section 3: Detail View -->
-        <div id="detail-view" class="hidden space-y-6">
-            <div class="flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                <div class="flex items-center space-x-3 space-x-reverse">
-                    <button id="btn-back-dashboard" type="button" onclick="window.backToDashboard()" class="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-sm transition">
-                        ⬅ بازگشت به لیست
-                    </button>
-                    <h2 id="detail-typist-name" class="font-bold text-lg">جزئیات تایپیست</h2>
-                </div>
-                <div id="typist-self-pass-btn-container" class="hidden">
-                    <button type="button" onclick="window.openChangePassModal()" class="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition">
-                        🔑 تغییر رمز عبور
-                    </button>
-                </div>
-            </div>
-
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                <h3 class="font-bold text-md mb-4 border-b border-gray-100 dark:border-gray-700 pb-2">اطلاعات شناسنامه‌ای و بانکی</h3>
-                <form id="form-typist-profile" onsubmit="window.saveTypist(event); return false;" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <input type="hidden" id="profile_id">
-                    <div>
-                        <label class="block text-gray-500 mb-1">نام</label>
-                        <input type="text" id="profile_first_name" required class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                <form id="loginForm" onsubmit="handleLogin(); return false;">
+                    <div id="loginInputArea">
+                        <input type="password" id="loginPass" placeholder="رمز عبور مدیر" required>
                     </div>
-                    <div>
-                        <label class="block text-gray-500 mb-1">نام خانوادگی</label>
-                        <input type="text" id="profile_last_name" required class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                    </div>
-                    <div>
-                        <label class="block text-gray-500 mb-1">نام پدر</label>
-                        <input type="text" id="profile_father_name" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                    </div>
-                    <div>
-                        <label class="block text-gray-500 mb-1">کد ملی</label>
-                        <input type="text" id="profile_national_id" required class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                    </div>
-                    <div>
-                        <label class="block text-gray-500 mb-1">شماره تماس</label>
-                        <input type="text" id="profile_phone" required class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                    </div>
-                    <div>
-                        <label class="block text-gray-500 mb-1">شماره کارت بانکی</label>
-                        <input type="text" id="profile_card_number" dir="ltr" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 text-left">
-                    </div>
-                    <div class="md:col-span-2">
-                        <label class="block text-gray-500 mb-1">شماره شبا (بدون IR)</label>
-                        <input type="text" id="profile_sheba_number" dir="ltr" placeholder="IR..." class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 text-left">
-                    </div>
-                    <div id="admin-rates-container" class="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-gray-100 dark:border-gray-700 pt-3 mt-2">
-                        <div>
-                            <label class="block text-gray-500 mb-1">نرخ صفحه عادی (تومان)</label>
-                            <input type="number" id="profile_rate_normal" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                        </div>
-                        <div>
-                            <label class="block text-gray-500 mb-1">نرخ صفحه فوری (تومان)</label>
-                            <input type="number" id="profile_rate_urgent" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                        </div>
-                        <div>
-                            <label class="block text-gray-500 mb-1">نرخ صفحه ریاضی/فرمول (تومان)</label>
-                            <input type="number" id="profile_rate_math" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                        </div>
-                    </div>
-                    <div class="md:col-span-3 flex justify-end">
-                        <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition">
-                            💾 ثبت تغییرات پروفایل
-                        </button>
-                    </div>
+                    <button type="submit" class="btn-primary" style="width:100%; margin-top:15px;">ورود</button>
                 </form>
             </div>
+        </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <div class="text-sm text-gray-500">مجموع درآمد تایپ</div>
-                    <div id="typist-summary-earned" class="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">0 تومان</div>
-                </div>
-                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <div class="text-sm text-gray-500">مجموع پرداختی‌های مرکز</div>
-                    <div id="typist-summary-paid" class="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">0 تومان</div>
-                </div>
-                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <div class="text-sm text-gray-500">مانده قابل تسویه</div>
-                    <div id="typist-summary-balance" class="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">0 تومان</div>
+        <!-- Admin Dashboard -->
+        <div id="adminDash" class="container hidden">
+            <div class="flex" style="justify-content: space-between; margin-bottom: 20px;">
+                <h2>پنل مدیریت</h2>
+                <div class="flex">
+                    <button class="btn-outline" onclick="toggleTheme()">🌙/☀️</button>
+                    <button class="btn-danger" onclick="logout()">خروج</button>
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
-                <div class="flex justify-between items-center">
-                    <h3 class="font-bold text-md">جدول گزارش کارهای تایپ</h3>
-                    <button type="button" onclick="window.openAddReportModal()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition">
-                        ➕ ثبت گزارش کار جدید
-                    </button>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-right text-sm">
-                        <thead class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                            <tr>
-                                <th class="p-2.5">عنوان کار</th>
-                                <th class="p-2.5">تاریخ تحویل</th>
-                                <th class="p-2.5">نوع صفحه</th>
-                                <th class="p-2.5">تعداد صفحات</th>
-                                <th class="p-2.5 th-rate-column">نرخ صفحه</th>
-                                <th class="p-2.5">مبلغ کل (تومان)</th>
-                                <th class="p-2.5 text-center">وضعیت تحویل</th>
-                                <th class="p-2.5 text-center">عملیات</th>
-                            </tr>
-                        </thead>
-                        <tbody id="reports-table-body" class="divide-y divide-gray-100 dark:divide-gray-700">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            <div class="stats-grid" id="adminStats"></div>
 
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
-                <div class="flex justify-between items-center">
-                    <h3 class="font-bold text-md">جدول واریزی‌ها و پرداختی‌ها</h3>
-                    <button id="btn-add-payment" type="button" onclick="window.openAddPaymentModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-lg transition">
-                        ➕ ثبت واریزی جدید
-                    </button>
+            <div class="card">
+                <div class="flex" style="justify-content: space-between;">
+                    <input type="text" id="typistSearch" placeholder="جستجوی نام یا کد ملی..." style="max-width: 300px;" oninput="renderTypists()">
+                    <div class="flex">
+                        <button class="btn-success" onclick="openTypistModal()">+ تایپیست جدید</button>
+                        <button class="btn-outline" onclick="exportBankCSV()">📥 خروجی بانک (ریال)</button>
+                        <button class="btn-outline" onclick="openSMSModal()">💬 پیامک گروهی</button>
+                    </div>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-right text-sm">
-                        <thead class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
                             <tr>
-                                <th class="p-2.5">تاریخ واریز</th>
-                                <th class="p-2.5">مبلغ (تومان)</th>
-                                <th class="p-2.5">کد پیگیری</th>
-                                <th class="p-2.5">توضیحات</th>
-                                <th class="p-2.5 text-center">وضعیت واریز</th>
-                                <th class="p-2.5 text-center action-col-payment">عملیات</th>
+                                <th>نام تایپیست</th>
+                                <th>کد ملی</th>
+                                <th>شماره تماس</th>
+                                <th>مانده حساب (تومان)</th>
+                                <th>وضعیت تسویه</th>
+                                <th>عملیات</th>
                             </tr>
                         </thead>
-                        <tbody id="payments-table-body" class="divide-y divide-gray-100 dark:divide-gray-700">
-                        </tbody>
+                        <tbody id="typistsTableBody"></tbody>
                     </table>
                 </div>
             </div>
         </div>
 
-    </main>
-
-    <!-- Modals -->
-    <div id="typist-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <h3 id="typist-modal-title" class="font-bold text-lg border-b pb-2">افزودن تایپیست جدید</h3>
-            <form id="form-typist-modal" onsubmit="window.saveTypist(event); return false;" class="space-y-3 text-sm">
-                <div>
-                    <label class="block mb-1 text-gray-600 dark:text-gray-300">نام</label>
-                    <input type="text" id="modal_typist_first_name" required class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+        <!-- Typist Profile / Detail View (Used by Admin and Typist) -->
+        <div id="detailView" class="container hidden">
+            <button class="btn-outline" id="backBtn" onclick="showAdminDash()" style="margin-bottom:15px;">🔙 بازگشت</button>
+            <div id="profileSection"></div>
+            
+            <div class="card">
+                <div class="flex" style="justify-content: space-between;">
+                    <h3>گزارش‌های کار</h3>
+                    <button class="btn-primary btn-sm" id="addReportBtn" onclick="openReportModal()">+ ثبت گزارش جدید</button>
                 </div>
-                <div>
-                    <label class="block mb-1 text-gray-600 dark:text-gray-300">نام خانوادگی</label>
-                    <input type="text" id="modal_typist_last_name" required class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                </div>
-                <div>
-                    <label class="block mb-1 text-gray-600 dark:text-gray-300">کد ملی</label>
-                    <input type="text" id="modal_typist_national_id" required class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                </div>
-                <div>
-                    <label class="block mb-1 text-gray-600 dark:text-gray-300">شماره تماس</label>
-                    <input type="text" id="modal_typist_phone" required class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                </div>
-                <div class="grid grid-cols-3 gap-2">
-                    <div>
-                        <label class="block mb-1 text-xs">نرخ عادی</label>
-                        <input type="number" id="modal_typist_rate_normal" value="0" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                    </div>
-                    <div>
-                        <label class="block mb-1 text-xs">نرخ فوری</label>
-                        <input type="number" id="modal_typist_rate_urgent" value="0" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                    </div>
-                    <div>
-                        <label class="block mb-1 text-xs">نرخ فرمول</label>
-                        <input type="number" id="modal_typist_rate_math" value="0" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                    </div>
-                </div>
-                <div class="flex justify-end gap-2 pt-3">
-                    <button type="button" onclick="window.closeTypistModal()" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg">انصراف</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">ذخیره</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="report-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <h3 id="report-modal-title" class="font-bold text-lg border-b pb-2">ثبت گزارش کار جدید</h3>
-            <form id="form-report-modal" onsubmit="window.saveReport(event); return false;" class="space-y-3 text-sm">
-                <input type="hidden" id="report_id">
-                <div>
-                    <label class="block mb-1 text-gray-600 dark:text-gray-300">عنوان فایل / کار</label>
-                    <input type="text" id="report_title" required placeholder="مثال: تایپ کتاب ریاضی" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                </div>
-                <div>
-                    <label class="block mb-1 text-gray-600 dark:text-gray-300">تاریخ تحویل (شمسی)</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="report_delivery_date" required placeholder="1403/01/01" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 text-center">
-                        <button type="button" onclick="window.openDatePicker('report_delivery_date')" class="px-3 py-2 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 rounded-lg text-xs">📅 تقویم</button>
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block mb-1 text-gray-600 dark:text-gray-300">نوع کار</label>
-                        <select id="report_page_type" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                            <option value="normal">صفحه عادی</option>
-                            <option value="urgent">صفحه فوری</option>
-                            <option value="math">ریاضی / فرمول‌دار</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block mb-1 text-gray-600 dark:text-gray-300">تعداد صفحات</label>
-                        <input type="number" id="report_page_count" required min="1" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                    </div>
-                </div>
-                <div id="admin-custom-rate-field" class="hidden">
-                    <label class="block mb-1 text-xs text-amber-600 dark:text-amber-400 font-bold">نرخ دستی برای این گزارش (اختیاری - تومان)</label>
-                    <input type="number" id="report_custom_rate" placeholder="خالی بگذارید تا از نرخ پیش‌فرض استفاده شود" class="w-full p-2 border border-amber-300 rounded-lg dark:bg-gray-700 dark:border-amber-600">
-                </div>
-                <div class="flex justify-end gap-2 pt-3">
-                    <button type="button" onclick="window.closeReportModal()" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg">انصراف</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">ثبت گزارش</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="payment-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <h3 id="payment-modal-title" class="font-bold text-lg border-b pb-2">ثبت واریزی جدید</h3>
-            <form id="form-payment-modal" onsubmit="window.savePayment(event); return false;" class="space-y-3 text-sm">
-                <input type="hidden" id="payment_id">
-                <div>
-                    <label class="block mb-1 text-gray-600 dark:text-gray-300">مبلغ واریزی (تومان)</label>
-                    <input type="number" id="payment_amount" required min="1000" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                </div>
-                <div>
-                    <label class="block mb-1 text-gray-600 dark:text-gray-300">تاریخ واریز (شمسی)</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="payment_date" required placeholder="1403/01/01" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 text-center">
-                        <button type="button" onclick="window.openDatePicker('payment_date')" class="px-3 py-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200 rounded-lg text-xs">📅 تقویم</button>
-                    </div>
-                </div>
-                <div>
-                    <label class="block mb-1 text-gray-600 dark:text-gray-300">کد پیگیری / شماره سند</label>
-                    <input type="text" id="payment_ref_code" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                </div>
-                <div>
-                    <label class="block mb-1 text-gray-600 dark:text-gray-300">توضیحات</label>
-                    <textarea id="payment_notes" rows="2" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"></textarea>
-                </div>
-                <div class="flex justify-end gap-2 pt-3">
-                    <button type="button" onclick="window.closePaymentModal()" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg">انصراف</button>
-                    <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-lg">ثبت واریزی</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="datepicker-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-xs w-full p-5 shadow-2xl space-y-4">
-            <h4 class="font-bold text-center border-b pb-2">انتخاب تاریخ شمسی</h4>
-            <div class="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                    <label class="block text-xs mb-1">سال</label>
-                    <select id="dp-year" onchange="window.updateMonthDays()" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"></select>
-                </div>
-                <div>
-                    <label class="block text-xs mb-1">ماه</label>
-                    <select id="dp-month" onchange="window.updateMonthDays()" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                        <option value="1">فروردین</option>
-                        <option value="2">اردیبهشت</option>
-                        <option value="3">خرداد</option>
-                        <option value="4">تیر</option>
-                        <option value="5">مرداد</option>
-                        <option value="6">شهریور</option>
-                        <option value="7">مهر</option>
-                        <option value="8">آبان</option>
-                        <option value="9">آذر</option>
-                        <option value="10">دی</option>
-                        <option value="11">بهمن</option>
-                        <option value="12">اسفند</option>
-                    </select>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>تاریخ</th>
+                                <th>عنوان</th>
+                                <th>نوع</th>
+                                <th>تعداد</th>
+                                <th class="admin-only">نرخ</th>
+                                <th class="admin-only">مبلغ</th>
+                                <th>وضعیت</th>
+                                <th>عملیات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportsTableBody"></tbody>
+                    </table>
                 </div>
             </div>
-            <div>
-                <label class="block text-xs mb-1">روز</label>
-                <select id="dp-day" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"></select>
-            </div>
-            <div class="flex justify-end gap-2 pt-2">
-                <button type="button" onclick="window.closeDatePickerModal()" class="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">انصراف</button>
-                <button type="button" onclick="window.selectShamsiDate()" class="px-4 py-1.5 bg-blue-600 text-white rounded text-xs font-bold">تایید تاریخ</button>
-            </div>
-        </div>
-    </div>
 
-    <div id="changepass-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
-            <h3 class="font-bold text-md border-b pb-2">تغییر رمز عبور</h3>
-            <form id="form-changepass" onsubmit="window.saveNewPassword(event); return false;" class="space-y-3 text-sm">
-                <div>
-                    <label class="block mb-1 text-gray-500">رمز عبور جدید</label>
-                    <input type="password" id="new_password_val" required minlength="4" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+            <div class="card" id="paymentsCard">
+                <div class="flex" style="justify-content: space-between;">
+                    <h3>پرداختی‌ها</h3>
+                    <button class="btn-success btn-sm admin-only" onclick="openPaymentModal()">+ ثبت واریزی</button>
                 </div>
-                <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" onclick="window.closeChangePassModal()" class="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">انصراف</button>
-                    <button type="submit" class="px-4 py-1.5 bg-blue-600 text-white rounded text-xs">تغییر رمز</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="sms-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
-            <h3 class="font-bold text-md border-b pb-2">ارسال پیامک اطلاع‌رسانی</h3>
-            <div class="space-y-3 text-sm">
-                <div>
-                    <label class="block mb-1 text-gray-500">متن پیامک</label>
-                    <textarea id="sms_text" rows="4" placeholder="متن پیامک اطلاع‌رسانی را وارد کنید..." class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"></textarea>
-                </div>
-                <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" onclick="window.closeSmsModal()" class="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">انصراف</button>
-                    <button type="button" onclick="window.sendGroupSms()" class="px-4 py-1.5 bg-purple-600 text-white rounded text-xs">ارسال پیامک</button>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>تاریخ</th>
+                                <th>مبلغ (تومان)</th>
+                                <th>کد پیگیری</th>
+                                <th>توضیحات</th>
+                                <th>وضعیت</th>
+                                <th class="admin-only">عملیات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="paymentsTableBody"></tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
 
-    <footer class="mt-auto py-4 text-center text-xs text-gray-400 border-t border-gray-200 dark:border-gray-800">
-        سیستم مدیریت تایپیست‌ها و محاسبه کارکرد - نسخه ۶.۰.۰
-    </footer>
+    <!-- Modals (Global) -->
+    <div id="modalOverlay" class="modal hidden">
+        <div class="modal-content" id="modalBody"></div>
+    </div>
 
-    <script src="app.js?v=6.0.0"></script>
+    <!-- Date Picker Modal -->
+    <div id="datePickerModal" class="modal hidden" style="z-index: 2000;">
+        <div class="modal-content" style="max-width: 300px;">
+            <div class="flex" style="justify-content: space-between; margin-bottom: 10px;">
+                <select id="dpYear"></select>
+                <select id="dpMonth"></select>
+            </div>
+            <div id="dpDays" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;"></div>
+            <button class="btn-danger btn-sm" style="width: 100%; margin-top: 15px;" onclick="closeDatePicker()">بستن</button>
+        </div>
+    </div>
+
+    <script src="app.js?v=6.1.0"></script>
 </body>
 </html>
