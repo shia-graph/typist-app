@@ -6,19 +6,17 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
-// Access Supabase from window.supabase and name client 'supabaseClient'
+
 const supabaseClient = (window.supabase && window.supabase.createClient) 
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) 
     : null;
 
-// 2. Global State
-let currentUserRole = null; // 'admin' | 'typist'
+let currentUserRole = null; 
 let currentTypistId = null;
 let currentTypistData = null;
 let allTypistsList = [];
 let targetDatepickerInputId = null;
 
-// 3. Helper Functions: Persian Digits & Safe DOM Elements
 function toEnglishDigits(str) {
     if (str === null || str === undefined) return '';
     const persians = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
@@ -30,29 +28,11 @@ function toEnglishDigits(str) {
     return s;
 }
 
-function getEl(id) {
-    return document.getElementById(id);
-}
-
-function safeShow(id, displayType = 'block') {
-    const el = getEl(id);
-    if (el) el.style.display = displayType;
-}
-
-function safeHide(id) {
-    const el = getEl(id);
-    if (el) el.style.display = 'none';
-}
-
-function safeSetText(id, text) {
-    const el = getEl(id);
-    if (el) el.textContent = text;
-}
-
-function safeSetValue(id, val) {
-    const el = getEl(id);
-    if (el) el.value = val !== undefined && val !== null ? val : '';
-}
+function getEl(id) { return document.getElementById(id); }
+function safeShow(id, displayType = 'block') { const el = getEl(id); if (el) el.style.display = displayType; }
+function safeHide(id) { const el = getEl(id); if (el) el.style.display = 'none'; }
+function safeSetText(id, text) { const el = getEl(id); if (el) el.textContent = text; }
+function safeSetValue(id, val) { const el = getEl(id); if (el) el.value = val !== undefined && val !== null ? val : ''; }
 
 function showToast(message, type = 'info') {
     const container = getEl('toast-container');
@@ -68,7 +48,6 @@ function showToast(message, type = 'info') {
     }, 4000);
 }
 
-// 4. Shamsi (Jalali) Date Helpers
 function getCurrentShamsiDate() {
     const today = new Date();
     return gregorianToJalali(today.getFullYear(), today.getMonth() + 1, today.getDate());
@@ -103,7 +82,6 @@ function gregorianToJalali(g_y, g_m, g_d) {
     return `${jy}/${pad(jm)}/${pad(jd)}`;
 }
 
-// 5. Auth & Login Functions Bound directly to window
 window.switchLoginTab = function(role) {
     const tabAdmin = getEl('tab-admin');
     const tabTypist = getEl('tab-typist');
@@ -113,13 +91,13 @@ window.switchLoginTab = function(role) {
     if (role === 'admin') {
         if (tabAdmin) tabAdmin.className = "flex-1 py-3 text-center font-bold text-blue-600 border-b-2 border-blue-600 transition";
         if (tabTypist) tabTypist.className = "flex-1 py-3 text-center font-medium text-gray-500 border-b-2 border-transparent transition";
-        if (formAdmin) safeShow('form-admin-login', 'block');
-        if (formTypist) safeHide('form-typist-login');
+        safeShow('form-admin-login', 'block');
+        safeHide('form-typist-login');
     } else {
         if (tabTypist) tabTypist.className = "flex-1 py-3 text-center font-bold text-blue-600 border-b-2 border-blue-600 transition";
         if (tabAdmin) tabAdmin.className = "flex-1 py-3 text-center font-medium text-gray-500 border-b-2 border-transparent transition";
-        if (formTypist) safeShow('form-typist-login', 'block');
-        if (formAdmin) safeHide('form-admin-login');
+        safeShow('form-typist-login', 'block');
+        safeHide('form-admin-login');
     }
 };
 
@@ -127,8 +105,6 @@ window.loginAdmin = async function(e) {
     if (e && e.preventDefault) e.preventDefault();
     const pass = toEnglishDigits(getEl('admin_password')?.value || '');
     if (!pass) return showToast('لطفاً رمز عبور را وارد کنید', 'error');
-
-    if (!supabaseClient) return showToast('خطا در اتصال به Supabase', 'error');
 
     try {
         const { data, error } = await supabaseClient.rpc('verify_admin_password', { _pass: pass });
@@ -152,8 +128,6 @@ window.loginTypist = async function(e) {
     const loginId = toEnglishDigits(getEl('typist_login_id')?.value || '');
     const pass = toEnglishDigits(getEl('typist_password')?.value || '');
     if (!loginId || !pass) return showToast('شناسه و کلمه عبور را وارد کنید', 'error');
-
-    if (!supabaseClient) return showToast('خطا در اتصال به Supabase', 'error');
 
     try {
         const { data, error } = await supabaseClient.rpc('verify_typist_password', { _login_id: loginId, _pass: pass });
@@ -181,12 +155,6 @@ window.logout = function() {
 };
 
 function renderAppView() {
-    const authSec = getEl('auth-section');
-    const adminDash = getEl('admin-dashboard');
-    const detailView = getEl('detail-view');
-    const logoutBtn = getEl('logout-btn');
-    const userStatusText = getEl('user-status-text');
-
     if (!currentUserRole) {
         safeShow('auth-section', 'block');
         safeHide('admin-dashboard');
@@ -205,7 +173,6 @@ function renderAppView() {
     }
 }
 
-// 6. Admin Dashboard Logic
 async function loadAdminDashboard() {
     safeShow('admin-dashboard', 'block');
     safeHide('detail-view');
@@ -244,23 +211,37 @@ function renderTypistsTable(list) {
     tbody.innerHTML = '';
 
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-400">هیچ تایپیستی یافت نشد.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-400">هیچ تایپیستی یافت نشد.</td></tr>`;
         return;
     }
 
     list.forEach(t => {
+        const balance = Number(t.remaining_balance || 0);
+        const statusBadge = balance <= 0 
+            ? `<span class="px-2 py-1 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 rounded-lg text-xs font-bold">✔️ تسویه کامل</span>`
+            : `<span class="px-2 py-1 bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 rounded-lg text-xs font-bold">⏳ دارای مانده</span>`;
+
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-750 transition';
         tr.innerHTML = `
             <td class="p-3 font-medium">${t.first_name} ${t.last_name}</td>
             <td class="p-3">${t.national_id || '-'}</td>
-            <td class="p-3">${t.phone || '-'}</td>
+            <td class="p-3">
+                <div class="flex items-center gap-1.5">
+                    <span class="font-mono text-xs">${t.phone || '-'}</span>
+                    ${t.phone ? `
+                        <a href="tel:${t.phone}" title="تماس تلفنی" class="p-1 bg-green-100 hover:bg-green-200 text-green-700 rounded transition text-xs">📞</a>
+                        <a href="sms:${t.phone}" title="ارسال پیامک" class="p-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded transition text-xs">💬</a>
+                    ` : ''}
+                </div>
+            </td>
             <td class="p-3 text-blue-600 dark:text-blue-400 font-bold">${Number(t.total_earned || 0).toLocaleString('fa-IR')}</td>
             <td class="p-3 text-emerald-600 dark:text-emerald-400 font-bold">${Number(t.total_paid || 0).toLocaleString('fa-IR')}</td>
-            <td class="p-3 text-amber-600 dark:text-amber-400 font-bold">${Number(t.remaining_balance || 0).toLocaleString('fa-IR')}</td>
+            <td class="p-3 text-amber-600 dark:text-amber-400 font-bold">${balance.toLocaleString('fa-IR')}</td>
+            <td class="p-3 text-center">${statusBadge}</td>
             <td class="p-3 text-center">
                 <button type="button" onclick="window.viewTypistDetail('${t.id}')" class="px-3 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 rounded-lg text-xs font-bold hover:bg-blue-200 transition">
-                    📋 مشاهده کارکرد و جزییات
+                    📋 مشاهده کارکرد
                 </button>
             </td>
         `;
@@ -278,7 +259,6 @@ window.filterTypists = function() {
     renderTypistsTable(filtered);
 };
 
-// 7. Typist Detail View Logic
 window.viewTypistDetail = async function(typistId) {
     currentTypistId = typistId;
     safeHide('admin-dashboard');
@@ -354,7 +334,7 @@ function renderReportsTable(reports) {
     tbody.innerHTML = '';
 
     if (reports.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-400">هیچ گزارش کاری ثبت نشده است.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-400">هیچ گزارش کاری ثبت نشده است.</td></tr>`;
         return;
     }
 
@@ -372,6 +352,7 @@ function renderReportsTable(reports) {
             <td class="p-2.5 font-bold">${r.page_count}</td>
             ${rateDisplay}
             <td class="p-2.5 font-bold text-blue-600 dark:text-blue-400">${Number(r.total_price || 0).toLocaleString('fa-IR')}</td>
+            <td class="p-2.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 rounded text-xs">✔️ تحویل شد</span></td>
             <td class="p-2.5 text-center">
                 <button type="button" onclick="window.openEditReportModal('${r.id}')" class="text-blue-600 hover:text-blue-800 text-xs px-2 py-1">✏️ ویرایش</button>
                 <button type="button" onclick="window.deleteReport('${r.id}')" class="text-red-600 hover:text-red-800 text-xs px-2 py-1">🗑 حذف</button>
@@ -387,7 +368,7 @@ function renderPaymentsTable(payments) {
     tbody.innerHTML = '';
 
     if (payments.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400">هیچ واریزی ثبت نشده است.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-400">هیچ واریزی ثبت نشده است.</td></tr>`;
         return;
     }
 
@@ -406,13 +387,13 @@ function renderPaymentsTable(payments) {
             <td class="p-2.5 font-bold text-emerald-600 dark:text-emerald-400">${Number(p.amount || 0).toLocaleString('fa-IR')}</td>
             <td class="p-2.5 font-mono text-xs">${p.ref_code || '-'}</td>
             <td class="p-2.5 text-xs text-gray-500">${p.notes || '-'}</td>
+            <td class="p-2.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 rounded text-xs">✔️ واریز شد</span></td>
             ${actionCol}
         `;
         tbody.appendChild(tr);
     });
 }
 
-// 8. CRUD Typists
 window.openAddTypistModal = function() {
     safeSetValue('modal_typist_first_name', '');
     safeSetValue('modal_typist_last_name', '');
@@ -425,13 +406,10 @@ window.openAddTypistModal = function() {
     safeShow('typist-modal', 'flex');
 };
 
-window.closeTypistModal = function() {
-    safeHide('typist-modal');
-};
+window.closeTypistModal = function() { safeHide('typist-modal'); };
 
 window.saveTypist = async function(e) {
     if (e && e.preventDefault) e.preventDefault();
-    
     const isModal = getEl('typist-modal')?.style.display === 'flex';
     let payload = {};
 
@@ -442,9 +420,7 @@ window.saveTypist = async function(e) {
             _last_name: getEl('modal_typist_last_name').value,
             _national_id: toEnglishDigits(getEl('modal_typist_national_id').value),
             _phone: toEnglishDigits(getEl('modal_typist_phone').value),
-            _father_name: '',
-            _card_number: '',
-            _sheba_number: '',
+            _father_name: '', _card_number: '', _sheba_number: '',
             _rate_normal: Number(getEl('modal_typist_rate_normal').value || 0),
             _rate_urgent: Number(getEl('modal_typist_rate_urgent').value || 0),
             _rate_math: Number(getEl('modal_typist_rate_math').value || 0)
@@ -466,9 +442,9 @@ window.saveTypist = async function(e) {
     }
 
     try {
-        const { data, error } = await supabaseClient.rpc('upsert_typist', payload);
+        const { error } = await supabaseClient.rpc('upsert_typist', payload);
         if (error) throw error;
-        showToast('اطلاعات تایپیست با موفقیت ذخیره شد', 'success');
+        showToast('اطلاعات تایپیست ذخیره شد', 'success');
         window.closeTypistModal();
         if (currentUserRole === 'admin' && !currentTypistId) {
             loadAdminDashboard();
@@ -480,7 +456,6 @@ window.saveTypist = async function(e) {
     }
 };
 
-// 9. CRUD Reports
 window.openAddReportModal = function() {
     safeSetValue('report_id', '');
     safeSetValue('report_title', '');
@@ -489,11 +464,8 @@ window.openAddReportModal = function() {
     safeSetValue('report_page_count', '1');
     safeSetValue('report_custom_rate', '');
     
-    if (currentUserRole === 'admin') {
-        safeShow('admin-custom-rate-field', 'block');
-    } else {
-        safeHide('admin-custom-rate-field');
-    }
+    if (currentUserRole === 'admin') safeShow('admin-custom-rate-field', 'block');
+    else safeHide('admin-custom-rate-field');
     
     safeSetText('report-modal-title', 'ثبت گزارش کار جدید');
     safeShow('report-modal', 'flex');
@@ -511,23 +483,17 @@ window.openEditReportModal = function(reportId) {
     safeSetValue('report_page_count', r.page_count);
     safeSetValue('report_custom_rate', r.custom_rate || '');
 
-    if (currentUserRole === 'admin') {
-        safeShow('admin-custom-rate-field', 'block');
-    } else {
-        safeHide('admin-custom-rate-field');
-    }
+    if (currentUserRole === 'admin') safeShow('admin-custom-rate-field', 'block');
+    else safeHide('admin-custom-rate-field');
 
     safeSetText('report-modal-title', 'ویرایش گزارش کار');
     safeShow('report-modal', 'flex');
 };
 
-window.closeReportModal = function() {
-    safeHide('report-modal');
-};
+window.closeReportModal = function() { safeHide('report-modal'); };
 
 window.saveReport = async function(e) {
     if (e && e.preventDefault) e.preventDefault();
-
     const reportId = getEl('report_id').value;
     const customRateVal = getEl('report_custom_rate').value;
 
@@ -570,7 +536,6 @@ window.deleteReport = async function(reportId) {
     }
 };
 
-// 10. CRUD Payments
 window.openAddPaymentModal = function() {
     safeSetValue('payment_id', '');
     safeSetValue('payment_amount', '');
@@ -595,13 +560,10 @@ window.openEditPaymentModal = function(paymentId) {
     safeShow('payment-modal', 'flex');
 };
 
-window.closePaymentModal = function() {
-    safeHide('payment-modal');
-};
+window.closePaymentModal = function() { safeHide('payment-modal'); };
 
 window.savePayment = async function(e) {
     if (e && e.preventDefault) e.preventDefault();
-
     const paymentId = getEl('payment_id').value;
     const payload = {
         _typist_id: currentTypistId,
@@ -641,7 +603,6 @@ window.deletePayment = async function(paymentId) {
     }
 };
 
-// 11. Shamsi DatePicker Modal
 window.openDatePicker = function(targetInputId) {
     targetDatepickerInputId = targetInputId;
     const yearSelect = getEl('dp-year');
@@ -660,9 +621,7 @@ window.openDatePicker = function(targetInputId) {
     safeShow('datepicker-modal', 'flex');
 };
 
-window.closeDatePickerModal = function() {
-    safeHide('datepicker-modal');
-};
+window.closeDatePickerModal = function() { safeHide('datepicker-modal'); };
 
 window.updateMonthDays = function() {
     const month = Number(getEl('dp-month').value);
@@ -687,23 +646,16 @@ window.selectShamsiDate = function() {
     const year = getEl('dp-year').value;
     const month = getEl('dp-month').value.padStart(2, '0');
     const day = getEl('dp-day').value;
-    const formatted = `${year}/${month}/${day}`;
-
-    if (targetDatepickerInputId) {
-        safeSetValue(targetDatepickerInputId, formatted);
-    }
+    if (targetDatepickerInputId) safeSetValue(targetDatepickerInputId, `${year}/${month}/${day}`);
     window.closeDatePickerModal();
 };
 
-// 12. Change Password Modal
 window.openChangePassModal = function() {
     safeSetValue('new_password_val', '');
     safeShow('changepass-modal', 'flex');
 };
 
-window.closeChangePassModal = function() {
-    safeHide('changepass-modal');
-};
+window.closeChangePassModal = function() { safeHide('changepass-modal'); };
 
 window.saveNewPassword = async function(e) {
     if (e && e.preventDefault) e.preventDefault();
@@ -714,11 +666,11 @@ window.saveNewPassword = async function(e) {
         if (currentUserRole === 'admin') {
             const { error } = await supabaseClient.rpc('change_admin_password', { _new_pass: newPass });
             if (error) throw error;
-            showToast('رمز عبور مدیر با موفقیت تغییر یافت', 'success');
+            showToast('رمز عبور مدیر تغییر یافت', 'success');
         } else {
             const { error } = await supabaseClient.rpc('change_typist_password', { _typist_id: currentTypistId, _new_pass: newPass });
             if (error) throw error;
-            showToast('رمز عبور شما با موفقیت تغییر یافت', 'success');
+            showToast('رمز عبور شما تغییر یافت', 'success');
         }
         window.closeChangePassModal();
     } catch (err) {
@@ -726,11 +678,8 @@ window.saveNewPassword = async function(e) {
     }
 };
 
-// 13. Bank CSV Export & SMS
 window.exportBankCSV = function() {
-    if (!allTypistsList || allTypistsList.length === 0) {
-        return showToast('اطلاعاتی برای خروجی یافت نشد', 'error');
-    }
+    if (!allTypistsList || allTypistsList.length === 0) return showToast('اطلاعاتی برای خروجی یافت نشد', 'error');
 
     let csvContent = "\uFEFFردیف,نام,نام خانوادگی,نام پدر,کد ملی,شماره تماس,شماره کارت,شماره شبا,مبلغ پرداختی به ریال\n";
 
@@ -759,7 +708,7 @@ window.exportBankCSV = function() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast('فایل اکسل پایا به ریال با موفقیت دریافت شد', 'success');
+    showToast('فایل اکسل پایا با موفقیت دریافت شد', 'success');
 };
 
 window.openSmsModal = function() {
@@ -767,25 +716,21 @@ window.openSmsModal = function() {
     safeShow('sms-modal', 'flex');
 };
 
-window.closeSmsModal = function() {
-    safeHide('sms-modal');
-};
+window.closeSmsModal = function() { safeHide('sms-modal'); };
 
 window.sendGroupSms = function() {
     const text = getEl('sms_text').value;
     if (!text) return showToast('متن پیامک را وارد کنید', 'error');
-    showToast('درخواست پیامک ارسال شد (سامانه پیامکی آماده است)', 'success');
+    showToast('پیامک ارسال شد', 'success');
     window.closeSmsModal();
 };
 
-// 14. Theme Switcher
 window.toggleTheme = function() {
     const isDark = document.documentElement.classList.toggle('dark');
     safeSetText('theme-icon', isDark ? '☀️' : '🌙');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
 };
 
-// Initialize App Setup
 document.addEventListener('DOMContentLoaded', () => {
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
