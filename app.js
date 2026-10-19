@@ -4,7 +4,7 @@
 
 // 1. Supabase Initialization with Safe non-conflicting variable name
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEyMzg2NjYsImV4cCI6MjA1NjgxNDY2Nn0.2O5_N4MSpPBygOnT2XN65O9C4Y7I47b8s6R3H6R3g7U';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
 // Access Supabase from window.supabase and name client 'supabaseClient'
 const supabaseClient = (window.supabase && window.supabase.createClient) 
