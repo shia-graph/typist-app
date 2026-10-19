@@ -8,7 +8,6 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 // Global State
 let currentUser = null;
 let globalTypists = [];
