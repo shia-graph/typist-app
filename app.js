@@ -1,22 +1,52 @@
-/* ==========================================================================
-   Typist Payroll & Task Management Application Logic (v4.2.0)
-   ========================================================================== */
-
-// 1. Supabase Initialization with Safe non-conflicting variable name
-const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
-
-
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-// Global State
+// ==========================================
+// Global Variables & Supabase Initialization
+// ==========================================
 let currentUser = null;
 let globalTypists = [];
 let globalProjects = [];
 let globalReports = [];
 
+
+// 1. Supabase Initialization with Safe non-conflicting variable name
+const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 // ==========================================
-// UTILITY FUNCTIONS & FALLBACK READERS
+// SHAMSI / JALALI DATE CONVERTER ENGINE
 // ==========================================
+function gregorianToJalali(gy, gm, gd) {
+    const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    let jy = (gy <= 1600) ? 0 : 979;
+    gy -= (gy <= 1600) ? 621 : 1600;
+    const gy2 = (gm > 2) ? (gy + 1) : gy;
+    let days = (365 * gy) + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) + Math.floor((gy2 + 399) / 400) + 80 + gd + g_d_m[gm - 1];
+    jy += 33 * Math.floor(days / 12053);
+    days %= 12053;
+    jy += 4 * Math.floor(days / 1461);
+    days %= 1461;
+    jy += Math.floor((days - 1) / 365);
+    if (days > 0) days = (days - 1) % 365;
+    const jm = (days < 186) ? 1 + Math.floor(days / 31) : 7 + Math.floor((days - 186) / 30);
+    const jd = 1 + ((days < 186) ? (days % 31) : ((days - 186) % 30));
+    return [jy, jm, jd];
+}
+
+function formatJalali(isoString) {
+    if (!isoString) return '-';
+    try {
+        const d = new Date(isoString);
+        if (isNaN(d.getTime())) return isoString;
+        const [jy, jm, jd] = gregorianToJalali(d.getFullYear(), d.getMonth() + 1, d.getDate());
+        const pad = (n) => n < 10 ? '0' + n : n;
+        return `${jy}/${pad(jm)}/${pad(jd)}`;
+    } catch (e) {
+        return isoString;
+    }
+}
+
+// Helper Utilities
 function toEnglishDigits(str) {
     if (!str) return '';
     const persianDigits = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
@@ -35,19 +65,7 @@ function showToast(message, type = 'info') {
     toast.className = `${bgClass} text-white text-xs md:text-sm px-4 py-3 rounded-xl shadow-lg flex items-center justify-between transition-all duration-300 transform translate-y-2 pointer-events-auto`;
     toast.innerHTML = `<span>${message}</span><button onclick="this.parentElement.remove()" class="mr-2 font-bold">✕</button>`;
     container.appendChild(toast);
-    setTimeout(() => {
-        toast.remove();
-    }, 4000);
-}
-
-function formatJalali(isoString) {
-    if (!isoString) return '-';
-    try {
-        const date = new Date(isoString);
-        return date.toLocaleDateString('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' });
-    } catch (e) {
-        return isoString;
-    }
+    setTimeout(() => toast.remove(), 4000);
 }
 
 function calculate10DayStatus(lastReportDateISO) {
@@ -61,14 +79,14 @@ function calculate10DayStatus(lastReportDateISO) {
 
     if (diffDays > 10) {
         const delay = diffDays - 10;
-        return { status: 'delayed', text: `تأخیر در ارسال گزارش (${delay} روز تاخیر)`, delayDays: delay, isDelayed: true };
+        return { status: 'delayed', text: `تأخیر در ارسال (${delay} روز تاخیر)`, delayDays: delay, isDelayed: true };
     } else {
         const daysLeft = 10 - diffDays;
-        return { status: 'ok', text: `منظم (${daysLeft} روز مهلت باقی‌مانده)`, daysLeft: daysLeft, isDelayed: false };
+        return { status: 'ok', text: `منظم (${daysLeft} روز مهلت)`, daysLeft: daysLeft, isDelayed: false };
     }
 }
 
-// Dynamic Helpers matching DB exact schema
+// Fallback Schema Getters
 function getTypistFullName(t) {
     if (t.first_name || t.last_name) return `${t.first_name || ''} ${t.last_name || ''}`.trim();
     if (t.name) return t.name;
@@ -76,11 +94,11 @@ function getTypistFullName(t) {
 }
 
 function getTypistNationalId(t) {
-    return t.national_id || t.national_code || t.phone || '-';
+    return t.national_id || t.national_code || '-';
 }
 
 function getTypistShaba(t) {
-    return t.sheba_number || t.iban || t.account_number || '-';
+    return t.sheba_number || t.shaba || t.iban || t.account_number || '-';
 }
 
 function getTypistPageRate(t) {
@@ -116,7 +134,7 @@ async function handleLogin(e) {
     loginBtn.innerText = 'در حال بررسی...';
 
     try {
-        // 1. Admin Auth
+        // 1. Admin Login
         if ((usernameInput === 'admin' || usernameInput === 'مدیر') && passwordInput === 'admin123') {
             currentUser = { role: 'admin', full_name: 'مدیر سیستم' };
             localStorage.setItem('payroll_user', JSON.stringify(currentUser));
@@ -125,16 +143,19 @@ async function handleLogin(e) {
             return;
         }
 
-        // 2. Fetch Typists to authenticate
+        // 2. Fetch Typists to authenticate by Phone or National ID
         const { data: typists, error } = await db.from('typists').select('*');
         if (error) throw error;
 
-        const found = typists.find(t => {
-            const nid = getTypistNationalId(t);
+        const found = (typists || []).find(t => {
             const phone = t.phone || '';
+            const nid = getTypistNationalId(t);
             const uid = t.id || '';
-            const matchUser = (usernameInput === nid || usernameInput === phone || usernameInput === uid);
-            const userPass = t.password || (phone.length >= 4 ? phone.slice(-4) : '1234');
+            const matchUser = (usernameInput === phone || usernameInput === nid || usernameInput === uid);
+            
+            // Password fallback: t.password -> last 4 digits of phone -> '1234'
+            const defaultPass = phone.length >= 4 ? phone.slice(-4) : '1234';
+            const userPass = t.password || defaultPass;
             return matchUser && (passwordInput === userPass);
         });
 
@@ -144,7 +165,7 @@ async function handleLogin(e) {
             showToast(`خوش آمدید ${getTypistFullName(found)}`, 'success');
             setupUserUI();
         } else {
-            showToast('شناسه کاربری یا رمز عبور اشتباه است', 'error');
+            showToast('نام کاربری یا رمز عبور اشتباه است', 'error');
         }
     } catch (err) {
         console.error('Login error:', err);
@@ -311,6 +332,110 @@ async function deleteWorkRecord(recordId) {
         console.error('Delete record error:', err);
         showToast('خطا در حذف کارکرد', 'error');
     }
+}
+
+// ==========================================
+// ADMIN DIRECT RECORD SUBMISSION FOR TYPIST
+// ==========================================
+function openAdminRecordModal() {
+    const typistSelect = document.getElementById('admin-record-typist');
+    const projectSelect = document.getElementById('admin-record-project');
+
+    typistSelect.innerHTML = '<option value="">-- انتخاب تایپیست --</option>';
+    globalTypists.forEach(t => {
+        typistSelect.innerHTML += `<option value="${t.id}">${getTypistFullName(t)} (${t.phone || '-'})</option>`;
+    });
+
+    projectSelect.innerHTML = '<option value="">-- انتخاب عنوان کار --</option>';
+    globalProjects.filter(p => p.status === 'active').forEach(p => {
+        projectSelect.innerHTML += `<option value="${p.title}">${p.title}</option>`;
+    });
+
+    document.getElementById('admin-record-modal').classList.remove('hidden');
+}
+
+function closeAdminRecordModal() {
+    document.getElementById('admin-record-modal').classList.add('hidden');
+}
+
+async function saveAdminRecord(e) {
+    e.preventDefault();
+    const typistId = document.getElementById('admin-record-typist').value;
+    const title = document.getElementById('admin-record-project').value;
+    const pages = parseInt(toEnglishDigits(document.getElementById('admin-record-pages').value)) || 0;
+    const words = parseInt(toEnglishDigits(document.getElementById('admin-record-words').value)) || 0;
+
+    if (!typistId || !title) {
+        showToast('لطفاً تایپیست و عنوان کار را انتخاب کنید', 'error');
+        return;
+    }
+
+    try {
+        const nowISO = new Date().toISOString();
+        const { error: recErr } = await db.from('work_records').insert([{
+            typist_id: typistId,
+            person_id: typistId,
+            title: title,
+            page_count: pages,
+            words_count: words,
+            created_at: nowISO
+        }]);
+        if (recErr) throw recErr;
+
+        await db.from('typists').update({ last_report_date: nowISO }).eq('id', typistId);
+
+        showToast('کارکرد با موفقیت توسط مدیر ثبت گردید', 'success');
+        closeAdminRecordModal();
+        loadAdminData();
+    } catch (err) {
+        console.error('Admin record save error:', err);
+        showToast('خطا در ثبت کارکرد', 'error');
+    }
+}
+
+// ==========================================
+// GROUP SMS & NOTIFICATION SYSTEM
+// ==========================================
+function openSmsModal() {
+    updateSmsRecipients();
+    document.getElementById('sms-modal').classList.remove('hidden');
+}
+
+function closeSmsModal() {
+    document.getElementById('sms-modal').classList.add('hidden');
+}
+
+function updateSmsRecipients() {
+    const targetGroup = document.getElementById('sms-target-group').value;
+    let list = [];
+
+    if (targetGroup === 'delayed') {
+        list = globalTypists.filter(t => calculate10DayStatus(t.last_report_date || t.created_at).isDelayed);
+    } else {
+        list = globalTypists;
+    }
+
+    const phones = list.map(t => t.phone).filter(p => p && p.trim() !== '');
+    document.getElementById('sms-recipients-list').value = phones.join(', ');
+}
+
+function sendSmsAction() {
+    const phonesStr = document.getElementById('sms-recipients-list').value;
+    const message = document.getElementById('sms-message-text').value.trim();
+
+    if (!phonesStr) {
+        showToast('هیچ شماره تلفنی برای دریافت پیامک یافت نشد', 'error');
+        return;
+    }
+    if (!message) {
+        showToast('لطفاً متن پیامک را وارد کنید', 'error');
+        return;
+    }
+
+    // Open standard device SMS link
+    const phones = phonesStr.split(',').map(p => p.trim()).join(',');
+    window.location.href = `sms:${phones}?body=${encodeURIComponent(message)}`;
+    showToast('سامانه پیامک دستگاه فراخوانی شد', 'success');
 }
 
 // ==========================================
@@ -538,7 +663,6 @@ async function submitTypistWorkReport(e) {
     try {
         const nowISO = new Date().toISOString();
 
-        // 1. Insert Work Record (Using schema exact columns: page_count and words_count)
         const { error: recErr } = await db.from('work_records').insert([{
             typist_id: currentUser.id,
             person_id: currentUser.id,
@@ -549,11 +673,9 @@ async function submitTypistWorkReport(e) {
         }]);
         if (recErr) throw recErr;
 
-        // 2. Reset 10-Day Cycle in typists table
         const { error: typErr } = await db.from('typists').update({ last_report_date: nowISO }).eq('id', currentUser.id);
         if (!typErr) currentUser.last_report_date = nowISO;
 
-        // 3. Mark project completed if checkbox checked
         if (isFinished) {
             const selectedOpt = select.options[select.selectedIndex];
             const pId = selectedOpt ? selectedOpt.dataset.id : null;
@@ -565,7 +687,6 @@ async function submitTypistWorkReport(e) {
         showToast('گزارش کارکرد با موفقیت ثبت شد و تایمر ۱۰ روزه شما بازنشانی گردید.', 'success');
         document.getElementById('typist-report-form').reset();
 
-        // Refresh Typist UI
         update10DayBadge();
         await populateActiveProjectsDropdown();
         await loadTypistHistory();
@@ -625,9 +746,8 @@ async function exportBankExcel() {
             return;
         }
 
-        // Header required by Bank CSV export
         const headers = ["ردیف", "نام", "نام خانوادگی", "شماره ملی", "شماره تماس", "شماره شبا", "مبلغ قابل واریز (ریال)"];
-        let csvContent = "\ufeff" + headers.join(",") + "\n"; // UTF-8 BOM for Microsoft Excel
+        let csvContent = "\ufeff" + headers.join(",") + "\n";
 
         let rowNum = 1;
         typists.forEach(t => {
@@ -658,7 +778,6 @@ async function exportBankExcel() {
             csvContent += row.join(",") + "\n";
         });
 
-        // Trigger Download
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
