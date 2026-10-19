@@ -19,7 +19,7 @@ function getSupabaseClient() {
     return supabaseClient;
 }
 
-// ۲. توابع کمکی و تبدیل اعداد
+// توابع کمکی و تبدیل اعداد
 const toEnglishDigits = (str) => {
     if (str === null || str === undefined) return "";
     return str.toString()
@@ -37,7 +37,7 @@ function showLoading(show) {
     if (el) el.style.display = show ? 'flex' : 'none';
 }
 
-// ۳. مدیریت ورود، خروج و جلسات کاربری (Auth)
+// مدیریت ورود، خروج و جلسات کاربری (Auth)
 async function login() {
     const rawId = document.getElementById('loginId').value.trim();
     const id = toEnglishDigits(rawId).toLowerCase();
@@ -153,7 +153,7 @@ function logoutSilent() {
     location.reload();
 }
 
-// ۴. سوئیت‌کننده صفحات و تب‌ها
+// سوئیت‌کننده صفحات و تب‌ها
 function showSection(type) {
     document.getElementById('loginSection').classList.toggle('hidden', type !== 'login');
     document.getElementById('appSection').classList.toggle('hidden', type !== 'app');
@@ -169,9 +169,9 @@ function switchTab(tab) {
     const targetTab = document.getElementById(tab + 'Tab');
     if (targetTab) targetTab.classList.remove('hidden');
 
-    if (event && event.currentTarget && event.currentTarget.classList.contains('tab-btn')) {
-        event.currentTarget.classList.remove('bg-gray-200', 'text-gray-700');
-        event.currentTarget.classList.add('bg-blue-600', 'text-white');
+    if (window.event && window.event.currentTarget && window.event.currentTarget.classList.contains('tab-btn')) {
+        window.event.currentTarget.classList.remove('bg-gray-200', 'text-gray-700');
+        window.event.currentTarget.classList.add('bg-blue-600', 'text-white');
     }
 
     if (tab === 'typists') loadTypists();
@@ -180,7 +180,7 @@ function switchTab(tab) {
     if (tab === 'reports') loadAdminReport();
 }
 
-// ۵. مقداردهی اولیه برنامه
+// مقداردهی اولیه برنامه
 async function initApp() {
     showSection('app');
     document.getElementById('userBadge').innerText = isAdmin ? "مدیر سیستم" : "پنل تایپیست";
@@ -199,7 +199,7 @@ async function initApp() {
     }
 }
 
-// ۶. پنل و داشبورد خود تایپیست
+// پنل و داشبورد خود تایپیست
 async function loadTypistDashboard() {
     showLoading(true);
     const client = getSupabaseClient();
@@ -246,7 +246,7 @@ async function loadTypistDashboard() {
 
     } catch (e) {
         console.error("Dashboard Load Error:", e);
-    } finally {
+    } fontally {
         showLoading(false);
     }
 }
@@ -294,7 +294,7 @@ async function saveTypistProfile() {
     }
 }
 
-// ۷. پنل ادمین - مدیریت تایپیست‌ها
+// پنل ادمین - مدیریت تایپیست‌ها
 async function loadTypists() {
     showLoading(true);
     const { data, error } = await getSupabaseClient()
@@ -303,7 +303,7 @@ async function loadTypists() {
         .order('created_at', { ascending: false });
 
     showLoading(false);
-    if (error) return alert("خطا در دريافت لیست تایپیست‌ها.");
+    if (error) return alert("خطا در دریافت لیست تایپیست‌ها.");
 
     allTypistsCache = data || [];
     renderTypistsTable(allTypistsCache);
@@ -407,7 +407,7 @@ async function deleteTypist(id) {
     }
 }
 
-// ۸. مودال ویرایش تایپیست توسط ادمین
+// مودال ویرایش تایپیست توسط ادمین
 function openEditModal(id) {
     const t = allTypistsCache.find(x => x.id === id);
     if (!t) return;
@@ -437,7 +437,7 @@ async function saveTypistModalEdit() {
         phone: toEnglishDigits(document.getElementById('edit_t_phone').value.trim()),
         page_rate: parseInt(toEnglishDigits(document.getElementById('edit_t_rate').value.trim())),
         card_number: toEnglishDigits(document.getElementById('edit_t_card').value.trim()),
-        shaba: document.getElementById('edit_t_shaba').value.trim()
+        shaba: toEnglishDigits(document.getElementById('edit_t_shaba').value.trim())
     };
 
     showLoading(true);
@@ -454,7 +454,7 @@ async function saveTypistModalEdit() {
     }
 }
 
-// ۹. مودال تغییر رمز عبور
+// مودال تغییر رمز عبور
 let targetPassResetId = null;
 
 function openChangePassModal() {
@@ -498,7 +498,7 @@ async function saveNewPassword() {
     }
 }
 
-// ۱۰. ثبت و مدیریت کارها (Work Records)
+// ثبت و مدیریت کارها (Work Records)
 async function loadTypistDropdowns() {
     const { data } = await getSupabaseClient().from('typists').select('id, name, family').order('name');
     if (!data) return;
@@ -599,7 +599,7 @@ async function deleteWork(id) {
     loadWorks();
 }
 
-// ۱۱. ثبت و مدیریت پرداختی‌ها (Payments)
+// ثبت و مدیریت پرداختی‌ها (Payments)
 async function loadPayments() {
     showLoading(true);
     const { data, error } = await getSupabaseClient()
@@ -657,7 +657,7 @@ async function deletePayment(id) {
     loadPayments();
 }
 
-// ۱۲. گزارش‌گیری جامع ادمین
+// گزارش‌گیری جامع ادمین
 async function loadAdminReport() {
     const start = document.getElementById('rep_start').value || null;
     const end = document.getElementById('rep_end').value || null;
@@ -697,7 +697,7 @@ async function loadAdminReport() {
     }
 }
 
-// ۱۳. ابزارها و خروجی‌های CSV
+// ابزارها و خروجی‌های CSV
 function toggleSelectAll() {
     const master = document.getElementById('selectAll');
     document.querySelectorAll('.typist-checkbox').forEach(cb => cb.checked = master.checked);
@@ -773,7 +773,7 @@ function downloadCSVFile(content, fileName) {
     document.body.removeChild(link);
 }
 
-// ۱۴. لیسنرها و شروع خودکار برنامه
+// لیسنرها و شروع خودکار برنامه
 document.addEventListener('DOMContentLoaded', () => {
     checkSession();
 
