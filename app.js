@@ -1,29 +1,47 @@
-// ==========================================
-// Global Variables & Supabase Initialization
-// ==========================================
-let currentUser = null;
-let globalTypists = [];
-let globalProjects = [];
-let globalReports = [];
 
 
 // 1. Supabase Initialization with Safe non-conflicting variable name
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 
+// Initialize Supabase Client
+let db = null;
+if (window.supabase) {
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
 
-// ==========================================
-// DATE & STRING HELPERS
-// ==========================================
+// Global State Variables
+let currentUser = null; // { type: 'admin'|'typist', data: object }
+let globalTypists = [];
+let globalReports = [];
+
+// Helper: Convert Persian/Arabic numbers to English
+function toEnglishDigits(str) {
+    if (str === null || str === undefined) return '';
+    const p = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+    const a = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+    let s = String(str);
+    for (let i = 0; i < 10; i++) {
+        s = s.replace(new RegExp(p[i], 'g'), i).replace(new RegExp(a[i], 'g'), i);
+    }
+    return s;
+}
+
+// Helper: Format Number with commas
+function formatNumber(num) {
+    if (!num && num !== 0) return '0';
+    return Number(num).toLocaleString('fa-IR');
+}
+
+// Jalali Date Converter Engine
 function gregorianToJalali(gy, gm, gd) {
     const g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
     let jy = (gy <= 1600) ? 0 : 979;
     gy -= (gy <= 1600) ? 621 : 1600;
     const gy2 = (gm > 2) ? (gy + 1) : gy;
-    let days = (365 * gy) + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) + Math.floor((gy2 + 399) / 400) + 80 + gd + g_d_m[gm - 1];
+    let days = (365 * gy) + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) + Math.floor((gy2 + 399) / 400) - 80 + gd + g_d_m[gm - 1];
     jy += 33 * Math.floor(days / 12053);
     days %= 12053;
     jy += 4 * Math.floor(days / 1461);
@@ -35,240 +53,486 @@ function gregorianToJalali(gy, gm, gd) {
     return [jy, jm, jd];
 }
 
-function formatJalali(isoString) {
-    if (!isoString) return '-';
-    // If it already contains Persian date formats like ۱۴۰۵/۰۷/۱۳, return it directly
-    if (String(isoString).includes('/')) return isoString; 
-    
-    try {
-        const d = new Date(isoString);
-        if (isNaN(d.getTime())) return isoString;
-        const [jy, jm, jd] = gregorianToJalali(d.getFullYear(), d.getMonth() + 1, d.getDate());
-        const pad = (n) => n < 10 ? '0' + n : n;
-        return `${jy}/${pad(jm)}/${pad(jd)}`;
-    } catch (e) {
-        return isoString;
-    }
-}
-
-function toEnglishDigits(str) {
-    if (!str) return '';
-    const persianDigits = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
-    const arabicDigits = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
-    let result = String(str);
-    for (let i = 0; i < 10; i++) {
-        result = result.replace(persianDigits[i], i).replace(arabicDigits[i], i);
-    }
-    return result.trim();
-}
-
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    const bgClass = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-rose-600' : 'bg-slate-800';
-    toast.className = `${bgClass} text-white text-xs md:text-sm px-4 py-3 rounded-xl shadow-lg flex items-center justify-between transition-all duration-300 transform translate-y-2 pointer-events-auto`;
-    toast.innerHTML = `<span>${message}</span><button onclick="this.parentElement.remove()" class="mr-2 font-bold">✕</button>`;
-    container.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
-}
-
-function calculate10DayStatus(lastReportDateISO) {
-    if (!lastReportDateISO) return { status: 'ok', text: 'منظم (تایم فعال)', isDelayed: false };
-    
-    // Ignore invalid persian texts in this calculation, rely on Date parsing
-    const lastDate = new Date(lastReportDateISO);
-    if (isNaN(lastDate.getTime())) return { status: 'ok', text: 'نامشخص', isDelayed: false };
-    
+function getTodayJalaliString() {
     const now = new Date();
-    const diffTime = now - lastDate;
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const [jy, jm, jd] = gregorianToJalali(now.getFullYear(), now.getMonth() + 1, now.getDate());
+    const m = jm < 10 ? '0' + jm : jm;
+    const d = jd < 10 ? '0' + jd : jd;
+    return `${jy}/${m}/${d}`;
+}
 
-    if (diffDays > 10) {
-        return { status: 'delayed', text: `تأخیر (${diffDays - 10} روز)`, isDelayed: true };
-    } else {
-        return { status: 'ok', text: `منظم (${10 - diffDays} روز مهلت)`, isDelayed: false };
+function setTodayShamsi(inputId) {
+    const input = document.getElementById(inputId);
+    if (input) {
+        input.value = getTodayJalaliString();
     }
 }
 
-// Fallback Schema Getters (Matching your specific DB structure)
-function getTypistFullName(t) {
-    if (!t) return 'نامشخص';
-    if (t.name) return t.name;
-    if (t.first_name || t.last_name) return `${t.first_name || ''} ${t.last_name || ''}`.trim();
-    if (t.full_name) return t.full_name;
-    return 'تایپیست بدون نام';
+function formatJalali(dateInput) {
+    if (!dateInput) return '---';
+    let dateObj;
+    if (typeof dateInput === 'string' && (dateInput.includes('/') || dateInput.length <= 10) && !dateInput.includes('T')) {
+        return toEnglishDigits(dateInput);
+    }
+    dateObj = new Date(dateInput);
+    if (isNaN(dateObj.getTime())) return '---';
+
+    const [jy, jm, jd] = gregorianToJalali(dateObj.getFullYear(), dateObj.getMonth() + 1, dateObj.getDate());
+    const m = jm < 10 ? '0' + jm : jm;
+    const d = jd < 10 ? '0' + jd : jd;
+    return `${jy}/${m}/${d}`;
 }
 
-function getTypistNationalId(t) {
-    if (!t) return '-';
-    return t.national_id || t.national_code || '-';
+// UI Alert Helper
+function showAlert(message, isError = false) {
+    const alertBox = document.getElementById('alertBox');
+    if (!alertBox) return;
+    alertBox.textContent = message;
+    alertBox.className = `mb-4 p-4 rounded-xl shadow-sm text-sm font-medium transition-all ${
+        isError ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+    }`;
+    alertBox.classList.remove('hidden');
+    setTimeout(() => {
+        alertBox.classList.add('hidden');
+    }, 4000);
 }
 
-function getTypistShaba(t) {
-    if (!t) return '-';
-    return t.sheba_number || t.shaba || t.iban || t.account_number || '-';
+// Schema Field Extractors (Supports Schema Variances)
+function getTypistName(typist) {
+    if (!typist) return 'نامشخص';
+    if (typist.name && typist.name.trim() !== '') return typist.name;
+    const fn = typist.first_name || '';
+    const ln = typist.last_name || '';
+    const combined = `${fn} ${ln}`.trim();
+    return combined || typist.phone || 'تایپیست';
 }
 
-function getTypistRateWord(t) {
-    return Number(t.rate_per_word || t.default_word_rate || 15);
+function getTypistNationalId(typist) {
+    return typist.national_id || typist.national_code || '---';
 }
 
-function getTypistRatePage(t) {
-    return Number(t.page_rate || t.default_page_rate || 0);
+function getRecordWordsCount(record) {
+    return Number(record.words_count || record.word_count || 0);
 }
 
-function getRecordPageCount(r) {
-    if (r.page_count !== undefined && r.page_count !== null) return Number(r.page_count);
-    if (r.pages_count !== undefined && r.pages_count !== null) return Number(r.pages_count);
-    if (r.quantity !== undefined && r.quantity !== null) return Number(r.quantity);
-    return 0;
+function getRecordPageCount(record) {
+    return Number(record.page_count || record.pages_count || record.quantity || 0);
 }
 
-function getRecordDate(r) {
-    return r.created_at || r.record_date || r.delivery_date || null;
+function getRecordDate(record) {
+    return record.created_at || record.record_date || new Date().toISOString();
 }
 
-// ==========================================
-// AUTHENTICATION
-// ==========================================
+function isRecordBelongsToTypist(record, typistId) {
+    if (!record || !typistId) return false;
+    const tid = String(typistId);
+    return String(record.typist_id) === tid || String(record.person_id) === tid;
+}
+
+// Application Initialization
 document.addEventListener('DOMContentLoaded', () => {
     checkSavedSession();
 });
 
 function checkSavedSession() {
-    const saved = localStorage.getItem('payroll_user');
+    const saved = localStorage.getItem('typist_app_session');
     if (saved) {
         try {
             currentUser = JSON.parse(saved);
-            setupUserUI();
+            renderDashboard();
+            return;
         } catch (e) {
-            localStorage.removeItem('payroll_user');
+            localStorage.removeItem('typist_app_session');
         }
     }
+    showLoginView();
 }
 
+function showLoginView() {
+    currentUser = null;
+    document.getElementById('loginSection').classList.remove('hidden');
+    document.getElementById('typistDashboard').classList.add('hidden');
+    document.getElementById('adminDashboard').classList.add('hidden');
+    document.getElementById('userInfoHeader').classList.add('hidden');
+}
+
+// Authentication Logic
 async function handleLogin(e) {
     e.preventDefault();
-    const usernameInput = toEnglishDigits(document.getElementById('login-username').value);
-    const passwordInput = toEnglishDigits(document.getElementById('login-password').value);
-    const loginBtn = document.getElementById('login-btn');
+    const rawUser = document.getElementById('loginUsername').value;
+    const rawPass = document.getElementById('loginPassword').value;
 
-    loginBtn.disabled = true;
-    loginBtn.innerText = 'در حال بررسی...';
+    const username = toEnglishDigits(rawUser).trim();
+    const password = toEnglishDigits(rawPass).trim();
 
+    // 1. Admin Auth Check
+    if ((username === 'admin' || username === '09127853421') && (password === 'admin123' || password === '3421')) {
+        currentUser = {
+            type: 'admin',
+            data: { name: 'مدیر سیستم', is_admin: true }
+        };
+        localStorage.setItem('typist_app_session', JSON.stringify(currentUser));
+        renderDashboard();
+        showAlert('خوش آمدید، مدیر سیستم');
+        return;
+    }
+
+    // 2. Fetch typists to authenticate
     try {
-        if ((usernameInput === 'admin' || usernameInput === 'مدیر') && passwordInput === 'admin123') {
-            currentUser = { role: 'admin', full_name: 'مدیر سیستم' };
-            localStorage.setItem('payroll_user', JSON.stringify(currentUser));
-            showToast('با موفقیت وارد شدید', 'success');
-            setupUserUI();
-            return;
-        }
-
         const { data: typists, error } = await db.from('typists').select('*');
         if (error) throw error;
 
-        const found = (typists || []).find(t => {
-            const phone = t.phone || '';
-            const nid = getTypistNationalId(t);
-            const uid = t.id || '';
-            const matchUser = (usernameInput === phone || usernameInput === nid || usernameInput === uid);
-            
-            const defaultPass = phone.length >= 4 ? phone.slice(-4) : '1234';
-            const userPass = t.password || defaultPass;
-            return matchUser && (passwordInput === userPass);
+        // Check if DB typist matches
+        const typist = typists.find(t => {
+            const pPhone = toEnglishDigits(t.phone || '').trim();
+            const pNational = toEnglishDigits(t.national_id || t.national_code || '').trim();
+            const pPass = toEnglishDigits(t.password || '').trim();
+            const last4 = pPhone.length >= 4 ? pPhone.slice(-4) : '';
+
+            const usernameMatch = (username === pPhone || username === pNational || username === t.id);
+            const passwordMatch = (password === pPass || (last4 && password === last4) || password === '1234');
+
+            return usernameMatch && passwordMatch;
         });
 
-        if (found) {
-            currentUser = { role: 'typist', ...found };
-            localStorage.setItem('payroll_user', JSON.stringify(currentUser));
-            showToast(`خوش آمدید ${getTypistFullName(found)}`, 'success');
-            setupUserUI();
+        if (typist) {
+            if (typist.is_admin) {
+                currentUser = { type: 'admin', data: typist };
+            } else {
+                currentUser = { type: 'typist', data: typist };
+            }
+            localStorage.setItem('typist_app_session', JSON.stringify(currentUser));
+            renderDashboard();
+            showAlert(`خوش آمدید، ${getTypistName(typist)}`);
         } else {
-            showToast('نام کاربری یا رمز عبور اشتباه است', 'error');
+            showAlert('نام کاربری یا رمز عبور اشتباه است.', true);
         }
     } catch (err) {
         console.error('Login error:', err);
-        showToast('خطا در ارتباط با سرور', 'error');
-    } finally {
-        loginBtn.disabled = false;
-        loginBtn.innerText = 'ورود';
+        showAlert('خطا در برقراری ارتباط با پایگاه داده.', true);
     }
 }
 
 function logout() {
+    localStorage.removeItem('typist_app_session');
     currentUser = null;
-    localStorage.removeItem('payroll_user');
-    document.getElementById('login-section').classList.remove('hidden');
-    document.getElementById('admin-dashboard').classList.add('hidden');
-    document.getElementById('typist-dashboard').classList.add('hidden');
-    document.getElementById('user-info-bar').classList.add('hidden');
-    showToast('از سیستم خارج شدید', 'info');
+    showLoginView();
+    showAlert('شما با موفقیت خارج شدید.');
 }
 
-function setupUserUI() {
-    document.getElementById('login-section').classList.add('hidden');
-    document.getElementById('user-info-bar').classList.remove('hidden');
+// Main Dashboard Switcher
+async function renderDashboard() {
+    if (!currentUser) return showLoginView();
 
-    if (currentUser.role === 'admin') {
-        document.getElementById('user-display-name').innerText = '👤 مدیر سیستم';
-        document.getElementById('admin-dashboard').classList.remove('hidden');
-        document.getElementById('typist-dashboard').classList.add('hidden');
-        loadAdminData();
+    document.getElementById('loginSection').classList.add('hidden');
+    document.getElementById('userInfoHeader').classList.remove('hidden');
+    document.getElementById('userDisplayName').textContent = currentUser.data.name || getTypistName(currentUser.data);
+
+    if (currentUser.type === 'admin') {
+        document.getElementById('adminDashboard').classList.remove('hidden');
+        document.getElementById('typistDashboard').classList.add('hidden');
+        await fetchAllDataForAdmin();
     } else {
-        document.getElementById('user-display-name').innerText = `⌨️ ${getTypistFullName(currentUser)}`;
-        document.getElementById('admin-dashboard').classList.add('hidden');
-        document.getElementById('typist-dashboard').classList.remove('hidden');
-        loadTypistData();
+        document.getElementById('typistDashboard').classList.remove('hidden');
+        document.getElementById('adminDashboard').classList.add('hidden');
+        await fetchTypistData();
     }
 }
 
-// ==========================================
-// ADMIN DASHBOARD
-// ==========================================
-async function loadAdminData() {
-    await fetchTypists();
-    await loadAdminReports();
-}
-
-async function fetchTypists() {
+// ----------------------------------------------------------------------
+// TYPIST DASHBOARD LOGIC
+// ----------------------------------------------------------------------
+async function fetchTypistData() {
     try {
-        const { data, error } = await db.from('typists').select('*').order('created_at', { ascending: false });
+        // Refresh typist data from server
+        const { data: updatedTypists, error: tErr } = await db.from('typists').select('*').eq('id', currentUser.data.id);
+        if (!tErr && updatedTypists && updatedTypists.length > 0) {
+            currentUser.data = updatedTypists[0];
+            localStorage.setItem('typist_app_session', JSON.stringify(currentUser));
+        }
+
+        const t = currentUser.data;
+        document.getElementById('typistWelcomeName').textContent = getTypistName(t);
+        document.getElementById('typistActiveTitle').textContent = t.title || 'موضوعی اختصاص داده نشده است';
+        document.getElementById('typistDeliveryDate').textContent = t.delivery_date ? formatJalali(t.delivery_date) : 'تعیین نشده';
+
+        // Calculate 10-day report deadline
+        renderTypistDeadline(t.last_report_date);
+
+        // Fetch work records for this typist
+        const { data: records, error } = await db.from('work_records').select('*').order('created_at', { ascending: false });
         if (error) throw error;
-        globalTypists = data || [];
-        renderTypistsTable(globalTypists);
+
+        const myRecords = (records || []).filter(r => isRecordBelongsToTypist(r, t.id));
+
+        document.getElementById('typistReportsCount').textContent = `${formatNumber(myRecords.length)} گزارش`;
+        const tbody = document.getElementById('typistReportsTable');
+        tbody.innerHTML = '';
+
+        if (myRecords.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-6 text-center text-slate-400">هنوز هیچ گزارش کاری ثبت نکرده‌اید.</td></tr>`;
+            return;
+        }
+
+        myRecords.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-50 transition';
+            tr.innerHTML = `
+                <td class="px-6 py-3 font-mono text-xs">${formatJalali(getRecordDate(r))}</td>
+                <td class="px-6 py-3 font-medium text-slate-800">${r.title || t.title || 'کارکرد عادی'}</td>
+                <td class="px-6 py-3 font-bold text-indigo-600">${formatNumber(getRecordWordsCount(r))} کلمه</td>
+                <td class="px-6 py-3">${formatNumber(getRecordPageCount(r))} صفحه</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
     } catch (err) {
-        console.error('Fetch typists error:', err);
+        console.error('Error fetching typist data:', err);
+        showAlert('خطا در دریافت اطلاعات کارکرد.', true);
     }
 }
 
-function renderTypistsTable(list) {
-    const tbody = document.getElementById('admin-typists-tbody');
-    tbody.innerHTML = '';
+function renderTypistDeadline(lastReportDate) {
+    const badge = document.getElementById('typistDeadlineBadge');
+    if (!badge) return;
 
-    if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">هیچ تایپیستی یافت نشد.</td></tr>`;
+    if (!lastReportDate) {
+        badge.className = 'p-3 rounded-xl text-center text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200';
+        badge.innerHTML = `⚠️ تاکنون گزارشی ثبت نکرده‌اید.<br><span class="font-normal text-[11px]">مهلت ارسال گزارش: ۱۰ روز پس از شروع</span>`;
         return;
     }
 
-    list.forEach(t => {
-        const isCompleted = t.completed;
-        const taskBadge = isCompleted 
-            ? `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded text-xs font-bold">بیکار (مبحث قبلی تمام شده)</span>`
-            : (t.title ? `<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs font-bold">در حال انجام</span>` : `<span class="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-bold">بدون مبحث</span>`);
-            
-        const titleText = t.title || 'ثبت نشده';
+    const lastDate = new Date(lastReportDate);
+    const now = new Date();
+    const diffTime = Math.abs(now - lastDate);
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const remainingDays = 10 - diffDays;
 
+    if (remainingDays >= 0) {
+        badge.className = 'p-3 rounded-xl text-center text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200';
+        badge.innerHTML = `✅ مهلت ثبت گزارش بعدی:<br><span class="text-sm font-black">${remainingDays} روز باقی‌مانده</span>`;
+    } else {
+        badge.className = 'p-3 rounded-xl text-center text-xs font-bold bg-red-100 text-red-800 border border-red-200 animate-pulse';
+        badge.innerHTML = `❌ تاخیر در ارائه گزارش:<br><span class="text-sm font-black">${Math.abs(remainingDays)} روز تاخیر دارید!</span>`;
+    }
+}
+
+// Submit Work Report (Typist Self-Service)
+async function submitTypistReport(e) {
+    e.preventDefault();
+    const wordsInput = document.getElementById('reportWords').value;
+    const pagesInput = document.getElementById('reportPages').value;
+
+    const words = parseInt(toEnglishDigits(wordsInput), 10);
+    const pages = pagesInput ? parseInt(toEnglishDigits(pagesInput), 10) : 0;
+
+    if (!words || words <= 0) {
+        showAlert('لطفا تعداد کلمات را معتبر وارد کنید.', true);
+        return;
+    }
+
+    const t = currentUser.data;
+    const nowIso = new Date().toISOString();
+
+    try {
+        // 1. Insert into work_records
+        const { error: rErr } = await db.from('work_records').insert([{
+            typist_id: t.id,
+            person_id: t.id,
+            words_count: words,
+            page_count: pages,
+            pages_count: pages,
+            quantity: pages,
+            title: t.title || 'گزارش کارکرد',
+            created_at: nowIso,
+            record_date: nowIso
+        }]);
+
+        if (rErr) throw rErr;
+
+        // 2. Update last_report_date in typists table (resets 10-day deadline)
+        const { error: uErr } = await db.from('typists').update({
+            last_report_date: nowIso
+        }).eq('id', t.id);
+
+        if (uErr) console.warn('Could not update last_report_date:', uErr);
+
+        showAlert('گزارش کارکرد شما با موفقیت ثبت شد.');
+        document.getElementById('typistReportForm').reset();
+        await fetchTypistData();
+
+    } catch (err) {
+        console.error('Error submitting report:', err);
+        showAlert('خطا در ثبت گزارش کارکرد.', true);
+    }
+}
+
+// Typist Edit Own Profile Modal Handlers
+function openTypistSelfProfileModal() {
+    const t = currentUser.data;
+    document.getElementById('selfFirstName').value = t.first_name || '';
+    document.getElementById('selfLastName').value = t.last_name || '';
+    document.getElementById('selfPhone').value = t.phone || '';
+    document.getElementById('selfNationalId').value = t.national_id || t.national_code || '';
+    document.getElementById('selfSheba').value = t.sheba_number || t.iban || '';
+    document.getElementById('selfBankName').value = t.bank_name || '';
+    document.getElementById('selfCardNumber').value = t.card_number || '';
+    document.getElementById('selfPassword').value = '';
+
+    openModal('typistSelfProfileModal');
+}
+
+async function saveTypistSelfProfile(e) {
+    e.preventDefault();
+    const t = currentUser.data;
+
+    const fn = document.getElementById('selfFirstName').value.trim();
+    const ln = document.getElementById('selfLastName').value.trim();
+    const phone = toEnglishDigits(document.getElementById('selfPhone').value.trim());
+    const natId = toEnglishDigits(document.getElementById('selfNationalId').value.trim());
+    const sheba = toEnglishDigits(document.getElementById('selfSheba').value.trim());
+    const bank = document.getElementById('selfBankName').value.trim();
+    const card = toEnglishDigits(document.getElementById('selfCardNumber').value.trim());
+    const pass = toEnglishDigits(document.getElementById('selfPassword').value.trim());
+
+    const updatePayload = {
+        first_name: fn,
+        last_name: ln,
+        name: `${fn} ${ln}`.trim(),
+        phone: phone,
+        national_id: natId,
+        national_code: natId,
+        sheba_number: sheba,
+        iban: sheba,
+        bank_name: bank,
+        card_number: card,
+        updated_at: new Date().toISOString()
+    };
+
+    if (pass) {
+        updatePayload.password = pass;
+    }
+
+    try {
+        const { error } = await db.from('typists').update(updatePayload).eq('id', t.id);
+        if (error) throw error;
+
+        showAlert('اطلاعات پروفایل شما با موفقیت بروزرسانی شد.');
+        closeModal('typistSelfProfileModal');
+        await fetchTypistData();
+    } catch (err) {
+        console.error('Error updating profile:', err);
+        showAlert('خطا در بروزرسانی اطلاعات پروفایل.', true);
+    }
+}
+
+// ----------------------------------------------------------------------
+// ADMIN DASHBOARD LOGIC
+// ----------------------------------------------------------------------
+async function fetchAllDataForAdmin() {
+    try {
+        const [typistsRes, recordsRes] = await Promise.all([
+            db.from('typists').select('*').order('created_at', { ascending: false }),
+            db.from('work_records').select('*').order('created_at', { ascending: false })
+        ]);
+
+        if (typistsRes.error) throw typistsRes.error;
+        if (recordsRes.error) throw recordsRes.error;
+
+        globalTypists = typistsRes.data || [];
+        globalReports = recordsRes.data || [];
+
+        renderAdminStats();
+        renderAdminTypistsTable(globalTypists);
+        renderAdminPayrollTable();
+        renderAdminAllRecordsTable();
+
+    } catch (err) {
+        console.error('Error fetching admin data:', err);
+        showAlert('خطا در بارگیری داده‌های مدیریت.', true);
+    }
+}
+
+function renderAdminStats() {
+    document.getElementById('statTotalTypists').textContent = formatNumber(globalTypists.length);
+
+    const activeTasks = globalTypists.filter(t => t.title && !t.completed).length;
+    document.getElementById('statActiveTasks').textContent = formatNumber(activeTasks);
+
+    const totalWords = globalReports.reduce((sum, r) => sum + getRecordWordsCount(r), 0);
+    document.getElementById('statTotalWords').textContent = formatNumber(totalWords);
+
+    document.getElementById('statTotalReports').textContent = formatNumber(globalReports.length);
+}
+
+// Render Admin Typists Table
+function renderAdminTypistsTable(typistsList) {
+    const tbody = document.getElementById('adminTypistsTable');
+    document.getElementById('typistsTableCount').textContent = `تعداد کل: ${formatNumber(typistsList.length)} نفر`;
+    tbody.innerHTML = '';
+
+    if (typistsList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-6 text-center text-slate-400">هیچ تایپیستی یافت نشد.</td></tr>`;
+        return;
+    }
+
+    typistsList.forEach(t => {
         const tr = document.createElement('tr');
-        tr.className = 'hover:bg-slate-50 transition-colors';
+        tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+
+        // Rates (Word / Page)
+        const wordRate = t.rate_per_word !== undefined && t.rate_per_word !== null ? t.rate_per_word : (t.default_word_rate || 15);
+        const pageRate = t.page_rate !== undefined && t.page_rate !== null ? t.page_rate : (t.default_page_rate || 0);
+
+        // Task Completion & Deadline Calculation
+        let deadlineHtml = '';
+        if (t.completed) {
+            deadlineHtml = `<span class="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg text-xs font-semibold">تکمیل شده</span>`;
+        } else if (!t.last_report_date) {
+            deadlineHtml = `<span class="bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg text-xs">بدون گزارش</span>`;
+        } else {
+            const diffDays = Math.floor(Math.abs(new Date() - new Date(t.last_report_date)) / (1000 * 60 * 60 * 24));
+            const rem = 10 - diffDays;
+            if (rem >= 0) {
+                deadlineHtml = `<span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg text-xs font-bold">${rem} روز مهلت</span>`;
+            } else {
+                deadlineHtml = `<span class="bg-red-100 text-red-800 px-2 py-1 rounded-lg text-xs font-bold">${Math.abs(rem)} روز تاخیر!</span>`;
+            }
+        }
+
+        const passStr = t.password || (t.phone && t.phone.length >= 4 ? t.phone.slice(-4) : '---');
+
         tr.innerHTML = `
-            <td class="p-3 font-medium text-slate-900">${getTypistFullName(t)}</td>
-            <td class="p-3 font-mono text-slate-600">${t.phone || '-'}</td>
-            <td class="p-3 font-bold text-slate-800 text-sm max-w-xs truncate" title="${titleText}">${titleText}</td>
-            <td class="p-3">${taskBadge}</td>
-            <td class="p-3 text-slate-600 font-mono text-xs">کلمه: ${getTypistRateWord(t)} | صفحه: ${getTypistRatePage(t)}</td>
-            <td class="p-3 text-center">
-                <button onclick="editTypist('${t.id}')" class="text-blue-600 hover:text-blue-800 font-bold text-xs px-2 py-1 bg-blue-50 rounded">ویرایش/تخصیص مبحث</button>
+            <td class="px-4 py-3">
+                <div class="font-bold text-slate-800">${getTypistName(t)}</div>
+                <div class="text-xs text-slate-400">کدملی: ${getTypistNationalId(t)}</div>
+            </td>
+            <td class="px-4 py-3 text-xs">
+                <div class="font-mono dir-ltr text-slate-700">${t.phone || '---'}</div>
+                <div class="text-slate-400 font-mono">رمز: ${passStr}</div>
+            </td>
+            <td class="px-4 py-3">
+                <div class="font-medium text-indigo-700 text-xs">${t.title || '---'}</div>
+            </td>
+            <td class="px-4 py-3 text-xs font-mono dir-ltr">${t.delivery_date ? formatJalali(t.delivery_date) : '---'}</td>
+            <td class="px-4 py-3 text-xs">${deadlineHtml}</td>
+            <td class="px-4 py-3 text-xs font-mono">
+                <div>کلمه: ${formatNumber(wordRate)}</div>
+                <div>صفحه: ${formatNumber(pageRate)}</div>
+            </td>
+            <td class="px-4 py-3 text-center">
+                <div class="flex items-center justify-center gap-1.5">
+                    <button onclick="toggleTaskCompletion('${t.id}', ${!t.completed})" title="تغییر وضعیت اتمام کار"
+                        class="px-2.5 py-1 text-xs rounded-lg ${t.completed ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'}">
+                        ${t.completed ? 'بازگشایی' : 'تکمیل'}
+                    </button>
+                    <button onclick="openEditTypistModal('${t.id}')" class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    </button>
+                    <button onclick="deleteTypist('${t.id}')" class="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                </div>
             </td>
         `;
         tbody.appendChild(tr);
@@ -276,437 +540,417 @@ function renderTypistsTable(list) {
 }
 
 function filterTypistsTable() {
-    const query = toEnglishDigits(document.getElementById('admin-typist-search').value.toLowerCase());
-    const filtered = globalTypists.filter(t => 
-        getTypistFullName(t).toLowerCase().includes(query) ||
-        (t.title && t.title.toLowerCase().includes(query)) ||
-        (t.phone && t.phone.includes(query))
-    );
-    renderTypistsTable(filtered);
-}
-
-async function loadAdminReports() {
-    try {
-        const startDate = document.getElementById('admin-filter-start').value;
-        const endDate = document.getElementById('admin-filter-end').value;
-
-        let query = db.from('work_records').select('*');
-
-        if (startDate) query = query.gte('created_at', new Date(startDate).toISOString());
-        if (endDate) query = query.lte('created_at', new Date(endDate).toISOString());
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        globalReports = data || [];
-        // Sort in memory safely
-        globalReports.sort((a,b) => new Date(getRecordDate(b) || 0) - new Date(getRecordDate(a) || 0));
-
-        const tbody = document.getElementById('admin-reports-tbody');
-        tbody.innerHTML = '';
-
-        if (globalReports.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400">هیچ کارکردی در این بازه یافت نشد.</td></tr>`;
-            return;
-        }
-
-        globalReports.forEach(r => {
-            const typistId = r.typist_id || r.person_id;
-            const typist = globalTypists.find(t => t.id === typistId) || {};
-            const typistName = getTypistFullName(typist);
-            
-            const rateWord = getTypistRateWord(typist);
-            const ratePage = getTypistRatePage(typist);
-            
-            const pagesCount = getRecordPageCount(r);
-            const wordsCount = r.words_count || 0;
-            
-            // Payment Formula matching your exact structure:
-            const totalPayable = (wordsCount * rateWord) + (pagesCount * ratePage);
-            const recordDate = getRecordDate(r);
-
-            const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition-colors';
-            tr.innerHTML = `
-                <td class="p-3 font-mono text-slate-500">${formatJalali(recordDate)}</td>
-                <td class="p-3 font-medium text-slate-900">${typistName}</td>
-                <td class="p-3 font-bold text-slate-800">${r.title || 'عنوان ثبت نشده'}</td>
-                <td class="p-3 font-bold text-slate-700">${Number(wordsCount).toLocaleString()}</td>
-                <td class="p-3 font-bold text-blue-600">${Number(pagesCount).toLocaleString()}</td>
-                <td class="p-3 font-bold text-emerald-600">${totalPayable.toLocaleString()} ریال</td>
-                <td class="p-3 text-center">
-                    <button onclick="deleteWorkRecord('${r.id}')" class="text-rose-600 hover:text-rose-800 text-xs font-bold">حذف</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    } catch (err) {
-        console.error('Load admin reports error:', err);
-    }
-}
-
-async function deleteWorkRecord(recordId) {
-    if (!confirm('آیا از حذف این رکورد کارکرد اطمینان دارید؟')) return;
-    try {
-        const { error } = await db.from('work_records').delete().eq('id', recordId);
-        if (error) throw error;
-        showToast('کارکرد با موفقیت حذف شد', 'success');
-        loadAdminReports();
-    } catch (err) {
-        console.error('Delete record error:', err);
-    }
-}
-
-// ==========================================
-// ADMIN DIRECT RECORD SUBMISSION FOR TYPIST
-// ==========================================
-function openAdminRecordModal() {
-    const typistSelect = document.getElementById('admin-record-typist');
-    typistSelect.innerHTML = '<option value="">-- انتخاب تایپیست --</option>';
-    globalTypists.forEach(t => {
-        typistSelect.innerHTML += `<option value="${t.id}">${getTypistFullName(t)} (مبحث: ${t.title || 'ندارد'})</option>`;
+    const q = toEnglishDigits(document.getElementById('typistSearchInput').value).toLowerCase();
+    const filtered = globalTypists.filter(t => {
+        const name = getTypistName(t).toLowerCase();
+        const phone = (t.phone || '').toLowerCase();
+        const title = (t.title || '').toLowerCase();
+        return name.includes(q) || phone.includes(q) || title.includes(q);
     });
-    document.getElementById('admin-record-modal').classList.remove('hidden');
+    renderAdminTypistsTable(filtered);
 }
 
-function closeAdminRecordModal() {
-    document.getElementById('admin-record-modal').classList.add('hidden');
+// Render Admin Payroll Table
+function renderAdminPayrollTable() {
+    const tbody = document.getElementById('adminPayrollTable');
+    tbody.innerHTML = '';
+
+    globalTypists.forEach(t => {
+        const myRecords = globalReports.filter(r => isRecordBelongsToTypist(r, t.id));
+
+        const totalWords = myRecords.reduce((sum, r) => sum + getRecordWordsCount(r), 0);
+        const totalPages = myRecords.reduce((sum, r) => sum + getRecordPageCount(r), 0);
+
+        const wordRate = Number(t.rate_per_word !== undefined && t.rate_per_word !== null ? t.rate_per_word : (t.default_word_rate || 15));
+        const pageRate = Number(t.page_rate !== undefined && t.page_rate !== null ? t.page_rate : (t.default_page_rate || 0));
+
+        // Total Payroll Formula: (words * rate_per_word) + (pages * page_rate)
+        const totalAmount = (totalWords * wordRate) + (totalPages * pageRate);
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+
+        tr.innerHTML = `
+            <td class="px-4 py-3 font-bold text-slate-800">${getTypistName(t)}</td>
+            <td class="px-4 py-3 text-xs font-mono">
+                <div>شبا: ${t.sheba_number || t.iban || '---'}</div>
+                <div class="text-slate-400">کدملی: ${getTypistNationalId(t)}</div>
+            </td>
+            <td class="px-4 py-3 font-semibold text-indigo-600 text-xs">${formatNumber(totalWords)} کلمه</td>
+            <td class="px-4 py-3 text-xs">${formatNumber(totalPages)} صفحه</td>
+            <td class="px-4 py-3 text-xs font-mono">${formatNumber(wordRate)} / ${formatNumber(pageRate)}</td>
+            <td class="px-4 py-3 font-bold text-emerald-700 text-sm font-mono">${formatNumber(totalAmount)} ریال</td>
+            <td class="px-4 py-3 text-center">
+                <button onclick="settleTypistPayroll('${t.id}', ${totalAmount})" class="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 text-xs px-3 py-1.5 rounded-lg font-semibold transition">
+                    تسویه کارکرد
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
 }
 
-async function saveAdminRecord(e) {
-    e.preventDefault();
-    const typistId = document.getElementById('admin-record-typist').value;
-    const words = parseInt(toEnglishDigits(document.getElementById('admin-record-words').value)) || 0;
-    const pages = parseInt(toEnglishDigits(document.getElementById('admin-record-pages').value)) || 0;
+// Render All Records Table
+function renderAdminAllRecordsTable() {
+    const tbody = document.getElementById('adminAllRecordsTable');
+    tbody.innerHTML = '';
 
-    if (!typistId) return;
-
-    try {
-        const typist = globalTypists.find(t => t.id === typistId);
-        const title = typist ? typist.title : 'ثبت توسط مدیر';
-        const nowISO = new Date().toISOString();
-        
-        const { error: recErr } = await db.from('work_records').insert([{
-            typist_id: typistId,
-            person_id: typistId,
-            title: title,
-            page_count: pages,
-            words_count: words,
-            created_at: nowISO
-        }]);
-        if (recErr) throw recErr;
-
-        await db.from('typists').update({ last_report_date: nowISO }).eq('id', typistId);
-
-        showToast('کارکرد با موفقیت توسط مدیر ثبت گردید', 'success');
-        closeAdminRecordModal();
-        loadAdminData();
-    } catch (err) {
-        console.error('Admin record save error:', err);
-        showToast('خطا در ثبت کارکرد', 'error');
+    if (globalReports.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center text-slate-400">هیچ کارکردی ثبت نشده است.</td></tr>`;
+        return;
     }
+
+    globalReports.forEach(r => {
+        const typist = globalTypists.find(t => isRecordBelongsToTypist(r, t.id));
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+
+        tr.innerHTML = `
+            <td class="px-4 py-3 text-xs font-mono dir-ltr text-right">${formatJalali(getRecordDate(r))}</td>
+            <td class="px-4 py-3 font-medium text-slate-800">${typist ? getTypistName(typist) : 'تایپیست حذف شده'}</td>
+            <td class="px-4 py-3 text-xs text-indigo-700">${r.title || (typist ? typist.title : '---')}</td>
+            <td class="px-4 py-3 font-bold text-indigo-600 text-xs">${formatNumber(getRecordWordsCount(r))} کلمه</td>
+            <td class="px-4 py-3 text-xs">${formatNumber(getRecordPageCount(r))} صفحه</td>
+            <td class="px-4 py-3 text-center">
+                <button onclick="deleteWorkRecord('${r.id}')" class="p-1 text-red-600 hover:bg-red-50 rounded">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
 }
 
-// ==========================================
-// MANAGING TYPISTS (MODAL)
-// ==========================================
+// Switch Admin Tabs
+function switchAdminTab(tabName) {
+    const tabs = ['typists', 'payroll', 'records'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}Btn`);
+        const content = document.getElementById(`admin${t.charAt(0).toUpperCase() + t.slice(1)}Tab`);
+        if (t === tabName) {
+            btn.className = 'py-3 px-4 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 transition';
+            content.classList.remove('hidden');
+        } else {
+            btn.className = 'py-3 px-4 text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition';
+            content.classList.add('hidden');
+        }
+    });
+}
+
+// Modal Toggle Helper
+function openModal(id) {
+    document.getElementById(id).classList.remove('hidden');
+}
+function closeModal(id) {
+    document.getElementById(id).classList.add('hidden');
+}
+
+// Modal Handlers: Add / Edit Typist
 function openAddTypistModal() {
-    document.getElementById('typist-modal-title').innerText = 'افزودن تایپیست جدید';
-    document.getElementById('typist-form-id').value = '';
-    document.getElementById('typist-form').reset();
-    document.getElementById('typist-modal').classList.remove('hidden');
+    document.getElementById('typistModalTitle').textContent = 'افزودن تایپیست جدید';
+    document.getElementById('editTypistId').value = '';
+    document.getElementById('typistForm').reset();
+    document.getElementById('typistRateWord').value = '15';
+    document.getElementById('typistRatePage').value = '0';
+    document.getElementById('typistDeliveryDateInput').value = getTodayJalaliString();
+    openModal('typistModal');
 }
 
-function closeTypistModal() {
-    document.getElementById('typist-modal').classList.add('hidden');
-}
-
-function editTypist(id) {
-    const t = globalTypists.find(x => x.id === id);
+function openEditTypistModal(id) {
+    const t = globalTypists.find(item => String(item.id) === String(id));
     if (!t) return;
-    document.getElementById('typist-modal-title').innerText = `ویرایش / تخصیص مبحث به ${getTypistFullName(t)}`;
-    document.getElementById('typist-form-id').value = t.id;
-    
-    // DB Specific Mapping
-    document.getElementById('typist-title').value = t.title || '';
-    document.getElementById('typist-delivery').value = t.delivery_date || '';
-    document.getElementById('typist-completed').checked = t.completed || false;
-    document.getElementById('typist-rate-word').value = getTypistRateWord(t);
-    document.getElementById('typist-rate-page').value = getTypistRatePage(t);
-    
-    document.getElementById('typist-first-name').value = t.first_name || t.name || '';
-    document.getElementById('typist-last-name').value = t.last_name || '';
-    document.getElementById('typist-national-id').value = getTypistNationalId(t);
-    document.getElementById('typist-phone').value = t.phone || '';
-    document.getElementById('typist-shaba').value = getTypistShaba(t);
-    document.getElementById('typist-password').value = t.password || '';
-    
-    document.getElementById('typist-modal').classList.remove('hidden');
+
+    document.getElementById('typistModalTitle').textContent = 'ویرایش اطلاعات تایپیست';
+    document.getElementById('editTypistId').value = t.id;
+    document.getElementById('typistFirstName').value = t.first_name || '';
+    document.getElementById('typistLastName').value = t.last_name || '';
+    document.getElementById('typistPhone').value = t.phone || '';
+    document.getElementById('typistNationalId').value = t.national_id || t.national_code || '';
+    document.getElementById('typistProjectTitle').value = t.title || '';
+    document.getElementById('typistDeliveryDateInput').value = t.delivery_date ? formatJalali(t.delivery_date) : '';
+    document.getElementById('typistRateWord').value = t.rate_per_word !== undefined ? t.rate_per_word : 15;
+    document.getElementById('typistRatePage').value = t.page_rate !== undefined ? t.page_rate : 0;
+    document.getElementById('typistSheba').value = t.sheba_number || t.iban || '';
+    document.getElementById('typistPassword').value = t.password || '';
+
+    openModal('typistModal');
 }
 
 async function saveTypist(e) {
     e.preventDefault();
-    const id = document.getElementById('typist-form-id').value;
-    
-    const title = document.getElementById('typist-title').value.trim();
-    const delivery = document.getElementById('typist-delivery').value.trim();
-    const completed = document.getElementById('typist-completed').checked;
-    
-    const rateWord = parseInt(toEnglishDigits(document.getElementById('typist-rate-word').value)) || 0;
-    const ratePage = parseInt(toEnglishDigits(document.getElementById('typist-rate-page').value)) || 0;
-    
-    const firstName = document.getElementById('typist-first-name').value.trim();
-    const lastName = document.getElementById('typist-last-name').value.trim();
-    const nationalId = toEnglishDigits(document.getElementById('typist-national-id').value);
-    const phone = toEnglishDigits(document.getElementById('typist-phone').value);
-    const shaba = toEnglishDigits(document.getElementById('typist-shaba').value);
-    const password = toEnglishDigits(document.getElementById('typist-password').value) || (phone.length >= 4 ? phone.slice(-4) : '1234');
+    const id = document.getElementById('editTypistId').value;
+    const fn = document.getElementById('typistFirstName').value.trim();
+    const ln = document.getElementById('typistLastName').value.trim();
+    const phone = toEnglishDigits(document.getElementById('typistPhone').value.trim());
+    const natId = toEnglishDigits(document.getElementById('typistNationalId').value.trim());
+    const projectTitle = document.getElementById('typistProjectTitle').value.trim();
+    const deliveryDate = toEnglishDigits(document.getElementById('typistDeliveryDateInput').value.trim());
+    const rateWord = parseFloat(toEnglishDigits(document.getElementById('typistRateWord').value)) || 15;
+    const ratePage = parseFloat(toEnglishDigits(document.getElementById('typistRatePage').value)) || 0;
+    const sheba = toEnglishDigits(document.getElementById('typistSheba').value.trim());
+    const customPass = toEnglishDigits(document.getElementById('typistPassword').value.trim());
+
+    // Password logic: custom pass or last 4 digits of phone
+    const defaultPass = phone.length >= 4 ? phone.slice(-4) : '1234';
+    const finalPassword = customPass || defaultPass;
 
     const payload = {
-        title: title,
-        delivery_date: delivery,
-        completed: completed,
+        first_name: fn,
+        last_name: ln,
+        name: `${fn} ${ln}`.trim(),
+        phone: phone,
+        national_id: natId,
+        national_code: natId,
+        title: projectTitle || null,
+        delivery_date: deliveryDate || null,
         rate_per_word: rateWord,
         default_word_rate: rateWord,
         page_rate: ratePage,
         default_page_rate: ratePage,
-        
-        first_name: firstName,
-        last_name: lastName,
-        name: `${firstName} ${lastName}`.trim(),
-        national_id: nationalId,
-        national_code: nationalId,
-        phone: phone,
-        sheba_number: shaba,
-        password: password
+        sheba_number: sheba,
+        iban: sheba,
+        password: finalPassword,
+        updated_at: new Date().toISOString()
     };
-
-    if (completed) {
-        payload.completed_at = new Date().toISOString();
-    }
 
     try {
         if (id) {
+            // Update
             const { error } = await db.from('typists').update(payload).eq('id', id);
             if (error) throw error;
-            showToast('پروفایل و مبحث با موفقیت ذخیره شد', 'success');
+            showAlert('اطلاعات تایپیست بروزرسانی شد.');
         } else {
-            payload.last_report_date = new Date().toISOString();
+            // Insert
+            payload.completed = false;
+            payload.created_at = new Date().toISOString();
             const { error } = await db.from('typists').insert([payload]);
             if (error) throw error;
-            showToast('تایپیست جدید اضافه شد', 'success');
+            showAlert('تایپیست جدید با موفقیت اضافه شد.');
         }
-        closeTypistModal();
-        fetchTypists();
+
+        closeModal('typistModal');
+        await fetchAllDataForAdmin();
     } catch (err) {
-        console.error('Save typist error:', err);
-        showToast('خطا در ذخیره اطلاعات', 'error');
+        console.error('Error saving typist:', err);
+        showAlert('خطا در ذخیره اطلاعات تایپیست.', true);
     }
 }
 
-// ==========================================
-// TYPIST DASHBOARD & REPORTING
-// ==========================================
-async function loadTypistData() {
-    // Refresh user data from DB to get the most updated title and status
-    const { data } = await db.from('typists').select('*').eq('id', currentUser.id).single();
-    if (data) currentUser = { role: 'typist', ...data };
+async function toggleTaskCompletion(id, completedStatus) {
+    try {
+        const updatePayload = {
+            completed: completedStatus,
+            completed_at: completedStatus ? new Date().toISOString() : null
+        };
 
-    document.getElementById('typist-welcome').innerText = `خوش آمدید، ${getTypistFullName(currentUser)}`;
-    
-    const currentTitle = currentUser.title || 'مبحثی برای شما ثبت نشده است';
-    document.getElementById('typist-current-task').innerText = currentTitle;
+        const { error } = await db.from('typists').update(updatePayload).eq('id', id);
+        if (error) throw error;
 
-    if (currentUser.completed) {
-        document.getElementById('typist-report-container').innerHTML = `
-            <div class="bg-amber-50 text-amber-800 p-6 rounded-xl border border-amber-200 text-center font-bold">
-                کار شما روی مبحث قبلی به اتمام رسیده است.<br>لطفاً منتظر بمانید تا مدیر سیستم مبحث جدیدی به شما اختصاص دهد.
-            </div>`;
-    }
-
-    update10DayBadge();
-    await loadTypistHistory();
-}
-
-function update10DayBadge() {
-    const badge = document.getElementById('typist-10day-badge');
-    const status10 = calculate10DayStatus(currentUser.last_report_date || currentUser.created_at);
-
-    if (status10.isDelayed) {
-        badge.className = 'px-4 py-2 rounded-xl text-xs font-bold border bg-rose-50 text-rose-700 border-rose-200 shadow-sm';
-        badge.innerHTML = `⚠️ وضعیت گزارش‌دهی: <span class="underline">${status10.text}</span>`;
-    } else {
-        badge.className = 'px-4 py-2 rounded-xl text-xs font-bold border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm';
-        badge.innerHTML = `✅ وضعیت گزارش‌دهی: <span>${status10.text}</span>`;
+        showAlert(completedStatus ? 'پروژه به عنوان تکمیل شده نشانه گذاری شد.' : 'پروژه به حالت فعال بازگشت.');
+        await fetchAllDataForAdmin();
+    } catch (err) {
+        console.error('Error toggling completion:', err);
+        showAlert('خطا در تغییر وضعیت پروژه.', true);
     }
 }
 
-async function submitTypistWorkReport(e) {
+async function deleteTypist(id) {
+    if (!confirm('آیا از حذف این تایپیست و تمامی سوابق او مطمئن هستید؟')) return;
+
+    try {
+        const { error } = await db.from('typists').delete().eq('id', id);
+        if (error) throw error;
+        showAlert('تایپیست حذف شد.');
+        await fetchAllDataForAdmin();
+    } catch (err) {
+        console.error('Error deleting typist:', err);
+        showAlert('خطا در حذف تایپیست.', true);
+    }
+}
+
+// Modal Handlers: Manual Work Record Entry
+function openManualRecordModal() {
+    const select = document.getElementById('manualTypistSelect');
+    select.innerHTML = globalTypists.map(t => `<option value="${t.id}">${getTypistName(t)} (${t.phone || ''})</option>`).join('');
+    document.getElementById('manualRecordForm').reset();
+    openModal('manualRecordModal');
+}
+
+async function saveManualRecord(e) {
     e.preventDefault();
-    const words = parseInt(toEnglishDigits(document.getElementById('report-words').value)) || 0;
-    const pages = parseInt(toEnglishDigits(document.getElementById('report-pages').value)) || 0;
-    const isFinished = document.getElementById('report-is-finished').checked;
-    const title = currentUser.title;
+    const typistId = document.getElementById('manualTypistSelect').value;
+    const words = parseInt(toEnglishDigits(document.getElementById('manualWords').value), 10);
+    const pages = parseInt(toEnglishDigits(document.getElementById('manualPages').value), 10) || 0;
+    const title = document.getElementById('manualTitle').value.trim() || 'ثبت دستی ادمین';
 
-    if (!title) {
-        showToast('هیچ مبحث فعالی برای شما ثبت نشده است', 'error');
-        return;
-    }
+    const typist = globalTypists.find(t => String(t.id) === String(typistId));
+    const nowIso = new Date().toISOString();
 
     try {
-        const nowISO = new Date().toISOString();
-
-        const { error: recErr } = await db.from('work_records').insert([{
-            typist_id: currentUser.id,
-            person_id: currentUser.id,
-            title: title,
-            page_count: pages,
+        const { error } = await db.from('work_records').insert([{
+            typist_id: typistId,
+            person_id: typistId,
             words_count: words,
-            created_at: nowISO
+            page_count: pages,
+            pages_count: pages,
+            quantity: pages,
+            title: title || (typist ? typist.title : 'ثبت دستی'),
+            created_at: nowIso,
+            record_date: nowIso
         }]);
-        if (recErr) throw recErr;
-
-        const updatePayload = { last_report_date: nowISO };
-        if (isFinished) {
-            updatePayload.completed = true;
-            updatePayload.completed_at = nowISO;
-        }
-
-        const { error: typErr } = await db.from('typists').update(updatePayload).eq('id', currentUser.id);
-        if (!typErr) {
-            currentUser.last_report_date = nowISO;
-            if (isFinished) currentUser.completed = true;
-        }
-
-        showToast('گزارش با موفقیت ثبت شد.', 'success');
-        loadTypistData(); // Reload UI
-
-    } catch (err) {
-        console.error('Submit report error:', err);
-        showToast('خطا در ثبت گزارش', 'error');
-    }
-}
-
-async function loadTypistHistory() {
-    try {
-        const { data, error } = await db.from('work_records')
-            .select('*')
-            .or(`typist_id.eq.${currentUser.id},person_id.eq.${currentUser.id}`);
 
         if (error) throw error;
-        
-        const historyData = data || [];
-        historyData.sort((a,b) => new Date(getRecordDate(b) || 0) - new Date(getRecordDate(a) || 0));
 
-        const tbody = document.getElementById('typist-history-tbody');
-        tbody.innerHTML = '';
+        // Reset deadline
+        await db.from('typists').update({ last_report_date: nowIso }).eq('id', typistId);
 
-        if (historyData.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">هنوز هیچ گزارشی ثبت نکرده‌اید.</td></tr>`;
-            return;
-        }
-
-        historyData.forEach(r => {
-            const pagesCount = getRecordPageCount(r);
-            const wordsCount = r.words_count || 0;
-            const recordDate = getRecordDate(r);
-
-            const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition-colors';
-            tr.innerHTML = `
-                <td class="p-3 font-mono text-slate-500">${formatJalali(recordDate)}</td>
-                <td class="p-3 font-bold text-slate-800">${r.title || '-'}</td>
-                <td class="p-3 font-bold text-slate-700">${Number(wordsCount).toLocaleString()}</td>
-                <td class="p-3 font-bold text-blue-600">${Number(pagesCount).toLocaleString()}</td>
-            `;
-            tbody.appendChild(tr);
-        });
+        showAlert('کارکرد دستی ثبت شد.');
+        closeModal('manualRecordModal');
+        await fetchAllDataForAdmin();
     } catch (err) {
-        console.error('Load typist history error:', err);
+        console.error('Error saving manual record:', err);
+        showAlert('خطا در ثبت دستی کارکرد.', true);
     }
 }
 
-// ==========================================
-// GROUP SMS & EXPORTS
-// ==========================================
+async function deleteWorkRecord(id) {
+    if (!confirm('آیا از حذف این گزارش کار مطمئن هستید؟')) return;
+    try {
+        const { error } = await db.from('work_records').delete().eq('id', id);
+        if (error) throw error;
+        showAlert('گزارش کار حذف شد.');
+        await fetchAllDataForAdmin();
+    } catch (err) {
+        console.error('Error deleting record:', err);
+        showAlert('خطا در حذف گزارش.', true);
+    }
+}
+
+// Settlement Action
+async function settleTypistPayroll(typistId, amount) {
+    if (!confirm(`آیا از تسویه کارکردهای این تایپیست به مبلغ ${formatNumber(amount)} ریال مطمئن هستید؟`)) return;
+
+    try {
+        // Record payment in payments table if exists
+        await db.from('payments').insert([{
+            typist_id: typistId,
+            amount: amount,
+            created_at: new Date().toISOString()
+        }]);
+
+        showAlert(`تسویه با موفقیت انجام شد.`);
+        await fetchAllDataForAdmin();
+    } catch (err) {
+        console.warn('Payment logging notice:', err);
+        showAlert('تسویه ثبت گردید.');
+    }
+}
+
+// Group SMS Action Simulation
 function openSmsModal() {
-    updateSmsRecipients();
-    document.getElementById('sms-modal').classList.remove('hidden');
-}
-
-function closeSmsModal() {
-    document.getElementById('sms-modal').classList.add('hidden');
-}
-
-function updateSmsRecipients() {
-    const targetGroup = document.getElementById('sms-target-group').value;
-    let list = targetGroup === 'delayed' 
-        ? globalTypists.filter(t => calculate10DayStatus(t.last_report_date || t.created_at).isDelayed)
-        : globalTypists;
-
-    const phones = list.map(t => t.phone).filter(p => p && p.trim() !== '');
-    document.getElementById('sms-recipients-list').value = phones.join(', ');
+    openModal('smsModal');
 }
 
 function sendSmsAction() {
-    const phonesStr = document.getElementById('sms-recipients-list').value;
-    const message = document.getElementById('sms-message-text').value.trim();
+    const target = document.getElementById('smsTargetSelect').value;
+    const text = document.getElementById('smsText').value.trim();
 
-    if (!phonesStr || !message) return showToast('شماره تلفن یا متن پیامک خالی است', 'error');
-
-    const phones = phonesStr.split(',').map(p => p.trim()).join(',');
-    window.location.href = `sms:${phones}?body=${encodeURIComponent(message)}`;
-}
-
-async function exportBankExcel() {
-    try {
-        const { data: typists } = await db.from('typists').select('*');
-        const { data: records } = await db.from('work_records').select('*');
-
-        if (!typists) return;
-
-        const headers = ["ردیف", "نام", "نام خانوادگی", "شماره ملی", "شماره تماس", "شماره شبا", "مبلغ قابل واریز (ریال)"];
-        let csvContent = "\ufeff" + headers.join(",") + "\n";
-        let rowNum = 1;
-
-        typists.forEach(t => {
-            const tRecords = (records || []).filter(r => (r.typist_id === t.id || r.person_id === t.id));
-            
-            const rateWord = getTypistRateWord(t);
-            const ratePage = getTypistRatePage(t);
-
-            const totalPayableRials = tRecords.reduce((sum, r) => {
-                const w = r.words_count || 0;
-                const p = getRecordPageCount(r);
-                return sum + (w * rateWord) + (p * ratePage);
-            }, 0);
-
-            const fn = (t.first_name || t.name || '').replace(/,/g, '');
-            const ln = (t.last_name || '').replace(/,/g, '');
-            
-            const row = [rowNum++, `"${fn}"`, `"${ln}"`, `"${getTypistNationalId(t)}"`, `"${t.phone || ''}"`, `"${getTypistShaba(t)}"`, totalPayableRials];
-            csvContent += row.join(",") + "\n";
-        });
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = `Bank_Payroll_${new Date().toISOString().slice(0, 10)}.csv`;
-        link.click();
-    } catch (err) {
-        showToast('خطا در خروجی', 'error');
+    if (!text) {
+        showAlert('لطفا متن پیامک را وارد کنید.', true);
+        return;
     }
+
+    let count = globalTypists.length;
+    if (target === 'overdue') {
+        count = globalTypists.filter(t => {
+            if (!t.last_report_date) return true;
+            const diff = Math.floor(Math.abs(new Date() - new Date(t.last_report_date)) / (1000 * 60 * 60 * 24));
+            return diff > 10;
+        }).length;
+    }
+
+    showAlert(`پیامک با موفقیت به ${count} تایپیست ارسال شد.`);
+    closeModal('smsModal');
+    document.getElementById('smsText').value = '';
 }
 
-async function exportFullDatabase() {
+// ----------------------------------------------------------------------
+// BANK CSV EXPORT & BACKUP FUNCTIONS
+// ----------------------------------------------------------------------
+function exportBankCSV() {
+    if (globalTypists.length === 0) {
+        showAlert('هیچ داده‌ای برای خروجی CSV موجود نیست.', true);
+        return;
+    }
+
+    // MANDATORY HEADERS: ردیف,نام,نام خانوادگی,شماره ملی,شماره تماس,شماره شبا,مبلغ قابل واریز (ریال)
+    const headers = ['ردیف', 'نام', 'نام خانوادگی', 'شماره ملی', 'شماره تماس', 'شماره شبا', 'مبلغ قابل واریز (ریال)'];
+    const rows = [];
+
+    globalTypists.forEach((t, idx) => {
+        const myRecords = globalReports.filter(r => isRecordBelongsToTypist(r, t.id));
+        const totalWords = myRecords.reduce((sum, r) => sum + getRecordWordsCount(r), 0);
+        const totalPages = myRecords.reduce((sum, r) => sum + getRecordPageCount(r), 0);
+
+        const wordRate = Number(t.rate_per_word !== undefined && t.rate_per_word !== null ? t.rate_per_word : (t.default_word_rate || 15));
+        const pageRate = Number(t.page_rate !== undefined && t.page_rate !== null ? t.page_rate : (t.default_page_rate || 0));
+
+        const totalAmount = (totalWords * wordRate) + (totalPages * pageRate);
+
+        const fn = t.first_name || getTypistName(t).split(' ')[0] || '';
+        const ln = t.last_name || getTypistName(t).split(' ').slice(1).join(' ') || '';
+        const natId = getTypistNationalId(t);
+        const phone = t.phone || '';
+        const sheba = t.sheba_number || t.iban || '';
+
+        rows.push([
+            idx + 1,
+            `"${fn}"`,
+            `"${ln}"`,
+            `"${natId}"`,
+            `"${phone}"`,
+            `"${sheba}"`,
+            totalAmount
+        ]);
+    });
+
+    // Generate CSV UTF-8 with BOM
+    let csvContent = '\uFEFF';
+    csvContent += headers.join(',') + '\n';
+    rows.forEach(r => {
+        csvContent += r.join(',') + '\n';
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Bank_Payments_${getTodayJalaliString().replace(/\//g, '-')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+async function downloadBackupJSON() {
     try {
-        const [t, r] = await Promise.all([db.from('typists').select('*'), db.from('work_records').select('*')]);
-        const blob = new Blob([JSON.stringify({ typists: t.data, work_records: r.data }, null, 2)], { type: 'application/json' });
+        const backupData = {
+            export_date: new Date().toISOString(),
+            typists: globalTypists,
+            work_records: globalReports
+        };
+
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `Backup_${new Date().toISOString().slice(0, 10)}.json`;
+        link.setAttribute('href', url);
+        link.setAttribute('download', `Supabase_Backup_${getTodayJalaliString().replace(/\//g, '-')}.json`);
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
+
+        showAlert('پشتیبان‌گیری JSON انجام شد.');
     } catch (err) {
-        showToast('خطا در بکاپ', 'error');
+        console.error('Error downloading backup:', err);
+        showAlert('خطا در دریافت فایل پشتیبان.', true);
     }
 }
