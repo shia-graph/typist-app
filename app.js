@@ -6,6 +6,7 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
+
 const supabaseClient = (window.supabase && window.supabase.createClient) 
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) 
     : null;
@@ -302,8 +303,10 @@ window.enableProfileEdit = function() {
 };
 
 async function loadTypistDetailData(typistId) {
-    // قفل کردن مجدد فرم پروفایل در زمان بارگذاری
-    safeShow('btn-edit-profile', 'inline-block');
+    // قفل کردن مجدد فرم پروفایل
+    if (currentUserRole === 'admin') {
+        safeShow('btn-edit-profile', 'inline-block');
+    }
     safeHide('btn-save-profile');
     document.querySelectorAll('#profile-form input:not(#profile_id)').forEach(inp => {
         inp.setAttribute('readonly', 'true');
@@ -312,12 +315,47 @@ async function loadTypistDetailData(typistId) {
     try {
         const { data, error } = await supabaseClient.rpc('get_typist_detail', { _typist_id: typistId });
         if (error) throw error;
-        if (!data || data.length === 0) return showToast('اطلاعات یافت نشد', 'error');
+        if (!data || (Array.isArray(data) && data.length === 0)) return showToast('اطلاعات یافت نشد', 'error');
 
-        const detail = data[0];
-        currentTypistData = detail;
+        // --- پردازش ایمن برای هر نوع ساختار دیتابیس ---
+        let rawData = Array.isArray(data) ? data[0] : data;
+        let detail = rawData.profile ? rawData.profile : rawData;
+        let repData = rawData.profile ? rawData.reports : rawData.reports;
+        let payData = rawData.profile ? rawData.payments : rawData.payments;
 
-        safeSetText('detail-typist-name', `کارنامه کارکرد: ${detail.first_name} ${detail.last_name}`);
+        let reports = [];
+        if (repData) {
+            if (typeof repData === 'string') {
+                try { reports = JSON.parse(repData); } catch(e) { reports = []; }
+            } else if (Array.isArray(repData)) {
+                reports = repData;
+            } else {
+                reports = [repData];
+            }
+        }
+        
+        let payments = [];
+        if (payData) {
+            if (typeof payData === 'string') {
+                try { payments = JSON.parse(payData); } catch(e) { payments = []; }
+            } else if (Array.isArray(payData)) {
+                payments = payData;
+            } else {
+                payments = [payData];
+            }
+        }
+
+        // در صورت استرینگ بودن آیتم‌های داخل آرایه
+        if(reports.length > 0 && typeof reports[0] === 'string') {
+            try { reports = reports.map(r => JSON.parse(r)); } catch(e){}
+        }
+        if(payments.length > 0 && typeof payments[0] === 'string') {
+            try { payments = payments.map(p => JSON.parse(p)); } catch(e){}
+        }
+
+        currentTypistData = { ...detail, reports: reports, payments: payments };
+
+        safeSetText('detail-typist-name', `کارنامه کارکرد: ${detail.first_name || ''} ${detail.last_name || ''}`);
         
         safeSetValue('profile_id', detail.id);
         safeSetValue('profile_first_name', detail.first_name);
@@ -331,25 +369,11 @@ async function loadTypistDetailData(typistId) {
         safeSetValue('profile_rate_urgent', detail.rate_urgent);
         safeSetValue('profile_rate_math', detail.rate_math);
 
-        let reports = [];
-        if (detail.reports) {
-            if (typeof detail.reports === 'string') {
-                try { reports = JSON.parse(detail.reports); } catch (e) { reports = []; }
-            } else if (Array.isArray(detail.reports)) {
-                reports = detail.reports;
-            }
-        }
-
-        let payments = [];
-        if (detail.payments) {
-            if (typeof detail.payments === 'string') {
-                try { payments = JSON.parse(detail.payments); } catch (e) { payments = []; }
-            } else if (Array.isArray(detail.payments)) {
-                payments = detail.payments;
-            }
-        }
-
-        let totalEarned = reports.reduce((sum, r) => sum + Number(r.total_price || 0), 0);
+        let totalEarned = reports.reduce((sum, r) => {
+            const appliedRate = r.applied_rate || r.custom_rate || detail['rate_' + r.page_type] || 0;
+            const tPrice = r.total_price || (appliedRate * (r.page_count || 0)) || 0;
+            return sum + Number(tPrice);
+        }, 0);
         let totalPaid = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
         let balance = totalEarned - totalPaid;
 
@@ -379,7 +403,12 @@ function renderReportsTable(reports) {
     reports.forEach(r => {
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-750 transition';
-        const rateDisplay = currentUserRole === 'admin' ? `<td class="p-2.5 th-rate-column">${Number(r.applied_rate || 0).toLocaleString('fa-IR')}</td>` : '';
+        
+        // محاسبه امن مبالغ حتی اگر ورژن SQL متفاوت باشد
+        const appliedRate = r.applied_rate || r.custom_rate || (currentTypistData ? currentTypistData['rate_' + r.page_type] : 0) || 0;
+        const totalPrice = r.total_price || (appliedRate * (r.page_count || 0)) || 0;
+
+        const rateDisplay = currentUserRole === 'admin' ? `<td class="p-2.5 th-rate-column">${Number(appliedRate).toLocaleString('fa-IR')}</td>` : '';
         
         tr.innerHTML = `
             <td class="p-2.5 font-medium">${r.title}</td>
@@ -387,7 +416,7 @@ function renderReportsTable(reports) {
             <td class="p-2.5">${pageTypeLabels[r.page_type] || r.page_type}</td>
             <td class="p-2.5 font-bold">${r.page_count}</td>
             ${rateDisplay}
-            <td class="p-2.5 font-bold text-blue-600 dark:text-blue-400">${Number(r.total_price || 0).toLocaleString('fa-IR')}</td>
+            <td class="p-2.5 font-bold text-blue-600 dark:text-blue-400">${Number(totalPrice).toLocaleString('fa-IR')}</td>
             <td class="p-2.5 text-center"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 rounded text-xs font-bold">✔️ تحویل شد</span></td>
             <td class="p-2.5 text-center">
                 <button type="button" onclick="window.openEditReportModal('${r.id}')" class="text-blue-600 hover:text-blue-800 text-xs px-1.5 py-0.5">✏️ ویرایش</button>
@@ -510,12 +539,7 @@ window.openAddReportModal = function() {
 window.openEditReportModal = function(reportId) {
     if (!currentTypistData || !currentTypistData.reports) return;
     
-    let reports = [];
-    try {
-        reports = typeof currentTypistData.reports === 'string' ? JSON.parse(currentTypistData.reports) : currentTypistData.reports;
-    } catch (e) { reports = []; }
-
-    const r = reports.find(item => item.id === reportId);
+    const r = currentTypistData.reports.find(item => item.id === reportId);
     if (!r) return;
 
     safeSetValue('report_id', r.id);
@@ -591,12 +615,7 @@ window.openAddPaymentModal = function() {
 window.openEditPaymentModal = function(paymentId) {
     if (!currentTypistData || !currentTypistData.payments) return;
 
-    let payments = [];
-    try {
-        payments = typeof currentTypistData.payments === 'string' ? JSON.parse(currentTypistData.payments) : currentTypistData.payments;
-    } catch (e) { payments = []; }
-
-    const p = payments.find(item => item.id === paymentId);
+    const p = currentTypistData.payments.find(item => item.id === paymentId);
     if (!p) return;
 
     safeSetValue('payment_id', p.id);
