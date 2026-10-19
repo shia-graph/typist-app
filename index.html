@@ -50,16 +50,16 @@
             <div class="text-center mb-6">
                 <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3 text-3xl">🔑</div>
                 <h2 class="text-xl font-bold text-slate-900">ورود به سیستم</h2>
-                <p class="text-xs text-slate-500 mt-1">شناسه کاربری (کد ملی/شماره تماس) و رمز عبور خود را وارد کنید</p>
+                <p class="text-xs text-slate-500 mt-1">نام کاربری (شماره تلفن یا کد ملی) و رمز عبور (۴ رقم آخر تلفن) را وارد کنید</p>
             </div>
             <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">شناسه کاربری:</label>
-                    <input type="text" id="login-username" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-800" placeholder="شناسه کاربری یا شماره تماس">
+                    <label class="block text-xs font-bold text-slate-700 mb-1">نام کاربری (شماره تلفن / کد ملی):</label>
+                    <input type="text" id="login-username" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-800" placeholder="09123456789">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">رمز عبور:</label>
-                    <input type="password" id="login-password" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-800" placeholder="••••••••">
+                    <label class="block text-xs font-bold text-slate-700 mb-1">رمز عبور (پیش‌فرض ۴ رقم آخر تلفن):</label>
+                    <input type="password" id="login-password" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-800" placeholder="••••">
                 </div>
                 <button type="submit" id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-500/30 transition-all text-sm"> ورود به حساب کاربری </button>
             </form>
@@ -77,13 +77,19 @@
                     <p class="text-xs text-slate-500">بررسی گزارش‌های ارسالی، وضعیت مهلت ۱۰ روزه و خروجی اکسل بانک</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="openAdminRecordModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm px-3.5 py-2 rounded-xl transition-all font-medium flex items-center gap-1.5 shadow-sm">
+                        ➕ ثبت کارکرد توسط مدیر
+                    </button>
                     <button onclick="openManageProjectsModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs md:text-sm px-3.5 py-2 rounded-xl transition-all font-medium flex items-center gap-1.5 shadow-sm">
                         📁 مدیریت عناوین کار
                     </button>
                     <button onclick="openAddTypistModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs md:text-sm px-3.5 py-2 rounded-xl transition-all font-medium flex items-center gap-1.5 shadow-sm">
-                        ➕ افزودن تایپیست
+                        👤 افزودن تایپیست
                     </button>
-                    <button onclick="exportBankExcel()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm px-3.5 py-2 rounded-xl transition-all font-medium flex items-center gap-1.5 shadow-sm">
+                    <button onclick="openSmsModal()" class="bg-purple-600 hover:bg-purple-700 text-white text-xs md:text-sm px-3.5 py-2 rounded-xl transition-all font-medium flex items-center gap-1.5 shadow-sm">
+                        💬 پیامک گروهی
+                    </button>
+                    <button onclick="exportBankExcel()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs md:text-sm px-3.5 py-2 rounded-xl transition-all font-medium flex items-center gap-1.5 shadow-sm">
                         📊 خروجی اکسل بانک
                     </button>
                     <button onclick="exportFullDatabase()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs md:text-sm px-3.5 py-2 rounded-xl transition-all font-medium flex items-center gap-1.5 shadow-sm">
@@ -104,7 +110,7 @@
                             <tr>
                                 <th class="p-3">نام و نام خانوادگی</th>
                                 <th class="p-3">کد ملی</th>
-                                <th class="p-3">شماره تماس</th>
+                                <th class="p-3">شماره تماس (نام کاربری)</th>
                                 <th class="p-3">نرخ هر صفحه (ریال)</th>
                                 <th class="p-3">وضعیت گزارش ۱۰ روزه</th>
                                 <th class="p-3 text-center">عملیات</th>
@@ -120,7 +126,7 @@
             <!-- Work Reports Review Table -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
                 <div class="p-4 bg-slate-50/50 border-b border-slate-200/80 flex flex-wrap justify-between items-center gap-3">
-                    <h3 class="font-bold text-slate-800 text-sm md:text-base">گزارش‌های ارسالی تایپیست‌ها (کارکردهای ثبت شده)</h3>
+                    <h3 class="font-bold text-slate-800 text-sm md:text-base">گزارش‌های ارسالی و سوابق کارکردها</h3>
                     <div class="flex items-center gap-2 text-xs">
                         <span>از تاریخ:</span>
                         <input type="date" id="admin-filter-start" onchange="loadAdminReports()" class="border border-slate-300 rounded px-2 py-1">
@@ -243,12 +249,12 @@
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-xs font-bold text-slate-700 mb-1">کد ملی (شناسه ورود):</label>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">کد ملی:</label>
                         <input type="text" id="typist-national-id" required class="w-full px-3 py-2 border rounded-xl text-sm">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-700 mb-1">شماره تماس:</label>
-                        <input type="text" id="typist-phone" required class="w-full px-3 py-2 border rounded-xl text-sm">
+                        <label class="block text-xs font-bold text-slate-700 mb-1">شماره تماس (نام کاربری):</label>
+                        <input type="text" id="typist-phone" required class="w-full px-3 py-2 border rounded-xl text-sm" placeholder="09120000000">
                     </div>
                 </div>
                 <div>
@@ -262,7 +268,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-700 mb-1">رمز عبور ورود:</label>
-                        <input type="text" id="typist-password" required class="w-full px-3 py-2 border rounded-xl text-sm" placeholder="پیش‌فرض 4 رقم اخر موبایل">
+                        <input type="text" id="typist-password" class="w-full px-3 py-2 border rounded-xl text-sm" placeholder="پیش‌فرض ۴ رقم آخر تلفن">
                     </div>
                 </div>
                 <div class="flex justify-end gap-2 pt-4 border-t">
@@ -270,6 +276,72 @@
                     <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold">ذخیره اطلاعات</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- MODAL: ADMIN RECORD WORK FOR TYPIST -->
+    <div id="admin-record-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <h3 class="text-lg font-bold text-slate-900">ثبت کارکرد جدید توسط مدیر</h3>
+            <form onsubmit="saveAdminRecord(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">انتخاب تایپیست:</label>
+                    <select id="admin-record-typist" required class="w-full px-3 py-2 border rounded-xl text-sm bg-white">
+                        <option value="">-- انتخاب کنید --</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">عنوان کار:</label>
+                    <select id="admin-record-project" required class="w-full px-3 py-2 border rounded-xl text-sm bg-white">
+                        <option value="">-- انتخاب عنوان کار --</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">تعداد صفحات:</label>
+                        <input type="number" id="admin-record-pages" required min="1" class="w-full px-3 py-2 border rounded-xl text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">تعداد کلمات:</label>
+                        <input type="number" id="admin-record-words" required min="1" class="w-full px-3 py-2 border rounded-xl text-sm">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-4 border-t">
+                    <button type="button" onclick="closeAdminRecordModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl text-xs font-bold">انصراف</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold">ثبت کارکرد</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: GROUP SMS -->
+    <div id="sms-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-bold text-slate-900">💬 اطلاع‌رسانی و پیامک گروهی</h3>
+                <button onclick="closeSmsModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">گیرندگان:</label>
+                    <select id="sms-target-group" class="w-full px-3 py-2 border rounded-xl text-sm bg-white" onchange="updateSmsRecipients()">
+                        <option value="all">همه تایپیست‌ها</option>
+                        <option value="delayed">فقط تایپیست‌های دارای تاخیر (بیش از ۱۰ روز)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">شماره‌های گیرندگان:</label>
+                    <textarea id="sms-recipients-list" readonly class="w-full px-3 py-2 border rounded-xl text-xs bg-slate-50 font-mono" rows="2"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">متن پیامک:</label>
+                    <textarea id="sms-message-text" class="w-full px-3 py-2 border rounded-xl text-sm" rows="4" placeholder="متن پیامک خود را بنویسید..."></textarea>
+                </div>
+                <div class="flex justify-between items-center pt-2 border-t">
+                    <span class="text-xs text-slate-500">ارسال از طریق سامانه پیامک گوشی یا وب</span>
+                    <button onclick="sendSmsAction()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-xl text-xs">ارسال پیامک</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -281,13 +353,11 @@
                 <button onclick="closeProjectsModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
             </div>
             
-            <!-- Add Project Form -->
             <form onsubmit="addNewProject(event)" class="flex gap-2">
-                <input type="text" id="new-project-title" required placeholder="عنوان کار جدید (مثلاً: تایپ کتاب ریاضی)" class="flex-grow px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                <input type="text" id="new-project-title" required placeholder="عنوان کار جدید (مثلاً: کتاب ریاضی)" class="flex-grow px-3 py-2 border border-slate-300 rounded-xl text-sm">
                 <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-xl text-xs">افزودن عنوان</button>
             </form>
 
-            <!-- Projects List Table -->
             <div class="table-scroll max-h-60">
                 <table class="w-full text-right text-xs">
                     <thead class="bg-slate-100 text-slate-600 font-bold">
