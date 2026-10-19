@@ -3,393 +3,335 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>سامانه جامع مدیریت و حسابداری تایپیست‌ها</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
+    <title>سامانه حسابداری تایپیست‌ها</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+    <!-- Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Vazirmatn Font -->
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
     <style>
-        body { 
-            font-family: 'Vazirmatn', sans-serif; 
-            background-color: #f8fafc; 
+        * {
+            font-family: 'Vazirmatn', sans-serif;
             touch-action: manipulation;
-            overflow-x: hidden;
-            width: 100%;
         }
-        .loading-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.85); display: none;
-            align-items: center; justify-content: center; z-index: 9999;
-            backdrop-filter: blur(4px);
+        body {
+            background-color: #f8fafc;
+            overflow-x: hidden;
         }
         .table-scroll {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
-            width: 100%;
-            margin-bottom: 1rem;
-            border-radius: 0.75rem;
-            border: 1px solid #e2e8f0;
         }
-        .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        input, button, select, textarea { font-family: 'Vazirmatn', sans-serif; }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-900 overflow-x-hidden antialiased">
+<body class="text-gray-800 antialiased min-h-screen flex flex-col">
 
     <!-- Loading Overlay -->
-    <div id="loading" class="loading-overlay">
-        <div class="flex flex-col items-center gap-3">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600"></div>
-            <span class="text-sm font-bold text-gray-600">در حال پردازش اطلاعات...</span>
+    <div id="loading" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center gap-4">
+            <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <span class="font-bold text-gray-700 text-sm">در حال دریافت و پردازش اطلاعات...</span>
         </div>
     </div>
 
     <!-- Login Section -->
     <div id="loginSection" class="min-h-screen flex items-center justify-center p-4">
-        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
-            <div class="text-center mb-8">
-                <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl">📝</div>
-                <h1 class="text-2xl font-bold text-gray-800">سامانه حسابداری تایپ</h1>
-                <p class="text-xs text-gray-500 mt-1">ورود به حساب کاربری ادمین و تایپیست‌ها</p>
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-xl border border-gray-100 p-8 space-y-6">
+            <div class="text-center space-y-2">
+                <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto text-3xl font-black">📝</div>
+                <h1 class="text-2xl font-black text-gray-900">سامانه حسابداری تایپ</h1>
+                <p class="text-xs text-gray-500">ورود به حساب کاربری ادمین و تایپیست‌ها</p>
             </div>
-            <form onsubmit="event.preventDefault(); login();" class="space-y-4">
+
+            <div class="space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-gray-700 mb-1">کد ملی یا نام کاربری</label>
-                    <input type="text" id="loginId" class="w-full p-3 border border-gray-300 rounded-xl text-center tracking-wider text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" placeholder="مثلاً: admin یا کد ملی" required>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">کد ملی (نام کاربری)</label>
+                    <input type="text" id="loginId" placeholder="مثلاً: 1234567890 یا admin" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-left dir-ltr font-mono text-sm">
                 </div>
+
                 <div>
                     <label class="block text-xs font-bold text-gray-700 mb-1">رمز عبور</label>
-                    <input type="password" id="loginPass" class="w-full p-3 border border-gray-300 rounded-xl text-center text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" placeholder="****" required>
+                    <input type="password" id="loginPass" placeholder="****" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-left dir-ltr font-mono text-sm">
                 </div>
-                <button type="submit" class="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold hover:bg-blue-700 active:scale-95 transition-all shadow-lg shadow-blue-200">ورود به پنل کاربری</button>
-            </form>
+
+                <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98]">
+                    ورود به پنل کاربری
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- Main App Section -->
-    <div id="appSection" class="hidden min-h-screen pb-16">
-        <!-- Header -->
-        <header class="bg-white shadow-sm border-b sticky top-0 z-40">
-            <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+    <div id="appSection" class="hidden min-h-screen flex flex-col">
+        <!-- Top Header -->
+        <header class="bg-white border-b border-gray-200 sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <div class="bg-blue-100 px-3 py-1.5 rounded-xl border border-blue-200">
-                        <span id="userBadge" class="text-blue-800 font-bold text-xs md:text-sm"></span>
-                    </div>
-                    <span id="userNameDisplay" class="font-bold text-gray-800 text-sm md:text-base"></span>
+                    <span id="userBadge" class="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-lg"></span>
+                    <span id="userNameDisplay" class="font-bold text-sm text-gray-800"></span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button id="changePassSelfBtn" onclick="openChangePassModal()" class="text-xs md:text-sm text-gray-600 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-3 py-2 rounded-xl transition-all border border-gray-200">🔑 تغییر رمز</button>
-                    <button onclick="logout()" class="text-xs md:text-sm text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl transition-all border border-red-200 font-bold">خروج</button>
+                    <button onclick="openChangePassModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-xl text-xs font-bold transition">🔑 تغییر رمز</button>
+                    <button onclick="logout()" class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold transition">خروج</button>
                 </div>
             </div>
+            <!-- Admin Nav -->
+            <nav id="adminNav" class="bg-gray-50 border-t border-gray-100 px-4 py-2 hidden">
+                <div class="max-w-7xl mx-auto flex gap-2 overflow-x-auto">
+                    <button onclick="switchTab('typists')" class="tab-btn px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white transition whitespace-nowrap">👥 تایپیست‌ها</button>
+                    <button onclick="switchTab('work')" class="tab-btn px-4 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-700 transition whitespace-nowrap">📚 ثبت کارهای تایپ</button>
+                    <button onclick="switchTab('payments')" class="tab-btn px-4 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-700 transition whitespace-nowrap">💳 ثبت پرداختی‌ها</button>
+                    <button onclick="switchTab('reports')" class="tab-btn px-4 py-2 rounded-xl text-xs font-bold bg-gray-200 text-gray-700 transition whitespace-nowrap">📊 گزارشات مالی</button>
+                </div>
+            </nav>
         </header>
 
-        <main class="max-w-7xl mx-auto px-4 mt-6">
-            <!-- Navigation -->
-            <nav id="adminNav" class="hidden mb-6 flex flex-wrap gap-2 border-b pb-4">
-                <button onclick="switchTab('typists')" class="tab-btn bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm transition-all text-sm">👥 مدیریت تایپیست‌ها</button>
-                <button onclick="switchTab('work')" class="tab-btn bg-gray-200 text-gray-700 px-5 py-2.5 rounded-xl font-bold transition-all text-sm">📄 ثبت کار جدید</button>
-                <button onclick="switchTab('payments')" class="tab-btn bg-gray-200 text-gray-700 px-5 py-2.5 rounded-xl font-bold transition-all text-sm">💰 پرداختی‌ها</button>
-                <button onclick="switchTab('reports')" class="tab-btn bg-gray-200 text-gray-700 px-5 py-2.5 rounded-xl font-bold transition-all text-sm">📊 گزارشات جامع</button>
-            </nav>
+        <!-- Container Body -->
+        <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
 
-            <!-- Typist Panel -->
-            <div id="typistPanel" class="hidden space-y-6">
-                <!-- Summary Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <p class="text-xs font-bold text-gray-400 mb-1">کل صفحات کار شده</p>
-                        <h3 id="tPages" class="text-3xl font-black text-blue-600">0</h3>
+            <!-- ADMIN PANEL -->
+            <div id="adminPanel" class="hidden space-y-6">
+                <!-- TAB 1: Typists -->
+                <div id="typistsTab" class="tab-content space-y-6">
+                    <!-- Add Typist Form -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
+                        <h2 class="font-bold text-base text-gray-900 flex items-center gap-2">➕ افزودن تایپیست جدید</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                            <input type="text" id="t_id" placeholder="کد ملی *" class="px-3 py-2 rounded-xl border border-gray-200 text-xs">
+                            <input type="text" id="t_name" placeholder="نام *" class="px-3 py-2 rounded-xl border border-gray-200 text-xs">
+                            <input type="text" id="t_family" placeholder="نام خانوادگی" class="px-3 py-2 rounded-xl border border-gray-200 text-xs">
+                            <input type="text" id="t_phone" placeholder="شماره تماس" class="px-3 py-2 rounded-xl border border-gray-200 text-xs">
+                            <input type="text" id="t_pass" placeholder="رمز عبور (اختیاری)" class="px-3 py-2 rounded-xl border border-gray-200 text-xs">
+                            <input type="number" id="t_rate" placeholder="نرخ هر صفحه (تومان) *" class="px-3 py-2 rounded-xl border border-gray-200 text-xs">
+                        </div>
+                        <button onclick="addTypist()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs shadow-md transition">ثبت تایپیست</button>
                     </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <p class="text-xs font-bold text-gray-400 mb-1">جمع دریافتی (ریال)</p>
-                        <h3 id="tPaid" class="text-3xl font-black text-green-600">0</h3>
-                    </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <p class="text-xs font-bold text-gray-400 mb-1">مانده طلب (ریال)</p>
-                        <h3 id="tBalance" class="text-3xl font-black text-orange-600">0</h3>
+
+                    <!-- Actions & Table -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
+                        <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                            <input type="text" id="searchTypist" oninput="filterTypists()" placeholder="🔍 جستجو بر اساس نام یا کد ملی..." class="w-full md:w-72 px-4 py-2 rounded-xl border border-gray-200 text-xs">
+                            <div class="flex flex-wrap gap-2 w-full md:w-auto justify-end">
+                                <button onclick="sendGroupSMS()" class="bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold px-3 py-2 rounded-xl text-xs transition">💬 پیامک گروهی</button>
+                                <button onclick="exportPersonnelCSV()" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-bold px-3 py-2 rounded-xl text-xs transition">📁 خروجی پرسنلی</button>
+                                <button onclick="exportBankCSV()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold px-3 py-2 rounded-xl text-xs transition">🏦 خروجی بانک (پایا)</button>
+                            </div>
+                        </div>
+
+                        <div class="table-scroll">
+                            <table class="w-full text-right text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 border-b text-gray-600 text-xs">
+                                        <th class="p-4 text-center"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
+                                        <th class="p-4 font-bold">کد ملی</th>
+                                        <th class="p-4 font-bold">نام و خانوادگی</th>
+                                        <th class="p-4 text-center font-bold">نرخ صفحه</th>
+                                        <th class="p-4 text-center font-bold">ارتباط</th>
+                                        <th class="p-4 text-center font-bold">عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="typistsList"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
-                <!-- My Works Table -->
-                <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
-                    <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
-                        <h2 class="font-bold text-gray-800 text-sm md:text-base flex items-center gap-2"><span>📋</span> لیست کارهای من</h2>
+                <!-- TAB 2: Work Records -->
+                <div id="workTab" class="tab-content hidden space-y-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
+                        <h2 class="font-bold text-base text-gray-900">📚 ثبت کار جدید برای تایپیست</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                            <select id="w_typist" class="px-3 py-2 rounded-xl border border-gray-200 text-xs"></select>
+                            <input type="text" id="w_title" placeholder="عنوان فایل / پروژه *" class="px-3 py-2 rounded-xl border border-gray-200 text-xs">
+                            <input type="number" id="w_pages" placeholder="تعداد صفحات *" class="px-3 py-2 rounded-xl border border-gray-200 text-xs">
+                            <label class="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
+                                <input type="checkbox" id="w_delivered" class="w-4 h-4 rounded text-blue-600"> تحویل شده است
+                            </label>
+                        </div>
+                        <button onclick="addWork()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs shadow-md transition">ثبت کارکرد</button>
                     </div>
-                    <div class="table-scroll custom-scrollbar">
-                        <table class="w-full text-right border-collapse min-w-[600px]">
+
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                        <div class="table-scroll">
+                            <table class="w-full text-right text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 border-b text-gray-600 text-xs">
+                                        <th class="p-4">تاریخ</th>
+                                        <th class="p-4">تایپیست</th>
+                                        <th class="p-4">عنوان فایل</th>
+                                        <th class="p-4 text-center">صفحات</th>
+                                        <th class="p-4 text-center">وضعیت تحویل</th>
+                                        <th class="p-4 text-center">وضعیت تسویه</th>
+                                        <th class="p-4 text-center">حذف</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="workList"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: Payments -->
+                <div id="paymentsTab" class="tab-content hidden space-y-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
+                        <h2 class="font-bold text-base text-gray-900">💳 ثبت واریزی مالی جدید</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <select id="p_typist" class="px-3 py-2 rounded-xl border border-gray-200 text-xs"></select>
+                            <input type="number" id="p_amount" placeholder="مبلغ واریزی به ریال *" class="px-3 py-2 rounded-xl border border-gray-200 text-xs">
+                        </div>
+                        <button onclick="addPayment()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs shadow-md transition">ثبت پرداخت</button>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                        <div class="table-scroll">
+                            <table class="w-full text-right text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 border-b text-gray-600 text-xs">
+                                        <th class="p-4">تاریخ پرداخت</th>
+                                        <th class="p-4">تایپیست</th>
+                                        <th class="p-4 text-center">مبلغ (ریال)</th>
+                                        <th class="p-4 text-center">حذف</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="paymentsList"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: Reports -->
+                <div id="reportsTab" class="tab-content hidden space-y-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
+                        <h2 class="font-bold text-base text-gray-900">📊 گزارش جامع حسابداری</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">از تاریخ:</label>
+                                <input type="date" id="rep_start" class="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">تا تاریخ:</label>
+                                <input type="date" id="rep_end" class="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs">
+                            </div>
+                        </div>
+                        <button onclick="loadAdminReport()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs shadow-md transition">محاسبه گزارش</button>
+                    </div>
+
+                    <div id="adminReportResults" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+                </div>
+            </div>
+
+            <!-- TYPIST PANEL -->
+            <div id="typistPanel" class="hidden space-y-6">
+                <!-- Stat Cards (Rates Hidden) -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="bg-blue-600 text-white p-6 rounded-2xl shadow-lg">
+                        <p class="text-xs opacity-80 mb-1">کل صفحات تحویل شده</p>
+                        <h3 id="tPages" class="text-3xl font-black">۰</h3>
+                    </div>
+                    <div class="bg-green-600 text-white p-6 rounded-2xl shadow-lg">
+                        <p class="text-xs opacity-80 mb-1">مجموع دریافتی‌های شما (ریال)</p>
+                        <h3 id="tPaid" class="text-3xl font-black">۰</h3>
+                    </div>
+                    <div class="bg-orange-500 text-white p-6 rounded-2xl shadow-lg">
+                        <p class="text-xs opacity-80 mb-1">مانده طلب شما (ریال)</p>
+                        <h3 id="tBalance" class="text-3xl font-black">۰</h3>
+                    </div>
+                </div>
+
+                <!-- Work List -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
+                    <h3 class="font-bold text-base text-gray-900">📚 لیست کارهای اختصاص داده شده</h3>
+                    <div class="table-scroll">
+                        <table class="w-full text-right text-sm">
                             <thead>
-                                <tr class="bg-gray-100 text-gray-600 text-xs font-bold">
-                                    <th class="p-4 border-b">تاریخ</th>
-                                    <th class="p-4 border-b">عنوان فایل</th>
-                                    <th class="p-4 border-b text-center">تعداد صفحات</th>
-                                    <th class="p-4 border-b text-center">وضعیت تحویل</th>
-                                    <th class="p-4 border-b text-center">وضعیت تسویه</th>
+                                <tr class="bg-gray-50 border-b text-gray-600 text-xs">
+                                    <th class="p-4">تاریخ ثبت</th>
+                                    <th class="p-4">عنوان پروژه</th>
+                                    <th class="p-4 text-center">تعداد صفحات</th>
+                                    <th class="p-4 text-center">وضعیت تحویل</th>
+                                    <th class="p-4 text-center">وضعیت تسویه</th>
                                 </tr>
                             </thead>
-                            <tbody id="myWorksList" class="text-sm divide-y divide-gray-100"></tbody>
+                            <tbody id="myWorksList"></tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- Profile Self Edit -->
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-lg font-bold text-gray-800">✏️ ویرایش مشخصات فردی و بانکی</h2>
-                        <button onclick="enableProfileEdit()" class="text-blue-600 text-xs font-bold bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition-all">✏️ فعال‌سازی ویرایش</button>
+                <!-- Profile Form -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold text-base text-gray-900">👤 اطلاعات پرسنلی و بانکی</h3>
+                        <button onclick="enableProfileEdit()" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-4 py-2 rounded-xl text-xs font-bold transition">✏️ فعال‌سازی ویرایش</button>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="profileForm">
+
+                    <div id="profileForm" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                         <div>
-                            <label class="text-xs font-bold text-gray-500 mb-1 block">نام</label>
-                            <input type="text" id="p_name" readonly class="w-full p-3 bg-gray-50 border rounded-xl outline-none transition-all">
+                            <label class="block text-xs font-bold text-gray-600 mb-1">نام</label>
+                            <input type="text" id="p_name" readonly class="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs bg-gray-50">
                         </div>
                         <div>
-                            <label class="text-xs font-bold text-gray-500 mb-1 block">نام خانوادگی</label>
-                            <input type="text" id="p_family" readonly class="w-full p-3 bg-gray-50 border rounded-xl outline-none transition-all">
+                            <label class="block text-xs font-bold text-gray-600 mb-1">نام خانوادگی</label>
+                            <input type="text" id="p_family" readonly class="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs bg-gray-50">
                         </div>
                         <div>
-                            <label class="text-xs font-bold text-gray-500 mb-1 block">نام پدر</label>
-                            <input type="text" id="p_father" readonly class="w-full p-3 bg-gray-50 border rounded-xl outline-none transition-all">
+                            <label class="block text-xs font-bold text-gray-600 mb-1">نام پدر</label>
+                            <input type="text" id="p_father" readonly class="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs bg-gray-50">
                         </div>
                         <div>
-                            <label class="text-xs font-bold text-gray-500 mb-1 block">شماره تماس</label>
-                            <input type="text" id="p_phone" readonly class="w-full p-3 bg-gray-50 border rounded-xl outline-none transition-all">
+                            <label class="block text-xs font-bold text-gray-600 mb-1">شماره تماس</label>
+                            <input type="text" id="p_phone" readonly class="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs bg-gray-50">
                         </div>
                         <div>
-                            <label class="text-xs font-bold text-gray-500 mb-1 block">شماره کارت</label>
-                            <input type="text" id="p_card" readonly class="w-full p-3 bg-gray-50 border rounded-xl outline-none transition-all font-mono text-center">
+                            <label class="block text-xs font-bold text-gray-600 mb-1">شماره کارت</label>
+                            <input type="text" id="p_card" readonly class="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs bg-gray-50">
                         </div>
                         <div>
-                            <label class="text-xs font-bold text-gray-500 mb-1 block">شماره شبا (بدون IR)</label>
-                            <input type="text" id="p_shaba" readonly class="w-full p-3 bg-gray-50 border rounded-xl outline-none transition-all font-mono text-center">
-                        </div>
-                        <div class="md:col-span-2 lg:col-span-3 mt-2">
-                            <button id="saveProfileBtn" onclick="saveTypistProfile()" disabled class="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold opacity-50 cursor-not-allowed transition-all shadow-md">ذخیره مشخصات</button>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">شماره شبا</label>
+                            <input type="text" id="p_shaba" readonly class="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs bg-gray-50">
                         </div>
                     </div>
+                    <button id="saveProfileBtn" onclick="saveTypistProfile()" disabled class="opacity-50 cursor-not-allowed bg-green-600 text-white font-bold px-6 py-2.5 rounded-xl text-xs shadow-md transition">ذخیره تغییرات پروفایل</button>
                 </div>
             </div>
 
-            <!-- Admin Panels -->
-            <div id="adminPanel" class="hidden space-y-6">
-                <!-- Tab 1: Typists Management -->
-                <section id="typistsTab" class="tab-content">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
-                        <h2 class="text-lg font-bold text-gray-800 mb-4">افزودن تایپیست جدید</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                            <input type="text" id="t_id" placeholder="کد ملی (۱۰ رقم)" class="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-center">
-                            <input type="text" id="t_name" placeholder="نام" class="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
-                            <input type="text" id="t_family" placeholder="نام خانوادگی" class="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
-                            <input type="text" id="t_phone" placeholder="شماره تماس" class="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-center">
-                            <input type="password" id="t_pass" placeholder="رمز عبور (پیش‌فرض: ۴ رقم آخر موبایل)" class="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-center">
-                            <input type="number" id="t_rate" placeholder="نرخ صفحه (تومان)" class="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-center">
-                            <button onclick="addTypist()" class="md:col-span-2 lg:col-span-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 active:scale-95 transition-all py-3 shadow-md shadow-blue-100">ثبت تایپیست</button>
-                        </div>
-                    </div>
-
-                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div class="p-4 bg-gray-50 border-b flex flex-wrap justify-between items-center gap-4">
-                            <div class="flex items-center gap-4">
-                                <h2 class="font-bold text-gray-800">👥 لیست تایپیست‌ها</h2>
-                                <input type="text" id="searchTypist" oninput="filterTypists()" placeholder="جستجو بر اساس نام یا کد ملی..." class="p-2 border rounded-xl text-xs w-48 md:w-64">
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <button onclick="sendGroupSMS()" class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all">✉️ پیامک گروهی</button>
-                                <button onclick="exportPersonnelCSV()" class="bg-gray-800 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-gray-900 transition-all">📥 خروجی CSV تایپیست‌ها</button>
-                            </div>
-                        </div>
-                        <div class="table-scroll custom-scrollbar">
-                            <table class="w-full text-right border-collapse min-w-[900px]">
-                                <thead>
-                                    <tr class="bg-gray-100 text-gray-600 text-xs font-bold">
-                                        <th class="p-4 border-b text-center"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()" class="w-4 h-4 rounded"></th>
-                                        <th class="p-4 border-b">کد ملی</th>
-                                        <th class="p-4 border-b">نام و خانوادگی</th>
-                                        <th class="p-4 border-b text-center">نرخ هر صفحه</th>
-                                        <th class="p-4 border-b text-center">ارتباط مستقیم</th>
-                                        <th class="p-4 border-b text-center">عملیات مدیریت</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="typistsList" class="text-sm divide-y divide-gray-100"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Tab 2: Work Registration -->
-                <section id="workTab" class="tab-content hidden">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
-                        <h2 class="text-lg font-bold text-gray-800 mb-4">ثبت کارکرد (فایل تایپ شده)</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">انتخاب تایپیست</label>
-                                <select id="w_typist" class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"></select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">عنوان فایل / کار</label>
-                                <input type="text" id="w_title" placeholder="مثلاً: مقاله پزشکی فصل ۱" class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">تعداد صفحات</label>
-                                <input type="number" id="w_pages" placeholder="0" class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-center">
-                            </div>
-                            <div class="flex items-center justify-center border rounded-xl bg-gray-50 p-3 mt-5">
-                                <label class="text-sm font-bold text-gray-700 cursor-pointer flex items-center gap-2">
-                                    <input type="checkbox" id="w_delivered" class="w-5 h-5 accent-blue-600 rounded">
-                                    تحویل نهایی داده شده؟
-                                </label>
-                            </div>
-                            <button onclick="addWork()" class="md:col-span-2 lg:col-span-4 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 py-3.5 transition-all shadow-md">ثبت در دیتابیس</button>
-                        </div>
-                    </div>
-
-                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
-                            <h2 class="font-bold text-gray-800">📊 ثبت‌های اخیر کارکرد</h2>
-                        </div>
-                        <div class="table-scroll custom-scrollbar">
-                            <table class="w-full text-right border-collapse min-w-[750px]">
-                                <thead>
-                                    <tr class="bg-gray-100 text-gray-600 text-xs font-bold">
-                                        <th class="p-4 border-b">تاریخ ثبت</th>
-                                        <th class="p-4 border-b">تایپیست</th>
-                                        <th class="p-4 border-b">عنوان فایل</th>
-                                        <th class="p-4 border-b text-center">صفحات</th>
-                                        <th class="p-4 border-b text-center">وضعیت تحویل</th>
-                                        <th class="p-4 border-b text-center">تغییر وضعیت تسویه</th>
-                                        <th class="p-4 border-b text-center">حذف</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="workList" class="text-sm divide-y divide-gray-100"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Tab 3: Payments -->
-                <section id="paymentsTab" class="tab-content hidden">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
-                        <h2 class="text-lg font-bold text-gray-800 mb-4">ثبت پرداخت مالی به تایپیست</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">انتخاب تایپیست</label>
-                                <select id="p_typist" class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"></select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">مبلغ پرداختی (ریال)</label>
-                                <input type="number" id="p_amount" placeholder="0" class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-center font-mono">
-                            </div>
-                            <div class="flex items-end">
-                                <button onclick="addPayment()" class="w-full bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 py-3.5 transition-all shadow-md">ثبت واریزی جدید</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div class="p-4 bg-gray-50 border-b flex flex-wrap justify-between items-center gap-4">
-                            <h2 class="font-bold text-gray-800">💸 سوابق کلی پرداختی‌ها</h2>
-                            <button onclick="exportBankCSV()" class="bg-green-700 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-green-800 transition-all">📥 خروجی CSV پایا / بانک (مانده طلب)</button>
-                        </div>
-                        <div class="table-scroll custom-scrollbar">
-                            <table class="w-full text-right border-collapse min-w-[650px]">
-                                <thead>
-                                    <tr class="bg-gray-100 text-gray-600 text-xs font-bold">
-                                        <th class="p-4 border-b">تاریخ پرداخت</th>
-                                        <th class="p-4 border-b">تایپیست</th>
-                                        <th class="p-4 border-b text-center">مبلغ پرداختی (ریال)</th>
-                                        <th class="p-4 border-b text-center">حذف سند</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="paymentsList" class="text-sm divide-y divide-gray-100"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Tab 4: Financial Reports -->
-                <section id="reportsTab" class="tab-content hidden">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
-                        <h2 class="text-lg font-bold text-gray-800 mb-4">گزارش‌گیری محاسباتی و زمان‌بندی شده</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">از تاریخ</label>
-                                <input type="date" id="rep_start" class="w-full p-3 border rounded-xl outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">تا تاریخ</label>
-                                <input type="date" id="rep_end" class="w-full p-3 border rounded-xl outline-none">
-                            </div>
-                            <div class="flex items-end">
-                                <button onclick="loadAdminReport()" class="w-full bg-blue-600 text-white font-bold rounded-xl py-3.5 hover:bg-blue-700 transition-all shadow-md">محاسبه گزارش</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="adminReportResults" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"></div>
-                </section>
-            </div>
         </main>
     </div>
 
-    <!-- Edit Typist Modal -->
-    <div id="editTypistModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <h3 class="text-lg font-bold text-gray-800 border-b pb-3">ویرایش اطلاعات تایپیست</h3>
+    <!-- MODAL: Edit Typist (Admin) -->
+    <div id="editTypistModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white w-full max-w-lg rounded-3xl p-6 space-y-4 shadow-2xl">
+            <h3 class="font-bold text-lg text-gray-900">✏️ ویرایش مشخصات تایپیست</h3>
             <input type="hidden" id="edit_t_id">
             <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="text-xs font-bold text-gray-500 block mb-1">نام</label>
-                    <input type="text" id="edit_t_name" class="w-full p-2.5 border rounded-xl text-sm">
-                </div>
-                <div>
-                    <label class="text-xs font-bold text-gray-500 block mb-1">نام خانوادگی</label>
-                    <input type="text" id="edit_t_family" class="w-full p-2.5 border rounded-xl text-sm">
-                </div>
-                <div>
-                    <label class="text-xs font-bold text-gray-500 block mb-1">نام پدر</label>
-                    <input type="text" id="edit_t_father" class="w-full p-2.5 border rounded-xl text-sm">
-                </div>
-                <div>
-                    <label class="text-xs font-bold text-gray-500 block mb-1">شماره تماس</label>
-                    <input type="text" id="edit_t_phone" class="w-full p-2.5 border rounded-xl text-sm font-mono text-center">
-                </div>
-                <div>
-                    <label class="text-xs font-bold text-gray-500 block mb-1">نرخ هر صفحه (تومان)</label>
-                    <input type="number" id="edit_t_rate" class="w-full p-2.5 border rounded-xl text-sm text-center font-bold">
-                </div>
-                <div>
-                    <label class="text-xs font-bold text-gray-500 block mb-1">شماره کارت</label>
-                    <input type="text" id="edit_t_card" class="w-full p-2.5 border rounded-xl text-sm font-mono text-center">
-                </div>
-                <div class="col-span-2">
-                    <label class="text-xs font-bold text-gray-500 block mb-1">شماره شبا (بدون IR)</label>
-                    <input type="text" id="edit_t_shaba" class="w-full p-2.5 border rounded-xl text-sm font-mono text-center">
-                </div>
+                <input type="text" id="edit_t_name" placeholder="نام" class="px-3 py-2 rounded-xl border text-xs">
+                <input type="text" id="edit_t_family" placeholder="نام خانوادگی" class="px-3 py-2 rounded-xl border text-xs">
+                <input type="text" id="edit_t_father" placeholder="نام پدر" class="px-3 py-2 rounded-xl border text-xs">
+                <input type="text" id="edit_t_phone" placeholder="شماره تماس" class="px-3 py-2 rounded-xl border text-xs">
+                <input type="number" id="edit_t_rate" placeholder="نرخ صفحه (تومان)" class="px-3 py-2 rounded-xl border text-xs">
+                <input type="text" id="edit_t_card" placeholder="شماره کارت" class="px-3 py-2 rounded-xl border text-xs">
+                <input type="text" id="edit_t_shaba" placeholder="شماره شبا" class="col-span-2 px-3 py-2 rounded-xl border text-xs">
             </div>
-            <div class="flex justify-end gap-2 border-t pt-4">
-                <button onclick="closeEditModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl font-bold text-sm">انصراف</button>
-                <button onclick="saveTypistModalEdit()" class="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm">ذخیره تغییرات</button>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeEditModal()" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-xs font-bold">انصراف</button>
+                <button onclick="saveTypistModalEdit()" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">ذخیره ویرایش</button>
             </div>
         </div>
     </div>
 
-    <!-- Change Password Modal -->
-    <div id="changePassModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
-            <h3 class="text-lg font-bold text-gray-800 border-b pb-3">تغییر رمز عبور</h3>
-            <div>
-                <label class="text-xs font-bold text-gray-500 block mb-1">رمز عبور جدید</label>
-                <input type="password" id="newPasswordInput" class="w-full p-3 border rounded-xl text-center text-lg outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-            <div class="flex justify-end gap-2 border-t pt-4">
-                <button onclick="closeChangePassModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl font-bold text-sm">انصراف</button>
-                <button onclick="saveNewPassword()" class="px-4 py-2 bg-green-600 text-white rounded-xl font-bold text-sm">بروزرسانی رمز</button>
+    <!-- MODAL: Change Password -->
+    <div id="changePassModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white w-full max-w-md rounded-3xl p-6 space-y-4 shadow-2xl">
+            <h3 class="font-bold text-lg text-gray-900">🔑 تغییر رمز عبور</h3>
+            <input type="password" id="newPasswordInput" placeholder="رمز عبور جدید را وارد کنید" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-xs">
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeChangePassModal()" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-xs font-bold">انصراف</button>
+                <button onclick="saveNewPassword()" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">تغییر رمز</button>
             </div>
         </div>
     </div>
 
-    <script src="app.js?v=4.2.2"></script>
+    <!-- Main JavaScript Source -->
+    <script src="app.js"></script>
 </body>
 </html>
