@@ -8,10 +8,6 @@
 const SUPABASE_URL = 'https://irhiofmqusjpcznecmho.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyaGlvZm1xdXNqcGN6bmVjbWhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNDk4NDUsImV4cCI6MjEwNDYyNTg0NX0.Xu9y7K4KcQdpRQZ9YWZzJvrPAldejVcmtR-4ozHHZZ8';
 
-
-
-
-// Initialize Supabase Client safely
 let db = null;
 if (window.supabase) {
     db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -21,6 +17,7 @@ if (window.supabase) {
 let currentUser = null; // { type: 'admin'|'typist', data: object }
 let globalTypists = [];
 let globalReports = [];
+let globalPayments = [];
 
 // Helper: Convert Persian/Arabic numbers to English
 function toEnglishDigits(str) {
@@ -166,11 +163,10 @@ function showLoginView() {
     if (userHeader) userHeader.classList.add('hidden');
 }
 
-// Defensive Authentication Logic (Solves Cannot read properties of null)
+// Defensive Authentication Logic
 async function handleLogin(e) {
     if (e) e.preventDefault();
 
-    // Safe Selector (supports fallback IDs)
     const userInputEl = document.getElementById('loginUsername') || document.getElementById('username');
     const passInputEl = document.getElementById('loginPassword') || document.getElementById('password');
 
@@ -204,7 +200,6 @@ async function handleLogin(e) {
         const { data: typists, error } = await db.from('typists').select('*');
         if (error) throw error;
 
-        // Check if DB typist matches
         const typist = (typists || []).find(t => {
             const pPhone = toEnglishDigits(t.phone || '').trim();
             const pNational = toEnglishDigits(t.national_id || t.national_code || '').trim();
@@ -270,7 +265,6 @@ async function renderDashboard() {
 // ----------------------------------------------------------------------
 async function fetchTypistData() {
     try {
-        // Refresh typist data from server
         const { data: updatedTypists, error: tErr } = await db.from('typists').select('*').eq('id', currentUser.data.id);
         if (!tErr && updatedTypists && updatedTypists.length > 0) {
             currentUser.data = updatedTypists[0];
@@ -282,10 +276,8 @@ async function fetchTypistData() {
         document.getElementById('typistActiveTitle').textContent = t.title || 'موضوعی اختصاص داده نشده است';
         document.getElementById('typistDeliveryDate').textContent = t.delivery_date ? formatJalali(t.delivery_date) : 'تعیین نشده';
 
-        // Calculate 10-day report deadline
         renderTypistDeadline(t.last_report_date);
 
-        // Fetch work records for this typist
         const { data: records, error } = await db.from('work_records').select('*').order('created_at', { ascending: false });
         if (error) throw error;
 
@@ -302,7 +294,7 @@ async function fetchTypistData() {
 
         myRecords.forEach(r => {
             const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition';
+            tr.className = 'hover:bg-slate-50 transition border-b border-slate-50';
             tr.innerHTML = `
                 <td class="px-6 py-3 font-mono text-xs">${formatJalali(getRecordDate(r))}</td>
                 <td class="px-6 py-3 font-medium text-slate-800">${r.title || t.title || 'کارکرد عادی'}</td>
@@ -324,7 +316,7 @@ function renderTypistDeadline(lastReportDate) {
 
     if (!lastReportDate) {
         badge.className = 'p-3 rounded-xl text-center text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200';
-        badge.innerHTML = `⚠️ تاکنون گزارشی ثبت نکرده‌اید.<br><span class="font-normal text-[11px]">مهلت ارسال گزارش: ۱۰ روز پس از شروع</span>`;
+        badge.innerHTML = `⚠️ تاکنون گزارشی ثبت نکرده‌اید.<br><span class="font-normal text-[11px] mt-1 block">مهلت ارسال گزارش: ۱۰ روز پس از شروع</span>`;
         return;
     }
 
@@ -336,14 +328,13 @@ function renderTypistDeadline(lastReportDate) {
 
     if (remainingDays >= 0) {
         badge.className = 'p-3 rounded-xl text-center text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200';
-        badge.innerHTML = `✅ مهلت ثبت گزارش بعدی:<br><span class="text-sm font-black">${remainingDays} روز باقی‌مانده</span>`;
+        badge.innerHTML = `✅ مهلت ثبت گزارش بعدی:<br><span class="text-sm font-black mt-1 block">${remainingDays} روز باقی‌مانده</span>`;
     } else {
         badge.className = 'p-3 rounded-xl text-center text-xs font-bold bg-red-100 text-red-800 border border-red-200 animate-pulse';
-        badge.innerHTML = `❌ تاخیر در ارائه گزارش:<br><span class="text-sm font-black">${Math.abs(remainingDays)} روز تاخیر دارید!</span>`;
+        badge.innerHTML = `❌ تاخیر در ارائه گزارش:<br><span class="text-sm font-black mt-1 block">${Math.abs(remainingDays)} روز تاخیر دارید!</span>`;
     }
 }
 
-// Submit Work Report (Typist Self-Service)
 async function submitTypistReport(e) {
     e.preventDefault();
     const wordsInput = document.getElementById('reportWords').value;
@@ -361,7 +352,6 @@ async function submitTypistReport(e) {
     const nowIso = new Date().toISOString();
 
     try {
-        // 1. Insert into work_records
         const { error: rErr } = await db.from('work_records').insert([{
             typist_id: t.id,
             person_id: t.id,
@@ -376,7 +366,6 @@ async function submitTypistReport(e) {
 
         if (rErr) throw rErr;
 
-        // 2. Update last_report_date in typists table (resets 10-day deadline)
         const { error: uErr } = await db.from('typists').update({
             last_report_date: nowIso
         }).eq('id', t.id);
@@ -393,7 +382,6 @@ async function submitTypistReport(e) {
     }
 }
 
-// Typist Edit Own Profile Modal Handlers
 function openTypistSelfProfileModal() {
     const t = currentUser.data;
     document.getElementById('selfFirstName').value = t.first_name || '';
@@ -457,16 +445,20 @@ async function saveTypistSelfProfile(e) {
 // ----------------------------------------------------------------------
 async function fetchAllDataForAdmin() {
     try {
-        const [typistsRes, recordsRes] = await Promise.all([
+        const [typistsRes, recordsRes, paymentsRes] = await Promise.all([
             db.from('typists').select('*').order('created_at', { ascending: false }),
-            db.from('work_records').select('*').order('created_at', { ascending: false })
+            db.from('work_records').select('*').order('created_at', { ascending: false }),
+            db.from('payments').select('*')
         ]);
 
         if (typistsRes.error) throw typistsRes.error;
         if (recordsRes.error) throw recordsRes.error;
+        // Ignore table not found error for payments just in case it's newly created
+        if (paymentsRes.error && paymentsRes.error.code !== '42P01') throw paymentsRes.error;
 
         globalTypists = typistsRes.data || [];
         globalReports = recordsRes.data || [];
+        globalPayments = paymentsRes.data || [];
 
         renderAdminStats();
         renderAdminTypistsTable(globalTypists);
@@ -491,7 +483,6 @@ function renderAdminStats() {
     document.getElementById('statTotalReports').textContent = formatNumber(globalReports.length);
 }
 
-// Render Admin Typists Table
 function renderAdminTypistsTable(typistsList) {
     const tbody = document.getElementById('adminTypistsTable');
     document.getElementById('typistsTableCount').textContent = `تعداد کل: ${formatNumber(typistsList.length)} نفر`;
@@ -506,11 +497,9 @@ function renderAdminTypistsTable(typistsList) {
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
 
-        // Rates (Word / Page)
         const wordRate = t.rate_per_word !== undefined && t.rate_per_word !== null ? t.rate_per_word : (t.default_word_rate || 15);
         const pageRate = t.page_rate !== undefined && t.page_rate !== null ? t.page_rate : (t.default_page_rate || 0);
 
-        // Task Completion & Deadline Calculation
         let deadlineHtml = '';
         if (t.completed) {
             deadlineHtml = `<span class="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg text-xs font-semibold">تکمیل شده</span>`;
@@ -527,6 +516,7 @@ function renderAdminTypistsTable(typistsList) {
         }
 
         const passStr = t.password || (t.phone && t.phone.length >= 4 ? t.phone.slice(-4) : '---');
+        const newTaskBtn = t.completed ? `<button onclick="openNewTaskModal('${t.id}')" title="ارجاع کار جدید" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-800 hover:bg-blue-200">+ کار جدید</button>` : '';
 
         tr.innerHTML = `
             <td class="px-4 py-3">
@@ -547,15 +537,16 @@ function renderAdminTypistsTable(typistsList) {
                 <div>صفحه: ${formatNumber(pageRate)}</div>
             </td>
             <td class="px-4 py-3 text-center">
-                <div class="flex items-center justify-center gap-1.5">
+                <div class="flex items-center justify-center gap-1.5 flex-wrap w-full">
                     <button onclick="toggleTaskCompletion('${t.id}', ${!t.completed})" title="تغییر وضعیت اتمام کار"
                         class="px-2.5 py-1 text-xs rounded-lg ${t.completed ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'}">
                         ${t.completed ? 'بازگشایی' : 'تکمیل'}
                     </button>
-                    <button onclick="openEditTypistModal('${t.id}')" class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                    ${newTaskBtn}
+                    <button onclick="openEditTypistModal('${t.id}')" class="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg" title="ویرایش">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                     </button>
-                    <button onclick="deleteTypist('${t.id}')" class="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                    <button onclick="deleteTypist('${t.id}')" class="p-1.5 text-red-600 hover:bg-red-50 rounded-lg" title="حذف">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                     </button>
                 </div>
@@ -576,22 +567,25 @@ function filterTypistsTable() {
     renderAdminTypistsTable(filtered);
 }
 
-// Render Admin Payroll Table
+// Render Admin Payroll Table (WITH MULTI-MONTH NET LOGIC)
 function renderAdminPayrollTable() {
     const tbody = document.getElementById('adminPayrollTable');
     tbody.innerHTML = '';
 
     globalTypists.forEach(t => {
         const myRecords = globalReports.filter(r => isRecordBelongsToTypist(r, t.id));
-
         const totalWords = myRecords.reduce((sum, r) => sum + getRecordWordsCount(r), 0);
         const totalPages = myRecords.reduce((sum, r) => sum + getRecordPageCount(r), 0);
 
         const wordRate = Number(t.rate_per_word !== undefined && t.rate_per_word !== null ? t.rate_per_word : (t.default_word_rate || 15));
         const pageRate = Number(t.page_rate !== undefined && t.page_rate !== null ? t.page_rate : (t.default_page_rate || 0));
 
-        // Total Payroll Formula: (words * rate_per_word) + (pages * page_rate)
-        const totalAmount = (totalWords * wordRate) + (totalPages * pageRate);
+        const myPayments = globalPayments.filter(p => String(p.typist_id) === String(t.id));
+        const totalPaid = myPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+        // Payroll Formula: Gross - Payments
+        const grossAmount = (totalWords * wordRate) + (totalPages * pageRate);
+        const netPayable = grossAmount - totalPaid;
 
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
@@ -600,15 +594,16 @@ function renderAdminPayrollTable() {
             <td class="px-4 py-3 font-bold text-slate-800">${getTypistName(t)}</td>
             <td class="px-4 py-3 text-xs font-mono">
                 <div>شبا: ${t.sheba_number || t.iban || '---'}</div>
-                <div class="text-slate-400">کدملی: ${getTypistNationalId(t)}</div>
+                <div class="text-slate-400 mt-1">کدملی: ${getTypistNationalId(t)}</div>
             </td>
-            <td class="px-4 py-3 font-semibold text-indigo-600 text-xs">${formatNumber(totalWords)} کلمه</td>
-            <td class="px-4 py-3 text-xs">${formatNumber(totalPages)} صفحه</td>
+            <td class="px-4 py-3 font-semibold text-indigo-600 text-xs">${formatNumber(totalWords)} کلمه<br><span class="text-slate-500 font-normal">${formatNumber(totalPages)} صفحه</span></td>
             <td class="px-4 py-3 text-xs font-mono">${formatNumber(wordRate)} / ${formatNumber(pageRate)}</td>
-            <td class="px-4 py-3 font-bold text-emerald-700 text-sm font-mono">${formatNumber(totalAmount)} ریال</td>
+            <td class="px-4 py-3 font-semibold text-emerald-700 text-xs">${formatNumber(grossAmount)} ریال</td>
+            <td class="px-4 py-3 font-semibold text-rose-600 text-xs">${formatNumber(totalPaid)} ریال</td>
+            <td class="px-4 py-3 font-black text-indigo-700 text-sm">${formatNumber(netPayable)} ریال</td>
             <td class="px-4 py-3 text-center">
-                <button onclick="settleTypistPayroll('${t.id}', ${totalAmount})" class="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 text-xs px-3 py-1.5 rounded-lg font-semibold transition">
-                    تسویه کارکرد
+                <button onclick="settleTypistPayroll('${t.id}', ${netPayable})" class="bg-indigo-100 text-indigo-800 hover:bg-indigo-200 text-xs px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap">
+                    ثبت تسویه
                 </button>
             </td>
         `;
@@ -616,7 +611,6 @@ function renderAdminPayrollTable() {
     });
 }
 
-// Render All Records Table
 function renderAdminAllRecordsTable() {
     const tbody = document.getElementById('adminAllRecordsTable');
     tbody.innerHTML = '';
@@ -647,23 +641,21 @@ function renderAdminAllRecordsTable() {
     });
 }
 
-// Switch Admin Tabs
 function switchAdminTab(tabName) {
     const tabs = ['typists', 'payroll', 'records'];
     tabs.forEach(t => {
         const btn = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}Btn`);
         const content = document.getElementById(`admin${t.charAt(0).toUpperCase() + t.slice(1)}Tab`);
         if (t === tabName) {
-            btn.className = 'py-3 px-4 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 transition';
+            btn.className = 'flex-1 py-3 px-4 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 transition';
             content.classList.remove('hidden');
         } else {
-            btn.className = 'py-3 px-4 text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition';
+            btn.className = 'flex-1 py-3 px-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition';
             content.classList.add('hidden');
         }
     });
 }
 
-// Modal Toggle Helper
 function openModal(id) {
     const modal = document.getElementById(id);
     if (modal) modal.classList.remove('hidden');
@@ -718,7 +710,6 @@ async function saveTypist(e) {
     const sheba = toEnglishDigits(document.getElementById('typistSheba').value.trim());
     const customPass = toEnglishDigits(document.getElementById('typistPassword').value.trim());
 
-    // Password logic: custom pass or last 4 digits of phone
     const defaultPass = phone.length >= 4 ? phone.slice(-4) : '1234';
     const finalPassword = customPass || defaultPass;
 
@@ -743,12 +734,10 @@ async function saveTypist(e) {
 
     try {
         if (id) {
-            // Update
             const { error } = await db.from('typists').update(payload).eq('id', id);
             if (error) throw error;
             showAlert('اطلاعات تایپیست بروزرسانی شد.');
         } else {
-            // Insert
             payload.completed = false;
             payload.created_at = new Date().toISOString();
             const { error } = await db.from('typists').insert([payload]);
@@ -774,11 +763,48 @@ async function toggleTaskCompletion(id, completedStatus) {
         const { error } = await db.from('typists').update(updatePayload).eq('id', id);
         if (error) throw error;
 
-        showAlert(completedStatus ? 'پروژه به عنوان تکمیل شده نشانه گذاری شد.' : 'پروژه به حالت فعال بازگشت.');
+        showAlert(completedStatus ? 'پروژه به عنوان تکمیل شده نشانه‌گذاری شد.' : 'پروژه به حالت فعال بازگشت.');
         await fetchAllDataForAdmin();
     } catch (err) {
         console.error('Error toggling completion:', err);
         showAlert('خطا در تغییر وضعیت پروژه.', true);
+    }
+}
+
+// Modal Handlers: Assign New Task
+function openNewTaskModal(id) {
+    const t = globalTypists.find(item => String(item.id) === String(id));
+    if (!t) return;
+    document.getElementById('newTaskId').value = t.id;
+    document.getElementById('newTaskTitle').value = '';
+    document.getElementById('newTaskDeliveryDate').value = getTodayJalaliString();
+    openModal('newTaskModal');
+}
+
+async function saveNewTask(e) {
+    e.preventDefault();
+    const id = document.getElementById('newTaskId').value;
+    const title = document.getElementById('newTaskTitle').value.trim();
+    const deliveryDate = document.getElementById('newTaskDeliveryDate').value.trim();
+    const nowIso = new Date().toISOString();
+
+    try {
+        const { error } = await db.from('typists').update({
+            title: title,
+            delivery_date: deliveryDate,
+            completed: false,
+            completed_at: null,
+            last_report_date: nowIso // Reset 10-day deadline
+        }).eq('id', id);
+
+        if (error) throw error;
+        
+        showAlert('موضوع کار جدید ارجاع داده شد و زمان‌سنج گزارش‌دهی بازنشانی گردید.');
+        closeModal('newTaskModal');
+        await fetchAllDataForAdmin();
+    } catch (err) {
+        console.error('Error assigning new task:', err);
+        showAlert('خطا در ارجاع کار جدید.', true);
     }
 }
 
@@ -829,7 +855,6 @@ async function saveManualRecord(e) {
 
         if (error) throw error;
 
-        // Reset deadline
         await db.from('typists').update({ last_report_date: nowIso }).eq('id', typistId);
 
         showAlert('کارکرد دستی ثبت شد.');
@@ -854,27 +879,32 @@ async function deleteWorkRecord(id) {
     }
 }
 
-// Settlement Action
-async function settleTypistPayroll(typistId, amount) {
-    if (!confirm(`آیا از تسویه کارکردهای این تایپیست به مبلغ ${formatNumber(amount)} ریال مطمئن هستید؟`)) return;
+// Settlement Action (Updated to use Multi-Month Logging)
+async function settleTypistPayroll(typistId, netPayable) {
+    if (netPayable <= 0) {
+        showAlert('مبلغ قابل پرداختی وجود ندارد (کارکرد صفر یا تسویه شده است).', true);
+        return;
+    }
+
+    if (!confirm(`آیا از ثبت پرداخت به مبلغ ${formatNumber(netPayable)} ریال مطمئن هستید؟`)) return;
 
     try {
-        // Record payment in payments table if exists
-        await db.from('payments').insert([{
+        const { error } = await db.from('payments').insert([{
             typist_id: typistId,
-            amount: amount,
+            amount: netPayable,
             created_at: new Date().toISOString()
         }]);
 
-        showAlert(`تسویه با موفقیت انجام شد.`);
+        if (error) throw error;
+
+        showAlert(`تسویه مبلغ ${formatNumber(netPayable)} ریال با موفقیت ثبت شد.`);
         await fetchAllDataForAdmin();
     } catch (err) {
-        console.warn('Payment logging notice:', err);
-        showAlert('تسویه ثبت گردید.');
+        console.error('Payment logging error:', err);
+        showAlert('خطا در ثبت اطلاعات پرداخت.', true);
     }
 }
 
-// Group SMS Action Simulation
 function openSmsModal() {
     openModal('smsModal');
 }
@@ -907,15 +937,16 @@ function sendSmsAction() {
 // ----------------------------------------------------------------------
 function exportBankCSV() {
     if (globalTypists.length === 0) {
-        showAlert('هیچ داده‌ای برای خروجی CSV موجود نیست.', true);
+        showAlert('هیچ داده‌ای برای خروجی موجود نیست.', true);
         return;
     }
 
-    // MANDATORY HEADERS: ردیف,نام,نام خانوادگی,شماره ملی,شماره تماس,شماره شبا,مبلغ قابل واریز (ریال)
+    // MANDATORY HEADERS
     const headers = ['ردیف', 'نام', 'نام خانوادگی', 'شماره ملی', 'شماره تماس', 'شماره شبا', 'مبلغ قابل واریز (ریال)'];
     const rows = [];
+    let currentRowIndex = 1;
 
-    globalTypists.forEach((t, idx) => {
+    globalTypists.forEach((t) => {
         const myRecords = globalReports.filter(r => isRecordBelongsToTypist(r, t.id));
         const totalWords = myRecords.reduce((sum, r) => sum + getRecordWordsCount(r), 0);
         const totalPages = myRecords.reduce((sum, r) => sum + getRecordPageCount(r), 0);
@@ -923,26 +954,37 @@ function exportBankCSV() {
         const wordRate = Number(t.rate_per_word !== undefined && t.rate_per_word !== null ? t.rate_per_word : (t.default_word_rate || 15));
         const pageRate = Number(t.page_rate !== undefined && t.page_rate !== null ? t.page_rate : (t.default_page_rate || 0));
 
-        const totalAmount = (totalWords * wordRate) + (totalPages * pageRate);
+        const myPayments = globalPayments.filter(p => String(p.typist_id) === String(t.id));
+        const totalPaid = myPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        
+        const grossAmount = (totalWords * wordRate) + (totalPages * pageRate);
+        const netPayable = grossAmount - totalPaid;
 
-        const fn = t.first_name || getTypistName(t).split(' ')[0] || '';
-        const ln = t.last_name || getTypistName(t).split(' ').slice(1).join(' ') || '';
-        const natId = getTypistNationalId(t);
-        const phone = t.phone || '';
-        const sheba = t.sheba_number || t.iban || '';
+        // فقط افرادی که خالص پرداختی بالای 0 دارند وارد فایل خروجی می‌شوند
+        if (netPayable > 0) {
+            const fn = t.first_name || getTypistName(t).split(' ')[0] || '';
+            const ln = t.last_name || getTypistName(t).split(' ').slice(1).join(' ') || '';
+            const natId = getTypistNationalId(t);
+            const phone = t.phone || '';
+            const sheba = t.sheba_number || t.iban || '';
 
-        rows.push([
-            idx + 1,
-            `"${fn}"`,
-            `"${ln}"`,
-            `"${natId}"`,
-            `"${phone}"`,
-            `"${sheba}"`,
-            totalAmount
-        ]);
+            rows.push([
+                currentRowIndex++,
+                `"${fn}"`,
+                `"${ln}"`,
+                `"${natId}"`,
+                `"${phone}"`,
+                `"${sheba}"`,
+                netPayable
+            ]);
+        }
     });
 
-    // Generate CSV UTF-8 with BOM
+    if (rows.length === 0) {
+        showAlert('تمامی تایپیست‌ها تسویه شده‌اند و هیچ شخصی برای پرداختی بانک موجود نیست.', true);
+        return;
+    }
+
     let csvContent = '\uFEFF';
     csvContent += headers.join(',') + '\n';
     rows.forEach(r => {
@@ -964,7 +1006,8 @@ async function downloadBackupJSON() {
         const backupData = {
             export_date: new Date().toISOString(),
             typists: globalTypists,
-            work_records: globalReports
+            work_records: globalReports,
+            payments: globalPayments
         };
 
         const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
