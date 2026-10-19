@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>سیستم مدیریت مالی و کارکرد تایپیست‌ها</title>
+    <link rel="icon" href="data:,">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -11,7 +12,7 @@
             theme: {
                 extend: {
                     colors: {
-                        gray: { 750: '#1e293b' }
+                        slate: { 750: '#1e293b' }
                     }
                 }
             }
@@ -104,7 +105,7 @@
                     <span id="stat-total-paid" class="text-xl font-black text-emerald-600 dark:text-emerald-400">0</span>
                     <span class="text-xs text-slate-400">تومان</span>
                 </div>
-                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/20 dark:bg-amber-900/10 p-4 rounded-2xl shadow-sm">
+                <div class="bg-amber-50/20 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/40 p-4 rounded-2xl shadow-sm">
                     <span class="text-xs text-amber-700 dark:text-amber-400 block mb-1">کل مانده بدهی تسویه نشده</span>
                     <span id="stat-total-balance" class="text-xl font-black text-amber-600 dark:text-amber-400">0</span>
                     <span class="text-xs text-amber-500">تومان</span>
@@ -145,7 +146,7 @@
             </div>
         </section>
 
-        <!-- Detail View Section (Typist Profile, Reports, Payments) -->
+        <!-- Detail View Section -->
         <section id="detail-view" class="hidden space-y-6">
             <div class="flex items-center justify-between flex-wrap gap-2">
                 <button id="btn-back-dashboard" onclick="backToDashboard()" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition">🔙 بازگشت به لیست</button>
@@ -194,7 +195,7 @@
                         </div>
                     </div>
 
-                    <!-- Admin Default Page Rates (Strictly Hidden from Typists) -->
+                    <!-- Admin Default Page Rates -->
                     <div id="admin-rates-container" class="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100 dark:border-slate-700/60 text-xs">
                         <div>
                             <label class="block text-slate-500 mb-1">نرخ صفحه عادی (تومان)</label>
@@ -457,6 +458,6 @@
         </div>
     </div>
 
-    <script src="app.js?v=6.2.0"></script>
+    <script src="app.js?v=6.3.0"></script>
 </body>
 </html>
