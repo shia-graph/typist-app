@@ -1,292 +1,381 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl" class="light">
+<html lang="fa" dir="rtl" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>سیستم مدیریت مالی و کارکرد تایپیست‌ها</title>
-    <link rel="icon" href="data:,">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سیستم حقوق و دستمزد تایپیست‌ها</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
-                    colors: {
-                        slate: { 750: '#1e293b' }
+                    fontFamily: {
+                        vazir: ['Vazirmatn', 'sans-serif']
                     }
                 }
             }
         }
     </script>
-    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+    <!-- Vazirmatn Font CDN -->
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        * { font-family: 'Vazirmatn', sans-serif; touch-action: manipulation; }
-        body { -webkit-tap-highlight-color: transparent; }
-        /* قفل بودن فیلدها */
-        input[readonly] {
-            opacity: 0.7;
-            cursor: not-allowed;
-            background-color: rgba(241, 245, 249, 0.6);
-        }
-        .dark input[readonly] {
-            background-color: rgba(30, 41, 59, 0.6);
-        }
+        body { font-family: 'Vazirmatn', sans-serif; touch-action: manipulation; }
     </style>
 </head>
-<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen transition-colors duration-200">
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-full transition-colors duration-200">
 
-    <!-- Toast Notification Container -->
-    <div id="toast-container" class="fixed top-5 left-5 right-5 z-50 max-w-sm mx-auto flex flex-col gap-2 pointer-events-auto"></div>
+    <!-- Toast Notification -->
+    <div id="toastNotice" class="fixed bottom-4 left-4 z-50 hidden px-6 py-3 rounded-xl text-white font-medium shadow-2xl transition-all duration-300"></div>
 
-    <!-- Header Navigation -->
-    <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xl shadow-md">⌨️</div>
-                <div>
-                    <h1 class="font-bold text-lg leading-tight">سامانه تسویه و کارکرد تایپ</h1>
-                    <p id="user-status-text" class="text-xs text-slate-500 dark:text-slate-400">لطفاً وارد حساب کاربری خود شوید</p>
-                </div>
+    <!-- Loading Spinner Overlay -->
+    <div id="loadingSpinner" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl flex flex-col items-center space-y-4">
+            <div class="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">در حال پردازش، لطفاً شکیبا باشید...</span>
+        </div>
+    </div>
+
+    <!-- Navbar -->
+    <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <span class="text-2xl">⌨️</span>
+                <h1 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">سامانه مدیریت و تسویه حساب تایپیست‌ها</h1>
             </div>
-            <div class="flex items-center gap-2">
-                <button onclick="toggleTheme()" class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-750 text-slate-700 dark:text-slate-200 hover:bg-slate-200 transition">
-                    <span id="theme-icon">🌙</span>
-                </button>
-                <button id="logout-btn" onclick="logout()" class="hidden items-center gap-1 px-3 py-2 bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400 rounded-xl text-xs font-bold hover:bg-red-100 transition">
-                    🚪 خروج
+            <div class="flex items-center space-x-2 space-x-reverse">
+                <button onclick="toggleDarkMode()" class="p-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                    🌙 / ☀️
                 </button>
             </div>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 py-6">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-        <!-- Auth Section -->
-        <section id="auth-section" class="max-w-md mx-auto my-12">
-            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden">
-                <div class="flex border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                    <button id="tab-admin" onclick="switchLoginTab('admin')" class="flex-1 py-3.5 text-center font-bold text-blue-600 border-b-2 border-blue-600 transition">ورود مدیر</button>
-                    <button id="tab-typist" onclick="switchLoginTab('typist')" class="flex-1 py-3.5 text-center font-medium text-slate-500 border-b-2 border-transparent transition">ورود تایپیست</button>
-                </div>
-
-                <div class="p-6">
-                    <!-- Admin Login Form -->
-                    <form id="form-admin-login" onsubmit="loginAdmin(event); return false;" class="space-y-4">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">رمز عبور مدیر</label>
-                            <input type="password" id="admin_password" placeholder="رمز عبور را وارد کنید" required class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition">
-                        </div>
-                        <button type="submit" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition">ورود به پنل مدیریت</button>
-                    </form>
-
-                    <!-- Typist Login Form -->
-                    <form id="form-typist-login" onsubmit="loginTypist(event); return false;" class="hidden space-y-4">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">شماره موبایل یا کد ملی</label>
-                            <input type="text" id="typist_login_id" placeholder="مثال: 09123456789" required class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">رمز عبور (پیش‌فرض ۴ رقم آخر موبایل)</label>
-                            <input type="password" id="typist_password" placeholder="رمز عبور" required class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition">
-                        </div>
-                        <button type="submit" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition">ورود تایپیست</button>
-                    </form>
-                </div>
-            </div>
-        </section>
-
-        <!-- Admin Dashboard Section -->
-        <section id="admin-dashboard" class="hidden space-y-6">
-            <!-- Overall Stats -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <span class="text-xs text-slate-500 dark:text-slate-400 block mb-1">تعداد کل تایپیست‌ها</span>
-                    <span id="stat-total-typists" class="text-xl font-black text-slate-800 dark:text-slate-100">0 نفر</span>
-                </div>
-                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <span class="text-xs text-slate-500 dark:text-slate-400 block mb-1">مجموع کل کارکردها</span>
-                    <span id="stat-total-earned" class="text-xl font-black text-blue-600 dark:text-blue-400">0</span>
-                    <span class="text-xs text-slate-400">تومان</span>
-                </div>
-                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <span class="text-xs text-slate-500 dark:text-slate-400 block mb-1">مجموع پرداختی‌ها</span>
-                    <span id="stat-total-paid" class="text-xl font-black text-emerald-600 dark:text-emerald-400">0</span>
-                    <span class="text-xs text-slate-400">تومان</span>
-                </div>
-                <div class="bg-amber-50/20 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/40 p-4 rounded-2xl shadow-sm">
-                    <span class="text-xs text-amber-700 dark:text-amber-400 block mb-1">کل مانده بدهی تسویه نشده</span>
-                    <span id="stat-total-balance" class="text-xl font-black text-amber-600 dark:text-amber-400">0</span>
-                    <span class="text-xs text-amber-500">تومان</span>
-                </div>
+        <!-- LOGIN VIEW -->
+        <section id="loginView" class="max-w-md mx-auto mt-12 bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div class="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                <button id="tabAdmin" onclick="switchLoginTab('admin')" class="flex-1 py-4 text-center font-bold text-indigo-600 border-b-2 border-indigo-600 cursor-pointer">ورود مدیریت</button>
+                <button id="tabTypist" onclick="switchLoginTab('typist')" class="flex-1 py-4 text-center font-bold text-gray-500 border-b-2 border-transparent hover:text-indigo-600 cursor-pointer">ورود تایپیست</button>
             </div>
 
-            <!-- Action Toolbar & Typist List Table -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-                <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row gap-3 md:items-center justify-between">
-                    <div class="relative flex-1 max-w-md">
-                        <input type="text" id="admin-search-input" oninput="filterTypists()" placeholder="جستجو نام، کد ملی یا شماره تماس..." class="w-full pr-10 pl-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                        <span class="absolute right-3 top-3 text-slate-400">🔍</span>
-                    </div>
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <button onclick="openAddTypistModal()" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm">+ تایپیست</button>
-                        <button onclick="exportBankCSV()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm">📥 خروجی بانک</button>
-                        <button onclick="exportPersonnelCSV()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm">📥 خروجی مشخصات</button>
-                        <button onclick="openSmsModal()" class="px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition">💬 پیامک گروهی</button>
-                    </div>
-                </div>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full text-right text-xs">
-                        <thead class="bg-slate-50 dark:bg-slate-750 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700">
-                            <tr>
-                                <th class="p-3.5 w-10 text-center"><input type="checkbox" id="selectAllTypists" onchange="toggleAllTypists(this)" class="w-4 h-4 cursor-pointer rounded border-slate-300"></th>
-                                <th class="p-3.5">نام تایپیست</th>
-                                <th class="p-3.5">کد ملی</th>
-                                <th class="p-3.5">شماره تماس / ارتباط</th>
-                                <th class="p-3.5">کل کارکرد (تومان)</th>
-                                <th class="p-3.5">کل دریافتی (تومان)</th>
-                                <th class="p-3.5">مانده طلب (تومان)</th>
-                                <th class="p-3.5 text-center">وضعیت تسویه</th>
-                                <th class="p-3.5 text-center">عملیات</th>
-                            </tr>
-                        </thead>
-                        <tbody id="typists-table-body" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <!-- Detail View Section -->
-        <section id="detail-view" class="hidden space-y-6">
-            <div class="flex items-center justify-between flex-wrap gap-2">
-                <button id="btn-back-dashboard" onclick="backToDashboard()" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition">🔙 بازگشت به لیست</button>
-                <h2 id="detail-typist-name" class="text-base font-bold text-slate-800 dark:text-slate-100">کارنامه کارکرد تایپیست</h2>
-                <div id="typist-self-pass-btn-container" class="hidden">
-                    <button onclick="openChangePassModal()" class="px-3 py-1.5 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 rounded-xl text-xs font-bold border border-amber-200 dark:border-amber-800">🔑 تغییر رمز عبور</button>
-                </div>
-            </div>
-
-            <!-- Profile Info Form -->
-            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                <div class="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-700/60 pb-3">
-                    <h3 class="font-bold text-sm">👤 مشخصات فردی و بانکی</h3>
+            <div class="p-6 sm:p-8">
+                <!-- Admin Login Form -->
+                <form id="adminLoginForm" onsubmit="handleAdminLogin(event); return false;" class="space-y-5">
                     <div>
-                        <button type="button" id="btn-edit-profile" onclick="enableProfileEdit()" class="px-4 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold hover:bg-slate-200 transition">✏️ ویرایش مشخصات</button>
-                        <button type="button" id="btn-save-profile" onclick="saveTypist(event)" class="hidden px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition">💾 ذخیره تغییرات</button>
+                        <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">کلمه عبور مدیریت:</label>
+                        <input type="password" id="adminPassword" placeholder="رمز عبور مدیر را وارد کنید" class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
                     </div>
-                </div>
-                <form id="profile-form" class="space-y-4">
-                    <input type="hidden" id="profile_id">
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-                        <div>
-                            <label class="block text-slate-500 mb-1">نام</label>
-                            <input type="text" id="profile_first_name" required readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-slate-500 mb-1">نام خانوادگی</label>
-                            <input type="text" id="profile_last_name" required readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-slate-500 mb-1">نام پدر</label>
-                            <input type="text" id="profile_father_name" placeholder="نام پدر" readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-slate-500 mb-1">کد ملی</label>
-                            <input type="text" id="profile_national_id" required readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-slate-500 mb-1">شماره تماس</label>
-                            <input type="text" id="profile_phone" required readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-slate-500 mb-1">شماره کارت</label>
-                            <input type="text" id="profile_card_number" placeholder="۶۰۳۷..." readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
-                        </div>
-                        <div class="md:col-span-2">
-                            <label class="block text-slate-500 mb-1">شماره شبا (بدون IR)</label>
-                            <input type="text" id="profile_sheba_number" placeholder="0123..." readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 font-mono outline-none">
-                        </div>
-                    </div>
+                    <div id="adminLoginError" class="hidden text-sm text-red-600 bg-red-50 dark:bg-red-950/50 p-3 rounded-xl border border-red-200 dark:border-red-800 font-medium"></div>
+                    <button type="submit" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all">ورود به پنل مدیریت</button>
+                </form>
 
-                    <!-- Admin Default Page Rates -->
-                    <div id="admin-rates-container" class="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100 dark:border-slate-700/60 text-xs">
-                        <div>
-                            <label class="block text-slate-500 mb-1">نرخ صفحه عادی (تومان)</label>
-                            <input type="number" id="profile_rate_normal" readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-slate-500 mb-1">نرخ صفحه فوری (تومان)</label>
-                            <input type="number" id="profile_rate_urgent" readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-slate-500 mb-1">نرخ صفحه فرمول/ریاضی (تومان)</label>
-                            <input type="number" id="profile_rate_math" readonly class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 outline-none">
-                        </div>
+                <!-- Typist Login Form -->
+                <form id="typistLoginForm" onsubmit="handleTypistLogin(event); return false;" class="hidden space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">کد ملی یا شماره موبایل:</label>
+                        <input type="text" id="typistLoginId" placeholder="مثال: 0012345678" class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
                     </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">کلمه عبور (پیش‌فرض: ۴ رقم آخر موبایل):</label>
+                        <input type="password" id="typistPassword" placeholder="کلمه عبور خود را وارد کنید" class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
+                    </div>
+                    <div id="loginError" class="hidden text-sm text-red-600 bg-red-50 dark:bg-red-950/50 p-3 rounded-xl border border-red-200 dark:border-red-800 font-medium"></div>
+                    <button type="submit" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all">ورود به پنل کاربری</button>
                 </form>
             </div>
+        </section>
 
-            <!-- Financial Balance Summary -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <span class="text-xs text-slate-500 block mb-1">کل کارکرد تایید شده</span>
-                    <span id="typist-summary-earned" class="text-lg font-black text-blue-600 dark:text-blue-400">0 تومان</span>
+        <!-- ADMIN DASHBOARD VIEW -->
+        <section id="adminDashboardView" class="hidden space-y-8">
+            <div class="flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <span class="p-3 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 rounded-2xl text-2xl">📊</span>
+                    <div>
+                        <h2 class="text-xl font-bold">دشبورد مدیریت</h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">مدیریت تایپیست‌ها، گزارش کارها و تسویه حساب‌ها</p>
+                    </div>
                 </div>
-                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <span class="text-xs text-slate-500 block mb-1">کل واریزی‌ها</span>
-                    <span id="typist-summary-paid" class="text-lg font-black text-emerald-600 dark:text-emerald-400">0 تومان</span>
-                </div>
-                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <span class="text-xs text-slate-500 block mb-1">مانده قابل تسویه</span>
-                    <span id="typist-summary-balance" class="text-lg font-black text-amber-600 dark:text-amber-400">0 تومان</span>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="openAddTypistModal()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition-all shadow-md">➕ تعریف تایپیست جدید</button>
+                    <button onclick="openGroupSMSModal()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-all shadow-md">💬 پیامک گروهی</button>
+                    <button onclick="exportBankCSV()" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-all shadow-md">🏦 خروجی پایا (ریال)</button>
+                    <button onclick="exportPersonnelCSV()" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-sm transition-all shadow-md">📋 خروجی پرسنل</button>
+                    <button onclick="openChangePasswordModal()" class="px-3 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-gray-200 font-medium rounded-xl text-sm transition-all">🔑 تغییر رمز مدیر</button>
+                    <button onclick="logout()" class="px-3 py-2.5 bg-red-50 dark:bg-red-950/50 hover:bg-red-100 text-red-600 font-medium rounded-xl text-sm transition-all">خروج 🚪</button>
                 </div>
             </div>
 
-            <!-- Reports Table Container -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-                <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                    <h3 class="font-bold text-sm">📄 جدول گزارش‌های کار</h3>
-                    <button onclick="openAddReportModal()" class="px-3.5 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition">+ ثبت گزارش جدید</button>
+            <!-- Stats Overview -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <span class="text-xs font-medium text-gray-500">تعداد تایپیست‌ها</span>
+                    <div id="statTotalTypists" class="text-2xl font-black text-gray-900 dark:text-white mt-2">۰</div>
                 </div>
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <span class="text-xs font-medium text-gray-500">کل کارکردهای ثبت‌شده</span>
+                    <div id="statTotalReports" class="text-2xl font-black text-gray-900 dark:text-white mt-2">۰</div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <span class="text-xs font-medium text-gray-500">مجموع کارکرد (تومان)</span>
+                    <div id="statTotalEarned" class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-2">۰ تومان</div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <span class="text-xs font-medium text-gray-500">مجموع پرداختی‌ها (تومان)</span>
+                    <div id="statTotalPaid" class="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-2">۰ تومان</div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <span class="text-xs font-medium text-gray-500">مانده کل قابل پرداخت</span>
+                    <div id="statTotalRemaining" class="text-2xl font-black text-amber-600 dark:text-amber-400 mt-2">۰ تومان</div>
+                </div>
+            </div>
+
+            <!-- Search & Typists Table -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div class="p-5 border-b border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <h3 class="font-bold text-lg">لیست تایپیست‌ها</h3>
+                    <input type="text" id="searchTypistInput" oninput="searchTypists()" placeholder="🔍 جستجو براساس نام، کدملی یا شماره تماس..." class="w-full sm:w-80 px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+
                 <div class="overflow-x-auto">
-                    <table class="w-full text-right text-xs">
-                        <thead class="bg-slate-50 dark:bg-slate-750 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-100 dark:border-gray-700">
                             <tr>
-                                <th class="p-3">عنوان پروژه / فایل</th>
-                                <th class="p-3">تاریخ تحویل</th>
-                                <th class="p-3">نوع صفحه</th>
-                                <th class="p-3">تعداد صفحه</th>
-                                <th class="p-3 th-rate-column">نرخ محاسبه (تومان)</th>
-                                <th class="p-3">مبلغ کل (تومان)</th>
-                                <th class="p-3 text-center">وضعیت تحویل</th>
-                                <th class="p-3 text-center">عملیات</th>
+                                <th class="px-4 py-3.5 text-center"><input type="checkbox" id="selectAllTypists" onchange="toggleSelectAllTypists(this)" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"></th>
+                                <th class="px-4 py-3.5 text-center">ردیف</th>
+                                <th class="px-4 py-3.5">نام و نام خانوادگی</th>
+                                <th class="px-4 py-3.5 text-center">شماره تماس</th>
+                                <th class="px-4 py-3.5 text-center">کل کارکرد</th>
+                                <th class="px-4 py-3.5 text-center">کل دریافتی</th>
+                                <th class="px-4 py-3.5 text-center">مانده طلب</th>
+                                <th class="px-4 py-3.5 text-center">وضعیت تسویه</th>
+                                <th class="px-4 py-3.5 text-center">عملیات</th>
                             </tr>
                         </thead>
-                        <tbody id="reports-table-body" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+                        <tbody id="typistsTableBody" class="divide-y divide-gray-100 dark:divide-gray-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TYPIST DETAIL VIEW (ADMIN) -->
+        <section id="typistDetailView" class="hidden space-y-8">
+            <div class="flex items-center justify-between bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div class="flex items-center space-x-4 space-x-reverse">
+                    <button onclick="showAdminDashboard()" class="p-2.5 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 transition-colors">➔ بازگشت</button>
+                    <div>
+                        <h2 id="detailHeaderName" class="text-xl font-bold">مشخصات تایپیست</h2>
+                        <span id="detailHeaderPhone" class="text-xs text-gray-500 dir-ltr block mt-0.5"></span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2 space-x-reverse">
+                    <button id="btnEnableProfileEdit" onclick="toggleProfileEdit(true)" class="px-4 py-2 bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300 font-bold rounded-xl text-sm hover:bg-indigo-100 transition-all">✏️ ویرایش مشخصات</button>
+                    <button id="btnSaveProfileEdit" onclick="saveProfileEdit()" class="hidden px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl text-sm hover:bg-emerald-700 transition-all">💾 ذخیره تغییرات</button>
+                    <button id="btnCancelProfileEdit" onclick="toggleProfileEdit(false)" class="hidden px-4 py-2 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200 font-bold rounded-xl text-sm hover:bg-gray-300 transition-all">انصراف</button>
+                </div>
+            </div>
+
+            <!-- Profile Info Card (Locked Default) -->
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <input type="hidden" id="detailTypistId">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">نام:</label>
+                        <input type="text" id="detailFirstName" readonly class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">نام خانوادگی:</label>
+                        <input type="text" id="detailLastName" readonly class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">نام پدر:</label>
+                        <input type="text" id="detailFatherName" readonly class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">کد ملی:</label>
+                        <input type="text" id="detailNationalId" readonly class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">شماره تماس:</label>
+                        <input type="text" id="detailPhone" readonly class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">شماره کارت:</label>
+                        <input type="text" id="detailCardNumber" readonly class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">شماره شبا (بدون IR):</label>
+                        <input type="text" id="detailShebaNumber" readonly class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">نرخ صفحه معمولی (تومان):</label>
+                        <input type="number" id="detailRateNormal" readonly class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-sm font-bold text-emerald-600">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">نرخ صفحه فوری (تومان):</label>
+                        <input type="number" id="detailRateUrgent" readonly class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-sm font-bold text-emerald-600">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">نرخ صفحه ریاضی (تومان):</label>
+                        <input type="number" id="detailRateMath" readonly class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 cursor-not-allowed text-sm font-bold text-emerald-600">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Financial Summary Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <span class="text-xs font-medium text-gray-500">مجموع درآمد تایپیست</span>
+                    <div id="detailTotalEarned" class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-2">۰ تومان</div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <span class="text-xs font-medium text-gray-500">مجموع دریافتی‌ها</span>
+                    <div id="detailTotalPaid" class="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-2">۰ تومان</div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <span class="text-xs font-medium text-gray-500">مانده حساب (طلب)</span>
+                    <div id="detailRemainingBalance" class="text-2xl font-black text-amber-600 dark:text-amber-400 mt-2">۰ تومان</div>
+                </div>
+            </div>
+
+            <!-- Work Reports Table -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div class="p-5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <h3 class="font-bold text-lg">گزارش کارهای تحویل‌شده</h3>
+                    <button onclick="openAddReportModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-sm">➕ ثبت گزارش کار جدید</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300">
+                            <tr>
+                                <th class="px-4 py-3 text-center">ردیف</th>
+                                <th class="px-4 py-3">عنوان پروژه</th>
+                                <th class="px-4 py-3 text-center">تاریخ تحویل</th>
+                                <th class="px-4 py-3 text-center">نوع صفحه</th>
+                                <th class="px-4 py-3 text-center">تعداد صفحات</th>
+                                <th class="px-4 py-3 text-center">مبلغ کل (تومان)</th>
+                                <th class="px-4 py-3 text-center">عملیات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailReportsTableBody" class="divide-y divide-gray-100 dark:divide-gray-700"></tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- Payments Table Container -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-                <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                    <h3 class="font-bold text-sm">💳 جدول پرداختی‌های حسابدار</h3>
-                    <button id="btn-add-payment" onclick="openAddPaymentModal()" class="px-3.5 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition">+ ثبت واریزی جدید</button>
+            <!-- Payments Table -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div class="p-5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <h3 class="font-bold text-lg">سوابق پرداختی‌ها</h3>
+                    <button onclick="openAddPaymentModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-sm">➕ ثبت واریزی جدید</button>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-right text-xs">
-                        <thead class="bg-slate-50 dark:bg-slate-750 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300">
                             <tr>
-                                <th class="p-3">تاریخ پرداخت</th>
-                                <th class="p-3">مبلغ واریزی (تومان)</th>
-                                <th class="p-3">کد پیگیری بانکی</th>
-                                <th class="p-3">توضیحات / بابت</th>
-                                <th class="p-3 text-center">وضعیت واریز</th>
-                                <th class="p-3 text-center action-col-payment">عملیات</th>
+                                <th class="px-4 py-3 text-center">ردیف</th>
+                                <th class="px-4 py-3 text-center">مبلغ واریزی (تومان)</th>
+                                <th class="px-4 py-3 text-center">تاریخ واریز</th>
+                                <th class="px-4 py-3 text-center">کد پیگیری</th>
+                                <th class="px-4 py-3">توضیحات</th>
+                                <th class="px-4 py-3 text-center">عملیات</th>
                             </tr>
                         </thead>
-                        <tbody id="payments-table-body" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+                        <tbody id="detailPaymentsTableBody" class="divide-y divide-gray-100 dark:divide-gray-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TYPIST SELF-SERVICE DASHBOARD VIEW -->
+        <section id="typistSelfDashboardView" class="hidden space-y-8">
+            <div class="flex items-center justify-between bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <span class="p-3 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 rounded-2xl text-2xl">👤</span>
+                    <div>
+                        <h2 id="typistSelfHeaderName" class="text-xl font-bold">خوش آمدید</h2>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">پنل اختصاصی تایپیست</span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2 space-x-reverse">
+                    <button onclick="openChangePasswordModal()" class="px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-gray-200 font-medium rounded-xl text-xs">🔑 تغییر رمز عبور</button>
+                    <button onclick="logout()" class="px-3 py-2 bg-red-50 dark:bg-red-950/50 hover:bg-red-100 text-red-600 font-medium rounded-xl text-xs">خروج 🚪</button>
+                </div>
+            </div>
+
+            <!-- Profile Info Card (Page Rates Hidden) -->
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 class="font-bold text-sm text-gray-500 mb-4">مشخصات فردی و بانکی</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                    <div><span class="text-gray-400">نام و نام خانوادگی:</span> <strong id="typistSelfName" class="text-gray-900 dark:text-white mr-1">-</strong></div>
+                    <div><span class="text-gray-400">نام پدر:</span> <strong id="typistSelfFatherName" class="text-gray-900 dark:text-white mr-1">-</strong></div>
+                    <div><span class="text-gray-400">کد ملی:</span> <strong id="typistSelfNationalId" class="text-gray-900 dark:text-white mr-1">-</strong></div>
+                    <div><span class="text-gray-400">شماره تماس:</span> <strong id="typistSelfPhone" class="text-gray-900 dark:text-white mr-1 dir-ltr inline-block">-</strong></div>
+                    <div><span class="text-gray-400">شماره کارت:</span> <strong id="typistSelfCardNumber" class="text-gray-900 dark:text-white mr-1 dir-ltr inline-block">-</strong></div>
+                    <div><span class="text-gray-400">شماره شبا:</span> <strong id="typistSelfShebaNumber" class="text-gray-900 dark:text-white mr-1 dir-ltr inline-block">-</strong></div>
+                </div>
+            </div>
+
+            <!-- Financial Summary Cards (Page Rates Hidden) -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <span class="text-xs font-medium text-gray-500">کل کارکرد شما</span>
+                    <div id="typistSelfTotalEarned" class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-2">۰ تومان</div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <span class="text-xs font-medium text-gray-500">کل دریافتی شما</span>
+                    <div id="typistSelfTotalPaid" class="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-2">۰ تومان</div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <span class="text-xs font-medium text-gray-500">مانده طلب شما</span>
+                    <div id="typistSelfRemainingBalance" class="text-2xl font-black text-amber-600 dark:text-amber-400 mt-2">۰ تومان</div>
+                </div>
+            </div>
+
+            <!-- Work Reports Table -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div class="p-5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <h3 class="font-bold text-lg">گزارش کارهای ثبت‌شده</h3>
+                    <button onclick="openAddReportModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-sm">➕ ثبت کارکرد جدید</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300">
+                            <tr>
+                                <th class="px-4 py-3 text-center">ردیف</th>
+                                <th class="px-4 py-3">عنوان پروژه</th>
+                                <th class="px-4 py-3 text-center">تاریخ تحویل</th>
+                                <th class="px-4 py-3 text-center">نوع صفحه</th>
+                                <th class="px-4 py-3 text-center">تعداد صفحات</th>
+                                <th class="px-4 py-3 text-center">مبلغ کل (تومان)</th>
+                                <th class="px-4 py-3 text-center">وضعیت / عملیات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="typistSelfReportsTableBody" class="divide-y divide-gray-100 dark:divide-gray-700"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Payments Table -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div class="p-5 border-b border-gray-100 dark:border-gray-700">
+                    <h3 class="font-bold text-lg">سوابق دریافتی‌ها</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300">
+                            <tr>
+                                <th class="px-4 py-3 text-center">ردیف</th>
+                                <th class="px-4 py-3 text-center">مبلغ دریافتی (تومان)</th>
+                                <th class="px-4 py-3 text-center">تاریخ واریز</th>
+                                <th class="px-4 py-3 text-center">کد پیگیری</th>
+                                <th class="px-4 py-3 text-center">وضعیت</th>
+                            </tr>
+                        </thead>
+                        <tbody id="typistSelfPaymentsTableBody" class="divide-y divide-gray-100 dark:divide-gray-700"></tbody>
                     </table>
                 </div>
             </div>
@@ -294,187 +383,222 @@
 
     </main>
 
-    <!-- Modals -->
+    <!-- MODALS -->
 
-    <!-- Modal: Add / Edit Typist -->
-    <div id="typist-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
-        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700">
-            <h3 id="typist-modal-title" class="font-bold text-base mb-4">افزودن تایپیست جدید</h3>
-            <form onsubmit="saveTypist(event); return false;" class="space-y-3 text-xs">
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-slate-500 mb-1">نام</label>
-                        <input type="text" id="modal_typist_first_name" required class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
-                    </div>
-                    <div>
-                        <label class="block text-slate-500 mb-1">نام خانوادگی</label>
-                        <input type="text" id="modal_typist_last_name" required class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
-                    </div>
+    <!-- Add/Edit Typist Modal (Admin) -->
+    <div id="typistModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+            <h3 id="typistModalTitle" class="text-xl font-bold border-b pb-4">تعریف تایپیست جدید</h3>
+            <form onsubmit="saveTypist(event); return false;" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <input type="hidden" id="typistId">
+                <div>
+                    <label class="block text-xs font-medium mb-1">نام:</label>
+                    <input type="text" id="typistFirstName" required class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-slate-500 mb-1">کد ملی</label>
-                        <input type="text" id="modal_typist_national_id" required class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
-                    </div>
-                    <div>
-                        <label class="block text-slate-500 mb-1">شماره موبایل</label>
-                        <input type="text" id="modal_typist_phone" required class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
-                    </div>
+                <div>
+                    <label class="block text-xs font-medium mb-1">نام خانوادگی:</label>
+                    <input type="text" id="typistLastName" required class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
                 </div>
-                <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-                    <div>
-                        <label class="block text-slate-500 mb-1">نرخ عادی (تومان)</label>
-                        <input type="number" id="modal_typist_rate_normal" value="0" class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
-                    </div>
-                    <div>
-                        <label class="block text-slate-500 mb-1">نرخ فوری (تومان)</label>
-                        <input type="number" id="modal_typist_rate_urgent" value="0" class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
-                    </div>
-                    <div>
-                        <label class="block text-slate-500 mb-1">نرخ ریاضی (تومان)</label>
-                        <input type="number" id="modal_typist_rate_math" value="0" class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
-                    </div>
+                <div>
+                    <label class="block text-xs font-medium mb-1">نام پدر:</label>
+                    <input type="text" id="typistFatherName" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
                 </div>
-                <div class="flex items-center gap-2 justify-end pt-4">
-                    <button type="button" onclick="closeTypistModal()" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl">انصراف</button>
-                    <button type="submit" class="px-5 py-2 bg-blue-600 text-white font-bold rounded-xl">ذخیره تایپیست</button>
+                <div>
+                    <label class="block text-xs font-medium mb-1">کد ملی:</label>
+                    <input type="text" id="typistNationalId" required class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium mb-1">شماره تماس:</label>
+                    <input type="text" id="typistPhone" required class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium mb-1">شماره کارت:</label>
+                    <input type="text" id="typistCardNumber" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-medium mb-1">شماره شبا (بدون IR):</label>
+                    <input type="text" id="typistShebaNumber" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm font-mono dir-ltr">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium mb-1">نرخ صفحه معمولی (تومان):</label>
+                    <input type="number" id="typistRateNormal" value="0" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm font-bold text-emerald-600">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium mb-1">نرخ صفحه فوری (تومان):</label>
+                    <input type="number" id="typistRateUrgent" value="0" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm font-bold text-emerald-600">
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-medium mb-1">نرخ صفحه ریاضی (تومان):</label>
+                    <input type="number" id="typistRateMath" value="0" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm font-bold text-emerald-600">
+                </div>
+                <div class="sm:col-span-2 flex justify-end space-x-2 space-x-reverse mt-4">
+                    <button type="button" onclick="safeHide('typistModal')" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-xl text-sm font-medium">انصراف</button>
+                    <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700">ذخیره تایپیست</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal: Add / Edit Work Report -->
-    <div id="report-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
-        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700">
-            <h3 id="report-modal-title" class="font-bold text-base mb-4">ثبت گزارش کار جدید</h3>
-            <form onsubmit="saveReport(event); return false;" class="space-y-3 text-xs">
-                <input type="hidden" id="report_id">
+    <!-- Add/Edit Report Modal -->
+    <div id="reportModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6">
+            <h3 id="reportModalTitle" class="text-xl font-bold border-b pb-4">ثبت گزارش کار جدید</h3>
+            <form onsubmit="saveReport(event); return false;" class="space-y-4">
+                <input type="hidden" id="reportId">
                 <div>
-                    <label class="block text-slate-500 mb-1">عنوان کار / عنوان فایل</label>
-                    <input type="text" id="report_title" required placeholder="مثال: جزوه ریاضی فصل ۱" class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
+                    <label class="block text-xs font-medium mb-1">عنوان پروژه / گزارش کار:</label>
+                    <input type="text" id="reportTitle" required placeholder="مثال: تایپ فصل اول کتاب" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
                 </div>
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-slate-500 mb-1">تاریخ تحویل</label>
-                        <input type="text" id="report_delivery_date" readonly onclick="openDatePicker('report_delivery_date')" class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900 cursor-pointer">
+                        <label class="block text-xs font-medium mb-1">تاریخ تحویل:</label>
+                        <div class="flex items-center space-x-1 space-x-reverse">
+                            <input type="date" id="reportDeliveryDate" required class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
+                            <button type="button" onclick="openDatePicker('reportDeliveryDate')" class="p-2 bg-gray-100 dark:bg-gray-700 rounded-xl text-xs">📅</button>
+                        </div>
                     </div>
                     <div>
-                        <label class="block text-slate-500 mb-1">نوع صفحه</label>
-                        <select id="report_page_type" class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
-                            <option value="normal">عادی</option>
+                        <label class="block text-xs font-medium mb-1">نوع صفحه:</label>
+                        <select id="reportPageType" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
+                            <option value="normal">معمولی</option>
                             <option value="urgent">فوری</option>
-                            <option value="math">ریاضی / فرمول</option>
+                            <option value="math">فرمول/ریاضی</option>
                         </select>
                     </div>
                 </div>
                 <div>
-                    <label class="block text-slate-500 mb-1">تعداد صفحه</label>
-                    <input type="number" id="report_page_count" required min="1" value="1" class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
+                    <label class="block text-xs font-medium mb-1">تعداد صفحات:</label>
+                    <input type="number" id="reportPageCount" value="1" min="1" required class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm font-bold">
                 </div>
-                <div id="admin-custom-rate-field" class="hidden">
-                    <label class="block text-slate-500 mb-1">نرخ سفارشی هر صفحه (تومان) - اختیاری</label>
-                    <input type="number" id="report_custom_rate" placeholder="در صورت خالی بودن نرخ پیش‌فرض محاسبه می‌شود" class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
+                <div id="customRateContainer">
+                    <label class="block text-xs font-medium mb-1">نرخ اختصاصی این پروژه (تومان - اختیاری):</label>
+                    <input type="number" id="reportCustomRate" placeholder="خالی بگذارید تا از نرخ پایه استفاده شود" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
                 </div>
-                <div class="flex items-center gap-2 justify-end pt-4">
-                    <button type="button" onclick="closeReportModal()" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl">انصراف</button>
-                    <button type="submit" class="px-5 py-2 bg-blue-600 text-white font-bold rounded-xl">ثبت گزارش</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal: Add / Edit Payment -->
-    <div id="payment-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
-        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700">
-            <h3 id="payment-modal-title" class="font-bold text-base mb-4">ثبت واریزی جدید</h3>
-            <form onsubmit="savePayment(event); return false;" class="space-y-3 text-xs">
-                <input type="hidden" id="payment_id">
-                <div>
-                    <label class="block text-slate-500 mb-1">مبلغ واریزی (تومان)</label>
-                    <input type="number" id="payment_amount" required placeholder="مثال: 500000" class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-slate-500 mb-1">تاریخ پرداخت</label>
-                        <input type="text" id="payment_date" readonly onclick="openDatePicker('payment_date')" class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900 cursor-pointer">
-                    </div>
-                    <div>
-                        <label class="block text-slate-500 mb-1">کد پیگیری بانکی</label>
-                        <input type="text" id="payment_ref_code" placeholder="شماره پیگیری" class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-slate-500 mb-1">توضیحات / بابت</label>
-                    <textarea id="payment_notes" rows="2" placeholder="توضیحات اختیاری..." class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900"></textarea>
-                </div>
-                <div class="flex items-center gap-2 justify-end pt-4">
-                    <button type="button" onclick="closePaymentModal()" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl">انصراف</button>
-                    <button type="submit" class="px-5 py-2 bg-emerald-600 text-white font-bold rounded-xl">تایید و ثبت واریزی</button>
+                <div class="flex justify-end space-x-2 space-x-reverse mt-6">
+                    <button type="button" onclick="safeHide('reportModal')" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-xl text-sm font-medium">انصراف</button>
+                    <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700">ذخیره گزارش</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal: Shamsi DatePicker -->
-    <div id="datepicker-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-xs w-full p-5 shadow-2xl border border-slate-200 dark:border-slate-700 text-center space-y-4">
-            <h4 class="font-bold text-sm">انتخاب تاریخ شمسی</h4>
-            <div class="grid grid-cols-3 gap-2 text-xs">
+    <!-- Add/Edit Payment Modal (Admin) -->
+    <div id="paymentModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6">
+            <h3 id="paymentModalTitle" class="text-xl font-bold border-b pb-4">ثبت پرداخت جدید</h3>
+            <form onsubmit="savePayment(event); return false;" class="space-y-4">
+                <input type="hidden" id="paymentId">
                 <div>
-                    <label class="block text-slate-400 mb-1">سال</label>
-                    <select id="dp-year" onchange="updateMonthDays()" class="w-full p-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"></select>
+                    <label class="block text-xs font-medium mb-1">مبلغ واریزی (تومان):</label>
+                    <input type="number" id="paymentAmount" required placeholder="مثال: 500000" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm font-bold text-indigo-600">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium mb-1">تاریخ واریز:</label>
+                        <div class="flex items-center space-x-1 space-x-reverse">
+                            <input type="date" id="paymentDate" required class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
+                            <button type="button" onclick="openDatePicker('paymentDate')" class="p-2 bg-gray-100 dark:bg-gray-700 rounded-xl text-xs">📅</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-1">کد پیگیری:</label>
+                        <input type="text" id="paymentRefCode" placeholder="شماره ارجاع/پیگیری" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm font-mono">
+                    </div>
                 </div>
                 <div>
-                    <label class="block text-slate-400 mb-1">ماه</label>
-                    <select id="dp-month" onchange="updateMonthDays()" class="w-full p-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900">
-                        <option value="1">فروردین</option><option value="2">اردیبهشت</option><option value="3">خرداد</option>
-                        <option value="4">تیر</option><option value="5">مرداد</option><option value="6">شهریور</option>
-                        <option value="7">مهر</option><option value="8">آبان</option><option value="9">آذر</option>
-                        <option value="10">دی</option><option value="11">بهمن</option><option value="12">اسفند</option>
+                    <label class="block text-xs font-medium mb-1">توضیحات / یادداشت:</label>
+                    <textarea id="paymentNotes" rows="2" placeholder="توضیحات اختیاری..." class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm"></textarea>
+                </div>
+                <div class="flex justify-end space-x-2 space-x-reverse mt-6">
+                    <button type="button" onclick="safeHide('paymentModal')" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-xl text-sm font-medium">انصراف</button>
+                    <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700">ذخیره واریزی</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Group SMS Modal -->
+    <div id="groupSMSModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6">
+            <h3 class="text-xl font-bold border-b pb-4">ارسال پیامک گروهی</h3>
+            <p class="text-xs text-gray-500">تعداد تایپیست‌های انتخاب‌شده: <strong id="selectedSMSCountModal" class="text-indigo-600">۰</strong> نفر</p>
+            <div>
+                <label class="block text-xs font-medium mb-1">متن پیامک:</label>
+                <textarea id="smsTextarea" rows="4" placeholder="متن پیامک خود را بنویسید..." class="w-full p-3 rounded-xl border dark:bg-gray-700 text-sm"></textarea>
+            </div>
+            <div class="flex justify-end space-x-2 space-x-reverse">
+                <button type="button" onclick="safeHide('groupSMSModal')" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-xl text-sm font-medium">انصراف</button>
+                <button type="button" onclick="sendGroupSMS()" class="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700">ارسال پیامک 💬</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6">
+            <h3 class="text-xl font-bold border-b pb-4">تغییر رمز عبور</h3>
+            <form onsubmit="saveNewPassword(event); return false;" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium mb-1">رمز عبور جدید:</label>
+                    <input type="password" id="newPasswordInput" required placeholder="حداقل ۴ کاراکتر" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium mb-1">تکرار رمز عبور جدید:</label>
+                    <input type="password" id="confirmPasswordInput" required placeholder="تکرار رمز عبور" class="w-full px-3 py-2 rounded-xl border dark:bg-gray-700 text-sm">
+                </div>
+                <div class="flex justify-end space-x-2 space-x-reverse mt-6">
+                    <button type="button" onclick="safeHide('changePasswordModal')" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-xl text-sm font-medium">انصراف</button>
+                    <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700">تغییر رمز</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Shamsi DatePicker Modal -->
+    <div id="datePickerModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+            <h4 class="font-bold text-base border-b pb-2">انتخاب تاریخ شمسی</h4>
+            <div class="grid grid-cols-3 gap-2">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">سال:</label>
+                    <select id="pickerYear" class="w-full p-2 border rounded-lg dark:bg-gray-700 text-xs">
+                        <option value="1402">۱۴۰۲</option>
+                        <option value="1403" selected>۱۴۰۳</option>
+                        <option value="1404">۱۴۰۴</option>
                     </select>
                 </div>
                 <div>
-                    <label class="block text-slate-400 mb-1">روز</label>
-                    <select id="dp-day" class="w-full p-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900"></select>
+                    <label class="block text-xs text-gray-500 mb-1">ماه:</label>
+                    <select id="pickerMonth" class="w-full p-2 border rounded-lg dark:bg-gray-700 text-xs">
+                        <option value="1">فروردین</option>
+                        <option value="2">اردیبهشت</option>
+                        <option value="3">خرداد</option>
+                        <option value="4">تیر</option>
+                        <option value="5">مرداد</option>
+                        <option value="6">شهریور</option>
+                        <option value="7">مهر</option>
+                        <option value="8">آبان</option>
+                        <option value="9">آذر</option>
+                        <option value="10">دی</option>
+                        <option value="11">بهمن</option>
+                        <option value="12">اسفند</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">روز:</label>
+                    <select id="pickerDay" class="w-full p-2 border rounded-lg dark:bg-gray-700 text-xs">
+                        <!-- 1 to 31 populated dynamically -->
+                    </select>
                 </div>
             </div>
-            <div class="flex items-center gap-2 pt-2">
-                <button onclick="closeDatePickerModal()" class="flex-1 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl text-xs">لغو</button>
-                <button onclick="selectShamsiDate()" class="flex-1 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs">انتخاب</button>
+            <div class="flex justify-end space-x-2 space-x-reverse pt-2">
+                <button type="button" onclick="closeDatePicker()" class="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg text-xs">انصراف</button>
+                <button type="button" onclick="applyDatePicker()" class="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold">تایید تاریخ</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal: Change Password -->
-    <div id="changepass-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-xs w-full p-5 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4">
-            <h4 class="font-bold text-sm">تغییر رمز عبور</h4>
-            <div>
-                <label class="block text-xs text-slate-500 mb-1">رمز عبور جدید</label>
-                <input type="password" id="new_password_val" placeholder="رمز عبور جدید را وارد کنید" class="w-full p-2.5 rounded-lg border dark:border-slate-700 dark:bg-slate-900 text-xs">
-            </div>
-            <div class="flex items-center gap-2 pt-2">
-                <button onclick="closeChangePassModal()" class="flex-1 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl text-xs">انصراف</button>
-                <button onclick="saveNewPassword(event)" class="flex-1 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs">بروزرسانی رمز</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Group SMS -->
-    <div id="sms-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4">
-            <div class="flex justify-between items-center">
-                <h3 class="font-bold text-sm">ارسال پیامک گروهی</h3>
-                <span id="sms-target-count" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg font-bold"></span>
-            </div>
-            <textarea id="sms_text" rows="4" placeholder="متن پیامک خود را تایپ کنید..." class="w-full p-3 rounded-xl border dark:border-slate-700 dark:bg-slate-900 text-xs outline-none"></textarea>
-            <div class="flex items-center gap-2 justify-end">
-                <button onclick="closeSmsModal()" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl text-xs">انصراف</button>
-                <button onclick="sendGroupSms()" class="px-5 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs">ارسال پیامک</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="app.js?v=7.0.0"></script>
+    <!-- JavaScript File -->
+    <script src="app.js?v=7.2.0"></script>
 </body>
 </html>
