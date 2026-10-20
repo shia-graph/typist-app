@@ -349,8 +349,7 @@ async function fetchTypistData() {
         document.getElementById('typistActiveTitle').textContent = t.title || 'موضوعی اختصاص داده نشده است';
         document.getElementById('typistDeliveryDate').textContent = t.delivery_date ? formatJalali(t.delivery_date) : 'تعیین نشده';
 
-        renderTypistDeadline(t.last_report_date);
-
+renderTypistDeadline(t);
         const { data: records, error } = await client.from('work_records').select('*').order('created_at', { ascending: false });
         if (error) throw error;
 
@@ -383,28 +382,38 @@ async function fetchTypistData() {
     }
 }
 
-function renderTypistDeadline(lastReportDate) {
+function renderTypistDeadline(typist) {
     const badge = document.getElementById('typistDeadlineBadge');
-    if (!badge) return;
+    if (!badge || !typist) return;
 
-    if (!lastReportDate) {
+    // تاریخ مبنا: آخرین گزارش یا تاریخ تحویل یا تاریخ ایجاد
+    const rawDate = typist.last_report_date || typist.delivery_date || typist.created_at;
+    const refDate = parseDateToJsDate(rawDate);
+
+    if (!refDate) {
         badge.className = 'p-3 rounded-xl text-center text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200';
-        badge.innerHTML = `⚠️ تاکنون گزارشی ثبت نکرده‌اید.<br><span class="font-normal text-[11px] mt-1 block">مهلت ارسال گزارش: ۱۰ روز پس از شروع</span>`;
+        badge.innerHTML = `⚠️ تاریخ مبنا ثبت نشده است.<br><span class="font-normal text-[11px] mt-1 block">مهلت ۱۰ روزه ثبت گزارش کار</span>`;
         return;
     }
 
-    const lastDate = new Date(lastReportDate);
     const now = new Date();
-    const diffTime = Math.abs(now - lastDate);
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startRef = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
+
+    const diffTime = startToday.getTime() - startRef.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     const remainingDays = 10 - diffDays;
 
-    if (remainingDays >= 0) {
+    if (remainingDays > 0) {
         badge.className = 'p-3 rounded-xl text-center text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200';
-        badge.innerHTML = `✅ مهلت ثبت گزارش بعدی:<br><span class="text-sm font-black mt-1 block">${remainingDays} روز باقی‌مانده</span>`;
+        badge.innerHTML = `⏳ مهلت ارسال گزارش بعدی:<br><span class="text-sm font-black mt-1 block text-emerald-900">${remainingDays} روز باقی‌مانده</span>`;
+    } else if (remainingDays === 0) {
+        badge.className = 'p-3 rounded-xl text-center text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse';
+        badge.innerHTML = `⚠️ امروز آخرین مهلت ارسال گزارش است!`;
     } else {
+        const overdueDays = Math.abs(remainingDays);
         badge.className = 'p-3 rounded-xl text-center text-xs font-bold bg-red-100 text-red-800 border border-red-200 animate-pulse';
-        badge.innerHTML = `❌ تاخیر در ارائه گزارش:<br><span class="text-sm font-black mt-1 block">${Math.abs(remainingDays)} روز تاخیر دارید!</span>`;
+        badge.innerHTML = `❌ تاخیر در ارائه گزارش کار:<br><span class="text-sm font-black mt-1 block text-red-900">${overdueDays} روز تاخیر دارید!</span>`;
     }
 }
 
@@ -578,21 +587,30 @@ function renderAdminTypistsTable(typistsList) {
         const wordRate = t.rate_per_word !== undefined && t.rate_per_word !== null ? t.rate_per_word : (t.default_word_rate || 15);
         const pageRate = t.page_rate !== undefined && t.page_rate !== null ? t.page_rate : (t.default_page_rate || 0);
 
-        let deadlineHtml = '';
-        if (t.completed) {
-            deadlineHtml = `<span class="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg text-xs font-semibold">تکمیل شده</span>`;
-        } else if (!t.last_report_date) {
-            deadlineHtml = `<span class="bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg text-xs">بدون گزارش</span>`;
-        } else {
-            const diffDays = Math.floor(Math.abs(new Date() - new Date(t.last_report_date)) / (1000 * 60 * 60 * 24));
-            const rem = 10 - diffDays;
-            if (rem >= 0) {
-                deadlineHtml = `<span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg text-xs font-bold">${rem} روز مهلت</span>`;
-            } else {
-                deadlineHtml = `<span class="bg-red-100 text-red-800 px-2 py-1 rounded-lg text-xs font-bold">${Math.abs(rem)} روز تاخیر!</span>`;
-            }
-        }
+// در این تابع، بخش محاسبه مهلت تایمر بدین شکل اصلاح شد:
+let deadlineHtml = '';
+if (t.completed) {
+    deadlineHtml = `<span class="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg text-xs font-semibold">تکمیل شده</span>`;
+} else {
+    const refDate = parseDateToJsDate(t.last_report_date || t.delivery_date || t.created_at);
+    if (!refDate) {
+        deadlineHtml = `<span class="bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg text-xs">بدون گزارش</span>`;
+    } else {
+        const now = new Date();
+        const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startRef = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
+        const diffDays = Math.floor((startToday.getTime() - startRef.getTime()) / (1000 * 60 * 60 * 24));
+        const rem = 10 - diffDays;
 
+        if (rem > 0) {
+            deadlineHtml = `<span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg text-xs font-bold">${rem} روز مهلت</span>`;
+        } else if (rem === 0) {
+            deadlineHtml = `<span class="bg-amber-100 text-amber-800 px-2 py-1 rounded-lg text-xs font-bold">امروز مهلت</span>`;
+        } else {
+            deadlineHtml = `<span class="bg-red-100 text-red-800 px-2 py-1 rounded-lg text-xs font-bold">${Math.abs(rem)} روز تاخیر!</span>`;
+        }
+    }
+}
         const passStr = t.password || (t.phone && t.phone.length >= 4 ? t.phone.slice(-4) : '---');
         const newTaskBtn = t.completed ? `<button onclick="openNewTaskModal('${t.id}')" title="ارجاع کار جدید" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-800 hover:bg-blue-200">+ کار جدید</button>` : '';
 
@@ -1013,8 +1031,9 @@ function getTargetTypists() {
     const target = document.getElementById('smsTargetSelect').value;
     if (target === 'overdue') {
         return globalTypists.filter(t => {
-            if (!t.last_report_date) return true;
-            const diff = Math.floor(Math.abs(new Date() - new Date(t.last_report_date)) / (1000 * 60 * 60 * 24));
+            const refDate = parseDateToJsDate(t.last_report_date || t.delivery_date || t.created_at);
+            if (!refDate) return true;
+            const diff = Math.floor((new Date().getTime() - refDate.getTime()) / (1000 * 60 * 60 * 24));
             return diff > 10;
         });
     }
@@ -1221,110 +1240,44 @@ async function downloadBackupJSON() {
         showAlert('خطا در دریافت فایل پشتیبان.', true);
     }
 }
-/* ==========================================================================
-   PERSISTENT STOPWATCH / WORK TIMER LOGIC
-   ========================================================================== */
-let timerInterval = null;
-let timerAccumulatedSeconds = 0;
-let timerStartTime = null;
-let isTimerRunning = false;
+// مبدل تاریخ شمسی به میلادی برای محاسبه ریاضی روزها
+function jalaliToGregorian(jy, jm, jd) {
+    let sal_a, gy, gm, gd, days;
+    jy += 1595;
+    days = -355668 + (365 * jy) + Math.floor(jy / 33) * 8 + Math.floor(((jy % 33) + 3) / 4) + jd + ((jm < 7) ? (jm - 1) * 31 : ((jm - 7) * 30) + 186);
+    gy = 400 * Math.floor(days / 146097);
+    days %= 146097;
+    if (days > 36524) {
+        gy += 100 * Math.floor(--days / 36524);
+        days %= 36524;
+        if (days >= 365) days++;
+    }
+    gy += 4 * Math.floor(days / 1461);
+    days %= 1461;
+    if (days > 365) {
+        gy += Math.floor((days - 1) / 365);
+        days = (days - 1) % 365;
+    }
+    gd = days + 1;
+    sal_a = [0, 31, ((gy % 4 === 0 && gy % 100 !== 0) || (gy % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    for (gm = 0; gm < 13 && gd > sal_a[gm]; gm++) gd -= sal_a[gm];
+    return [gy, gm, gd];
+}
 
-// این تابع را در هنگام لود صفحه (داخل DOMContentLoaded) فراخوانی کنید
-function initTimerState() {
-    const savedState = localStorage.getItem('typist_stopwatch_state');
-    if (savedState) {
-        try {
-            const parsed = JSON.parse(savedState);
-            timerAccumulatedSeconds = parsed.accumulated || 0;
-            isTimerRunning = parsed.isRunning || false;
-            timerStartTime = parsed.startTime || null;
+// پارسر هوشمند تاریخ (پشتیبانی کامل از فرمت‌های شمسی 1403/01/15 و میلادی ISO)
+function parseDateToJsDate(dateInput) {
+    if (!dateInput) return null;
+    if (dateInput instanceof Date) return dateInput;
 
-            if (isTimerRunning && timerStartTime) {
-                // محاسبه زمان سپری شده هنگام رفرش یا بسته بودن تب
-                const now = Date.now();
-                const delta = Math.floor((now - timerStartTime) / 1000);
-                timerAccumulatedSeconds += Math.max(0, delta);
-                timerStartTime = now;
-                saveTimerState();
-                startTimerInterval();
-            } else {
-                updateTimerDisplay();
-            }
-        } catch (e) {
-            resetTimer();
+    const str = toEnglishDigits(String(dateInput)).trim();
+    if (str.includes('/')) {
+        const parts = str.split('/').map(Number);
+        if (parts.length === 3 && parts[0] > 1300 && parts[0] < 1500) {
+            const [gy, gm, gd] = jalaliToGregorian(parts[0], parts[1], parts[2]);
+            return new Date(gy, gm - 1, gd);
         }
-    } else {
-        updateTimerDisplay();
     }
-}
-
-function saveTimerState() {
-    const state = {
-        accumulated: timerAccumulatedSeconds,
-        isRunning: isTimerRunning,
-        startTime: timerStartTime
-    };
-    localStorage.setItem('typist_stopwatch_state', JSON.stringify(state));
-}
-
-function startTimer() {
-    if (isTimerRunning) return;
-    isTimerRunning = true;
-    timerStartTime = Date.now();
-    saveTimerState();
-    startTimerInterval();
     
-    const statusEl = document.getElementById('timer-status');
-    if (statusEl) statusEl.textContent = 'تایمر در حال محاسبه زمان تایپ...';
-    showAlert('تایمر تایپ فعال شد'); // اصلاح شد
-}
-
-function pauseTimer() {
-    if (!isTimerRunning) return;
-    if (timerStartTime) {
-        const delta = Math.floor((Date.now() - timerStartTime) / 1000);
-        timerAccumulatedSeconds += Math.max(0, delta);
-    }
-    isTimerRunning = false;
-    timerStartTime = null;
-    if (timerInterval) clearInterval(timerInterval);
-    saveTimerState();
-    updateTimerDisplay();
-
-    const statusEl = document.getElementById('timer-status');
-    if (statusEl) statusEl.textContent = 'تایمر متوقف شد.';
-    showAlert('تایمر متوقف گردید'); // اصلاح شد
-}
-
-function applyTimerToReport() {
-    let totalSecs = timerAccumulatedSeconds;
-    if (isTimerRunning && timerStartTime) {
-        const delta = Math.floor((Date.now() - timerStartTime) / 1000);
-        totalSecs += Math.max(0, delta);
-    }
-
-    if (totalSecs <= 0) {
-        showAlert('هیچ زمانی در تایمر ثبت نشده است', true); // اصلاح شد
-        return;
-    }
-
-    const hrs = Math.floor(totalSecs / 3600);
-    const mins = Math.floor((totalSecs % 3600) / 60);
-    const secs = totalSecs % 60;
-    
-    let timeString = '';
-    if (hrs > 0) timeString += `${hrs} ساعت و `;
-    timeString += `${mins} دقیقه و ${secs} ثانیه`;
-
-    // دقت کنید: اگر فیلد توضیحات در فرم HTML شما آیدی دیگری دارد، 'reportNotes' را تغییر دهید
-    const descField = document.getElementById('reportNotes') || document.getElementById('record-description'); 
-    if (descField) {
-        const note = `[مدت زمان تایپ: ${timeString}]`;
-        descField.value = descField.value ? `${descField.value}\n${note}` : note;
-        // اسکرول به سمت فرم
-        descField.scrollIntoView({ behavior: 'smooth' }); 
-        showAlert('زمان تایمر در یادداشت فرم درج گردید'); // اصلاح شد
-    } else {
-        showAlert(`زمان کارکرد شما: ${timeString} (میتوانید در گزارش ثبت کنید)`);
-    }
+    const d = new Date(dateInput);
+    return isNaN(d.getTime()) ? null : d;
 }
