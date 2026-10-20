@@ -1078,69 +1078,105 @@ function copySmsNumbers() {
     });
 }
 
-// BANK CSV EXPORT & BACKUP
+// BANK EXCEL EXPORT (.xlsx) - Solves Leading Zero & Conversion Prompts
 function exportBankCSV() {
-    if (globalTypists.length === 0) {
-        showAlert('هیچ داده‌ای برای خروجی موجود نیست.', true);
+    if (typeof globalTypists === 'undefined' || globalTypists.length === 0) {
+        if (typeof showAlert === 'function') showAlert('هیچ داده‌ای برای خروجی موجود نیست.', true);
+        else showToast('هیچ داده‌ای برای خروجی موجود نیست.', true);
         return;
     }
 
     const headers = ['ردیف', 'نام', 'نام خانوادگی', 'شماره ملی', 'شماره تماس', 'شماره شبا', 'مبلغ قابل واریز (ریال)'];
-    const rows = [];
+    const rows = [headers];
     let currentRowIndex = 1;
 
     globalTypists.forEach((t) => {
-        const myRecords = globalReports.filter(r => isRecordBelongsToTypist(r, t.id));
-        const totalWords = myRecords.reduce((sum, r) => sum + getRecordWordsCount(r), 0);
-        const totalPages = myRecords.reduce((sum, r) => sum + getRecordPageCount(r), 0);
+        const myRecords = typeof globalReports !== 'undefined' 
+            ? globalReports.filter(r => typeof isRecordBelongsToTypist === 'function' ? isRecordBelongsToTypist(r, t.id) : (r.typist_id === t.id || r.person_id === t.id))
+            : [];
+        
+        const totalWords = myRecords.reduce((sum, r) => sum + (typeof getRecordWordsCount === 'function' ? getRecordWordsCount(r) : Number(r.words_count || 0)), 0);
+        const totalPages = myRecords.reduce((sum, r) => sum + (typeof getRecordPageCount === 'function' ? getRecordPageCount(r) : Number(r.page_count || r.pages_count || r.quantity || 0)), 0);
 
         const wordRate = Number(t.rate_per_word !== undefined && t.rate_per_word !== null ? t.rate_per_word : (t.default_word_rate || 15));
         const pageRate = Number(t.page_rate !== undefined && t.page_rate !== null ? t.page_rate : (t.default_page_rate || 0));
 
-        const myPayments = globalPayments.filter(p => String(p.typist_id) === String(t.id));
+        const myPayments = typeof globalPayments !== 'undefined'
+            ? globalPayments.filter(p => String(p.typist_id) === String(t.id))
+            : [];
         const totalPaid = myPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
         
         const grossAmount = (totalWords * wordRate) + (totalPages * pageRate);
         const netPayable = grossAmount - totalPaid;
 
         if (netPayable > 0) {
-            const fn = t.first_name || getTypistName(t).split(' ')[0] || '';
-            const ln = t.last_name || getTypistName(t).split(' ').slice(1).join(' ') || '';
-            const natId = getTypistNationalId(t);
-            const phone = t.phone || '';
-            const sheba = t.sheba_number || t.iban || '';
+            const typistNameStr = typeof getTypistName === 'function' ? getTypistName(t) : (t.name || (t.first_name + ' ' + (t.last_name || '')));
+            const fn = t.first_name || typistNameStr.split(' ')[0] || '';
+            const ln = t.last_name || typistNameStr.split(' ').slice(1).join(' ') || '';
+            const natId = String(typeof getTypistNationalId === 'function' ? getTypistNationalId(t) : (t.national_id || t.national_code || ''));
+            const phone = String(t.phone || '');
+            const sheba = String(t.sheba_number || t.iban || '');
 
             rows.push([
                 currentRowIndex++,
-                `"${fn}"`,
-                `"${ln}"`,
-                `"${natId}"`,
-                `"${phone}"`,
-                `"${sheba}"`,
+                fn,
+                ln,
+                natId,
+                phone,
+                sheba,
                 netPayable
             ]);
         }
     });
 
-    if (rows.length === 0) {
-        showAlert('تمامی مقرر‌ها تسویه شده‌اند و هیچ شخصی برای پرداختی بانک موجود نیست.', true);
+    if (rows.length <= 1) {
+        if (typeof showAlert === 'function') showAlert('تمامی مقرر‌ها تسویه شده‌اند و هیچ شخصی برای پرداختی بانک موجود نیست.', true);
+        else showToast('تمامی مقرر‌ها تسویه شده‌اند و هیچ شخصی برای پرداختی بانک موجود نیست.', true);
         return;
     }
 
-    let csvContent = '\uFEFF';
-    csvContent += headers.join(',') + '\n';
-    rows.forEach(r => {
-        csvContent += r.join(',') + '\n';
-    });
+    // ساخت فایل واقعی اکسل (.xlsx) با SheetJS
+    if (typeof XLSX !== 'undefined') {
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        
+        // تنظیم ستون‌های کد ملی، شماره تماس و شماره شبا به فرمت متن جهت حفظ صفر اول
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+            [3, 4, 5].forEach(C => {
+                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                if (ws[cellRef]) {
+                    ws[cellRef].t = 's'; // Force Text Format
+                    ws[cellRef].z = '@';
+                }
+            });
+        }
+        
+        // راست‌به‌چپ کردن شیت اکسل
+        if (!ws['!views']) ws['!views'] = [];
+        ws['!views'].push({ RTL: true });
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Bank_Payments_${getTodayJalaliString().replace(/\//g, '-')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "لیست تسویه");
+        const dateStr = typeof getTodayJalaliString === 'function' ? getTodayJalaliString().replace(/\//g, '-') : getJalaliDate().replace(/\//g, '-');
+        XLSX.writeFile(wb, `Bank_Payments_${dateStr}.xlsx`);
+    } else {
+        // روش پشتیبان CSV با فرمول متن اکسل ="0912..."
+        let csvContent = '\uFEFF';
+        csvContent += headers.join(',') + '\n';
+        for (let i = 1; i < rows.length; i++) {
+            const r = rows[i];
+            csvContent += `${r[0]},"${r[1]}","${r[2]}",="${r[3]}",="${r[4]}",="${r[5]}",${r[6]}\n`;
+        }
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        const dateStr = typeof getTodayJalaliString === 'function' ? getTodayJalaliString().replace(/\//g, '-') : getJalaliDate().replace(/\//g, '-');
+        link.setAttribute('download', `Bank_Payments_${dateStr}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 }
 
 async function downloadBackupJSON() {
