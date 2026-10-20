@@ -1029,14 +1029,18 @@ function openSmsModal() {
 
 function getTargetTypists() {
     const target = document.getElementById('smsTargetSelect').value;
-    if (target === 'overdue') {
-        return globalTypists.filter(t => {
-            const refDate = parseDateToJsDate(t.last_report_date || t.delivery_date || t.created_at);
-            if (!refDate) return true;
-            const diff = Math.floor((new Date().getTime() - refDate.getTime()) / (1000 * 60 * 60 * 24));
-            return diff > 10;
-        });
-    }
+if (target === 'overdue') {
+    return globalTypists.filter(t => {
+        if (t.completed) return false;
+        const refDate = parseDateToJsDate(t.last_report_date || t.delivery_date || t.created_at);
+        if (!refDate) return true;
+        const now = new Date();
+        const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startRef = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
+        const diffDays = Math.floor((startToday.getTime() - startRef.getTime()) / (1000 * 60 * 60 * 24));
+        return (10 - diffDays) < 0;
+    });
+}
     return globalTypists;
 }
 
@@ -1110,7 +1114,7 @@ function copySmsNumbers() {
 function exportBankCSV() {
     if (typeof globalTypists === 'undefined' || globalTypists.length === 0) {
         if (typeof showAlert === 'function') showAlert('هیچ داده‌ای برای خروجی موجود نیست.', true);
-        else showToast('هیچ داده‌ای برای خروجی موجود نیست.', true);
+        else showAlert('هیچ داده‌ای برای خروجی موجود نیست.', true);
         return;
     }
 
@@ -1168,7 +1172,7 @@ function exportBankCSV() {
 
     if (rows.length <= 1) {
         if (typeof showAlert === 'function') showAlert('تمامی مقرر‌ها تسویه شده‌اند و هیچ شخصی برای پرداختی بانک موجود نیست.', true);
-        else showToast('تمامی مقرر‌ها تسویه شده‌اند و هیچ شخصی برای پرداختی بانک موجود نیست.', true);
+        else showAlert('تمامی مقرر‌ها تسویه شده‌اند و هیچ شخصی برای پرداختی بانک موجود نیست.', true);
         return;
     }
 
