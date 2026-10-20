@@ -386,8 +386,8 @@ function renderTypistDeadline(typist) {
     const badge = document.getElementById('typistDeadlineBadge');
     if (!badge || !typist) return;
 
-    // تاریخ مبنا: آخرین گزارش یا تاریخ تحویل یا تاریخ ایجاد
-    const rawDate = typist.last_report_date || typist.delivery_date || typist.created_at;
+    // تاریخ تحویل نهایی (delivery_date) کلا از مبنا حذف شد
+    const rawDate = typist.last_report_date || typist.updated_at || typist.created_at;
     const refDate = parseDateToJsDate(rawDate);
 
     if (!refDate) {
@@ -400,8 +400,10 @@ function renderTypistDeadline(typist) {
     const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startRef = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
 
-    const diffTime = startToday.getTime() - startRef.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    let diffTime = startToday.getTime() - startRef.getTime();
+    let diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) diffDays = 0; // جلوگیری از اعداد منفی
+
     const remainingDays = 10 - diffDays;
 
     if (remainingDays > 0) {
@@ -592,14 +594,17 @@ let deadlineHtml = '';
 if (t.completed) {
     deadlineHtml = `<span class="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg text-xs font-semibold">تکمیل شده</span>`;
 } else {
-    const refDate = parseDateToJsDate(t.last_report_date || t.delivery_date || t.created_at);
+    // حذف t.delivery_date از محاسبات
+    const refDate = parseDateToJsDate(t.last_report_date || t.updated_at || t.created_at);
     if (!refDate) {
         deadlineHtml = `<span class="bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg text-xs">بدون گزارش</span>`;
     } else {
         const now = new Date();
         const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const startRef = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
-        const diffDays = Math.floor((startToday.getTime() - startRef.getTime()) / (1000 * 60 * 60 * 24));
+        let diffDays = Math.floor((startToday.getTime() - startRef.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) diffDays = 0;
+
         const rem = 10 - diffDays;
 
         if (rem > 0) {
@@ -910,7 +915,8 @@ async function saveNewTask(e) {
             delivery_date: deliveryDate,
             completed: false,
             completed_at: null,
-            last_report_date: nowIso
+            last_report_date: nowIso, // زمان‌سنج ۱۰ روزه دقیقاً از همین لحظه ارجاع کار جدید شروع می‌شود
+            updated_at: nowIso
         }).eq('id', id);
 
         if (error) throw error;
@@ -1029,18 +1035,19 @@ function openSmsModal() {
 
 function getTargetTypists() {
     const target = document.getElementById('smsTargetSelect').value;
-if (target === 'overdue') {
-    return globalTypists.filter(t => {
-        if (t.completed) return false;
-        const refDate = parseDateToJsDate(t.last_report_date || t.delivery_date || t.created_at);
-        if (!refDate) return true;
-        const now = new Date();
-        const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const startRef = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
-        const diffDays = Math.floor((startToday.getTime() - startRef.getTime()) / (1000 * 60 * 60 * 24));
-        return (10 - diffDays) < 0;
-    });
-}
+    if (target === 'overdue') {
+        return globalTypists.filter(t => {
+            if (t.completed) return false;
+            // حذف delivery_date از شرط تاخیر
+            const refDate = parseDateToJsDate(t.last_report_date || t.updated_at || t.created_at);
+            if (!refDate) return true;
+            const now = new Date();
+            const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const startRef = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
+            const diffDays = Math.floor((startToday.getTime() - startRef.getTime()) / (1000 * 60 * 60 * 24));
+            return (10 - diffDays) < 0;
+        });
+    }
     return globalTypists;
 }
 
