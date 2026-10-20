@@ -670,7 +670,16 @@ function renderAdminPayrollTable() {
         const myPayments = globalPayments.filter(p => String(p.typist_id) === String(t.id));
         const totalPaid = myPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
-        const grossAmount = (totalWords * wordRate) + (totalPages * pageRate);
+             // محاسبه انحصاری کارکرد (یا کلمه یا صفحه برای هر گزارش)
+        let grossAmount = 0;
+        myRecords.forEach(r => {
+            const w = getRecordWordsCount(r);
+            const p = getRecordPageCount(r);
+            if (w > 0 && wordRate > 0) grossAmount += w * wordRate;
+            else if (p > 0 && pageRate > 0) grossAmount += p * pageRate;
+            else if (w > 0) grossAmount += w * wordRate;
+            else grossAmount += p * pageRate;
+        });
         const netPayable = grossAmount - totalPaid;
 
         const tr = document.createElement('tr');
@@ -1106,7 +1115,16 @@ function exportBankCSV() {
             : [];
         const totalPaid = myPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
         
-        const grossAmount = (totalWords * wordRate) + (totalPages * pageRate);
+            // محاسبه انحصاری کارکرد برای خروجی بانک
+        let grossAmount = 0;
+        myRecords.forEach(r => {
+            const w = typeof getRecordWordsCount === 'function' ? getRecordWordsCount(r) : Number(r.words_count || 0);
+            const p = typeof getRecordPageCount === 'function' ? getRecordPageCount(r) : Number(r.page_count || r.pages_count || r.quantity || 0);
+            if (w > 0 && wordRate > 0) grossAmount += w * wordRate;
+            else if (p > 0 && pageRate > 0) grossAmount += p * pageRate;
+            else if (w > 0) grossAmount += w * wordRate;
+            else grossAmount += p * pageRate;
+        });
         const netPayable = grossAmount - totalPaid;
 
         if (netPayable > 0) {
