@@ -1221,3 +1221,110 @@ async function downloadBackupJSON() {
         showAlert('خطا در دریافت فایل پشتیبان.', true);
     }
 }
+/* ==========================================================================
+   PERSISTENT STOPWATCH / WORK TIMER LOGIC
+   ========================================================================== */
+let timerInterval = null;
+let timerAccumulatedSeconds = 0;
+let timerStartTime = null;
+let isTimerRunning = false;
+
+// این تابع را در هنگام لود صفحه (داخل DOMContentLoaded) فراخوانی کنید
+function initTimerState() {
+    const savedState = localStorage.getItem('typist_stopwatch_state');
+    if (savedState) {
+        try {
+            const parsed = JSON.parse(savedState);
+            timerAccumulatedSeconds = parsed.accumulated || 0;
+            isTimerRunning = parsed.isRunning || false;
+            timerStartTime = parsed.startTime || null;
+
+            if (isTimerRunning && timerStartTime) {
+                // محاسبه زمان سپری شده هنگام رفرش یا بسته بودن تب
+                const now = Date.now();
+                const delta = Math.floor((now - timerStartTime) / 1000);
+                timerAccumulatedSeconds += Math.max(0, delta);
+                timerStartTime = now;
+                saveTimerState();
+                startTimerInterval();
+            } else {
+                updateTimerDisplay();
+            }
+        } catch (e) {
+            resetTimer();
+        }
+    } else {
+        updateTimerDisplay();
+    }
+}
+
+function saveTimerState() {
+    const state = {
+        accumulated: timerAccumulatedSeconds,
+        isRunning: isTimerRunning,
+        startTime: timerStartTime
+    };
+    localStorage.setItem('typist_stopwatch_state', JSON.stringify(state));
+}
+
+function startTimer() {
+    if (isTimerRunning) return;
+    isTimerRunning = true;
+    timerStartTime = Date.now();
+    saveTimerState();
+    startTimerInterval();
+    
+    const statusEl = document.getElementById('timer-status');
+    if (statusEl) statusEl.textContent = 'تایمر در حال محاسبه زمان تایپ...';
+    showAlert('تایمر تایپ فعال شد'); // اصلاح شد
+}
+
+function pauseTimer() {
+    if (!isTimerRunning) return;
+    if (timerStartTime) {
+        const delta = Math.floor((Date.now() - timerStartTime) / 1000);
+        timerAccumulatedSeconds += Math.max(0, delta);
+    }
+    isTimerRunning = false;
+    timerStartTime = null;
+    if (timerInterval) clearInterval(timerInterval);
+    saveTimerState();
+    updateTimerDisplay();
+
+    const statusEl = document.getElementById('timer-status');
+    if (statusEl) statusEl.textContent = 'تایمر متوقف شد.';
+    showAlert('تایمر متوقف گردید'); // اصلاح شد
+}
+
+function applyTimerToReport() {
+    let totalSecs = timerAccumulatedSeconds;
+    if (isTimerRunning && timerStartTime) {
+        const delta = Math.floor((Date.now() - timerStartTime) / 1000);
+        totalSecs += Math.max(0, delta);
+    }
+
+    if (totalSecs <= 0) {
+        showAlert('هیچ زمانی در تایمر ثبت نشده است', true); // اصلاح شد
+        return;
+    }
+
+    const hrs = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+    
+    let timeString = '';
+    if (hrs > 0) timeString += `${hrs} ساعت و `;
+    timeString += `${mins} دقیقه و ${secs} ثانیه`;
+
+    // دقت کنید: اگر فیلد توضیحات در فرم HTML شما آیدی دیگری دارد، 'reportNotes' را تغییر دهید
+    const descField = document.getElementById('reportNotes') || document.getElementById('record-description'); 
+    if (descField) {
+        const note = `[مدت زمان تایپ: ${timeString}]`;
+        descField.value = descField.value ? `${descField.value}\n${note}` : note;
+        // اسکرول به سمت فرم
+        descField.scrollIntoView({ behavior: 'smooth' }); 
+        showAlert('زمان تایمر در یادداشت فرم درج گردید'); // اصلاح شد
+    } else {
+        showAlert(`زمان کارکرد شما: ${timeString} (میتوانید در گزارش ثبت کنید)`);
+    }
+}
