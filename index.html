@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
     
@@ -41,6 +40,7 @@
     <main class="flex-grow p-4 max-w-7xl mx-auto w-full">
         <!-- Global Alert Box -->
         <div id="alertBox" class="hidden mb-4 p-4 rounded-xl shadow-sm text-sm font-medium transition-all"></div>
+        
         <!-- 1. Login Section -->
         <section id="loginSection" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-2xl shadow-sm border border-slate-100 hidden">
             <h2 class="text-2xl font-black text-center text-slate-800 mb-6">ورود به سامانه</h2>
@@ -57,6 +57,7 @@
                 <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold p-3 rounded-xl transition shadow-sm">ورود</button>
             </form>
         </section>
+
         <!-- 2. Typist Dashboard -->
         <section id="typistDashboard" class="hidden space-y-6">
             <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -117,6 +118,7 @@
                 </div>
             </div>
         </section>
+
         <!-- 3. Admin Dashboard -->
         <section id="adminDashboard" class="hidden space-y-6">
             <!-- Stats -->
@@ -138,6 +140,7 @@
                     <div id="statTotalReports" class="text-2xl font-black text-blue-600 font-mono">0</div>
                 </div>
             </div>
+
             <!-- Admin Actions -->
             <div class="flex flex-wrap gap-2 justify-center sm:justify-start">
                 <button onclick="openAddTypistModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm">+ مقرر جدید</button>
@@ -153,16 +156,18 @@
                 <button onclick="exportBankCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm">خروجی اکسل بانک</button>
                 <button onclick="downloadBackupJSON()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm">بکاپ Database</button>
             </div>
-            <!-- Tabs -->
+
+            <!-- Tabs Container -->
             <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                <!-- Tab Navigation Headers (اصلاح ترتیب) -->
                 <div class="flex border-b border-slate-100 bg-slate-50 overflow-x-auto">
                     <button id="tabTypistsBtn" onclick="switchAdminTab('typists')" class="flex-1 py-3 px-4 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 transition whitespace-nowrap">لیست مقرر‌ها</button>
-                    <button id="tabAggregatedBtn" onclick="switchAdminTab('aggregated')" class="flex-1 py-3 px-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition whitespace-nowrap">گزارش‌های تجمیعی</button>
                     <button id="tabPayrollBtn" onclick="switchAdminTab('payroll')" class="flex-1 py-3 px-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition whitespace-nowrap">مالی و تسویه‌حساب</button>
                     <button id="tabRecordsBtn" onclick="switchAdminTab('records')" class="flex-1 py-3 px-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition whitespace-nowrap">همه گزارشات</button>
+                    <button id="tabAggregatedBtn" onclick="switchAdminTab('aggregated')" class="flex-1 py-3 px-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition whitespace-nowrap">گزارش‌های تجمیعی</button>
                 </div>
 
-                <!-- Typists Tab -->
+                <!-- 1. Typists Tab -->
                 <div id="adminTypistsTab" class="p-0">
                     <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
                         <input type="text" id="typistSearchInput" oninput="filterTypistsTable()" placeholder="جستجو (نام، موبایل، موضوع)..." class="w-full sm:w-72 px-4 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
@@ -186,7 +191,67 @@
                     </div>
                 </div>
 
-                <!-- Aggregated Reports Tab (جدید) -->
+                <!-- 2. Payroll Tab (همراه با قابلیت تسویه گروهی) -->
+                <div id="adminPayrollTab" class="hidden p-0">
+                    <div class="p-4 border-b border-slate-100 bg-indigo-50/50 flex flex-col sm:flex-row justify-between items-center gap-3">
+                        <p class="text-xs text-indigo-800 font-medium">فرمول محاسبه: (تعداد کلمات × نرخ کلمه) یا (تعداد صفحات × نرخ صفحه) - پرداختی‌های قبلی</p>
+                        <button id="bulkSettleBtn" onclick="bulkSettlePayroll()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5 whitespace-nowrap">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            <span id="bulkSettleBtnText">تسویه گروهی افراد انتخاب‌شده</span>
+                        </button>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="w-full text-sm text-right whitespace-nowrap">
+                            <thead class="text-xs text-slate-500 bg-slate-50 uppercase">
+                                <tr>
+                                    <th class="px-3 py-3 text-center">
+                                        <input type="checkbox" id="selectAllPayroll" onchange="toggleAllPayrollCheckboxes(this)" class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" title="انتخاب همه افراد دارای مانده">
+                                    </th>
+                                    <th class="px-4 py-3 font-bold">نام مقرر</th>
+                                    <th class="px-4 py-3 font-bold">اطلاعات حساب</th>
+                                    <th class="px-4 py-3 font-bold">کارکرد کلمه/صفحه</th>
+                                    <th class="px-4 py-3 font-bold">نرخ کلمه/صفحه</th>
+                                    <th class="px-4 py-3 font-bold">کل درآمد</th>
+                                    <th class="px-4 py-3 font-bold">پرداختی قبلی</th>
+                                    <th class="px-4 py-3 font-bold">قابل پرداخت (خالص)</th>
+                                    <th class="px-4 py-3 font-bold text-center">عملیات تکی</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminPayrollTable" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 3. All Records Tab (همراه با خروجی اکسل گزارش‌ها) -->
+                <div id="adminRecordsTab" class="hidden p-0">
+                    <div class="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-3">
+                        <div id="recordsFilterBadge" class="hidden p-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-xs text-amber-800 font-bold">
+                            <span id="recordsFilterText"></span>
+                            <button onclick="resetRecordsFilter()" class="bg-amber-200 hover:bg-amber-300 text-amber-900 px-2 py-0.5 rounded-md transition text-[11px]">نمایش همه گزارشات</button>
+                        </div>
+                        <button onclick="exportAllRecordsExcel()" class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm mr-auto sm:mr-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            خروجی اکسل گزارش‌ها
+                        </button>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="w-full text-sm text-right whitespace-nowrap">
+                            <thead class="text-xs text-slate-500 bg-slate-50 uppercase">
+                                <tr>
+                                    <th class="px-4 py-3 font-bold text-right">تاریخ و زمان</th>
+                                    <th class="px-4 py-3 font-bold">مقرر</th>
+                                    <th class="px-4 py-3 font-bold">موضوع</th>
+                                    <th class="px-4 py-3 font-bold">کلمات</th>
+                                    <th class="px-4 py-3 font-bold">صفحات</th>
+                                    <th class="px-4 py-3 font-bold text-center">حذف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminAllRecordsTable" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 4. Aggregated Reports Tab (انتقال‌یافته به آخر) -->
                 <div id="adminAggregatedTab" class="hidden p-0">
                     <div class="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
                         <input type="text" id="aggregatedSearchInput" oninput="filterAggregatedTable()" placeholder="جستجوی مقرر..." class="w-full sm:w-72 px-4 py-2 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
@@ -213,52 +278,6 @@
                     </div>
                 </div>
 
-                <!-- Payroll Tab -->
-                <div id="adminPayrollTab" class="hidden p-0">
-                    <div class="p-4 border-b border-slate-100 bg-indigo-50/50">
-                        <p class="text-xs text-indigo-800 font-medium">فرمول محاسبه: (تعداد کلمات × نرخ کلمه) یا (تعداد صفحات × نرخ صفحه) - پرداختی‌های قبلی</p>
-                    </div>
-                    <div class="table-scroll">
-                        <table class="w-full text-sm text-right whitespace-nowrap">
-                            <thead class="text-xs text-slate-500 bg-slate-50 uppercase">
-                                <tr>
-                                    <th class="px-4 py-3 font-bold">نام مقرر</th>
-                                    <th class="px-4 py-3 font-bold">اطلاعات حساب</th>
-                                    <th class="px-4 py-3 font-bold">کارکرد کلمه/صفحه</th>
-                                    <th class="px-4 py-3 font-bold">نرخ کلمه/صفحه</th>
-                                    <th class="px-4 py-3 font-bold">کل درآمد</th>
-                                    <th class="px-4 py-3 font-bold">پرداختی قبلی</th>
-                                    <th class="px-4 py-3 font-bold">قابل پرداخت (خالص)</th>
-                                    <th class="px-4 py-3 font-bold text-center">عملیات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="adminPayrollTable" class="divide-y divide-slate-100"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- All Records Tab -->
-                <div id="adminRecordsTab" class="hidden p-0">
-                    <div id="recordsFilterBadge" class="hidden p-3 bg-amber-50 border-b border-amber-100 flex justify-between items-center text-xs text-amber-800 font-bold">
-                        <span id="recordsFilterText"></span>
-                        <button onclick="resetRecordsFilter()" class="bg-amber-200 hover:bg-amber-300 text-amber-900 px-2 py-1 rounded-md transition">نمایش همه گزارشات</button>
-                    </div>
-                    <div class="table-scroll">
-                        <table class="w-full text-sm text-right whitespace-nowrap">
-                            <thead class="text-xs text-slate-500 bg-slate-50 uppercase">
-                                <tr>
-                                    <th class="px-4 py-3 font-bold text-right">تاریخ و زمان</th>
-                                    <th class="px-4 py-3 font-bold">مقرر</th>
-                                    <th class="px-4 py-3 font-bold">موضوع</th>
-                                    <th class="px-4 py-3 font-bold">کلمات</th>
-                                    <th class="px-4 py-3 font-bold">صفحات</th>
-                                    <th class="px-4 py-3 font-bold text-center">حذف</th>
-                                </tr>
-                            </thead>
-                            <tbody id="adminAllRecordsTable" class="divide-y divide-slate-100"></tbody>
-                        </table>
-                    </div>
-                </div>
             </div>
         </section>
     </main>
@@ -446,6 +465,7 @@
     let globalTypists = [];
     let globalReports = [];
     let globalPayments = [];
+    let currentRecordFilterTypistId = null; // جهت نگهداری فیلتر فعلی تب گزارش‌ها
 
     function toEnglishDigits(str) {
         if (str === null || str === undefined) return '';
@@ -855,9 +875,9 @@
 
             renderAdminStats();
             renderAdminTypistsTable(globalTypists);
-            renderAdminAggregatedTable(globalTypists);
             renderAdminPayrollTable();
-            renderAdminAllRecordsTable();
+            renderAdminAllRecordsTable(currentRecordFilterTypistId);
+            renderAdminAggregatedTable(globalTypists);
         } catch (err) {
             showAlert('خطا در بارگیری داده‌های مدیریت.', true);
         }
@@ -942,7 +962,206 @@
     }
 
     // ----------------------------------------------------------------------
-    // NEW: AGGREGATED REPORTS TABLE RENDERING & FILTERING
+    // PAYROLL TABLE WITH BULK SETTLEMENT (تسویه گروهی)
+    // ----------------------------------------------------------------------
+    function renderAdminPayrollTable() {
+        const tbody = document.getElementById('adminPayrollTable');
+        tbody.innerHTML = '';
+        const masterCb = document.getElementById('selectAllPayroll');
+        if (masterCb) masterCb.checked = false;
+
+        globalTypists.forEach(t => {
+            const myRecords = globalReports.filter(r => isRecordBelongsToTypist(r, t.id));
+            const totalWords = myRecords.reduce((sum, r) => sum + getRecordWordsCount(r), 0);
+            const totalPages = myRecords.reduce((sum, r) => sum + getRecordPageCount(r), 0);
+            const wordRate = Number(t.rate_per_word !== undefined && t.rate_per_word !== null ? t.rate_per_word : (t.default_word_rate || 15));
+            const pageRate = Number(t.page_rate !== undefined && t.page_rate !== null ? t.page_rate : (t.default_page_rate || 0));
+            const myPayments = globalPayments.filter(p => String(p.typist_id) === String(t.id));
+            const totalPaid = myPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+            let grossAmount = 0;
+            myRecords.forEach(r => {
+                const w = getRecordWordsCount(r);
+                const p = getRecordPageCount(r);
+                if (w > 0 && wordRate > 0) grossAmount += w * wordRate;
+                else if (p > 0 && pageRate > 0) grossAmount += p * pageRate;
+                else if (w > 0) grossAmount += w * wordRate;
+                else grossAmount += p * pageRate;
+            });
+            const netPayable = grossAmount - totalPaid;
+
+            const checkboxHtml = netPayable > 0 
+                ? `<input type="checkbox" value="${t.id}" data-amount="${netPayable}" data-name="${getTypistName(t)}" onchange="updateBulkSettleButton()" class="payroll-checkbox rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer">`
+                : `<input type="checkbox" disabled class="opacity-20 rounded w-4 h-4 cursor-not-allowed">`;
+
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+            tr.innerHTML = `
+                <td class="px-3 py-3 text-center">${checkboxHtml}</td>
+                <td class="px-4 py-3 font-bold text-slate-800">${getTypistName(t)}</td>
+                <td class="px-4 py-3 text-xs font-mono"><div>شبا: ${t.sheba_number || t.iban || '---'}</div><div class="text-slate-400 mt-1">کدملی: ${getTypistNationalId(t)}</div></td>
+                <td class="px-4 py-3 font-semibold text-indigo-600 text-xs">${formatNumber(totalWords)} کلمه <span class="text-slate-500 font-normal">(${formatNumber(totalPages)} صفحه)</span></td>
+                <td class="px-4 py-3 text-xs font-mono">${formatNumber(wordRate)} / ${formatNumber(pageRate)}</td>
+                <td class="px-4 py-3 font-semibold text-emerald-700 text-xs">${formatNumber(grossAmount)} ریال</td>
+                <td class="px-4 py-3 font-semibold text-rose-600 text-xs">${formatNumber(totalPaid)} ریال</td>
+                <td class="px-4 py-3 font-black text-indigo-700 text-sm">${formatNumber(netPayable)} ریال</td>
+                <td class="px-4 py-3 text-center">
+                    <button onclick="settleTypistPayroll('${t.id}', ${netPayable})" class="bg-indigo-100 text-indigo-800 hover:bg-indigo-200 text-xs px-3 py-1.5 rounded-lg font-bold transition">ثبت تسویه</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        updateBulkSettleButton();
+    }
+
+    function toggleAllPayrollCheckboxes(masterCb) {
+        const checkboxes = document.querySelectorAll('.payroll-checkbox:not(:disabled)');
+        checkboxes.forEach(cb => cb.checked = masterCb.checked);
+        updateBulkSettleButton();
+    }
+
+    function updateBulkSettleButton() {
+        const checkedboxes = document.querySelectorAll('.payroll-checkbox:checked');
+        const btnText = document.getElementById('bulkSettleBtnText');
+        if (!btnText) return;
+
+        let totalAmount = 0;
+        checkedboxes.forEach(cb => {
+            totalAmount += Number(cb.getAttribute('data-amount') || 0);
+        });
+
+        if (checkedboxes.length > 0) {
+            btnText.textContent = `تسویه گروهی (${formatNumber(checkedboxes.length)} نفر - مجموع: ${formatNumber(totalAmount)} ریال)`;
+        } else {
+            btnText.textContent = `تسویه گروهی افراد انتخاب‌شده`;
+        }
+    }
+
+    async function bulkSettlePayroll() {
+        const checkedboxes = document.querySelectorAll('.payroll-checkbox:checked');
+        if (checkedboxes.length === 0) {
+            showAlert('لطفا حداقل یک مقرر دارای مانده حساب را جهت تسویه انتخاب کنید.', true);
+            return;
+        }
+
+        let totalAmount = 0;
+        const paymentsToInsert = [];
+        const nowIso = new Date().toISOString();
+
+        checkedboxes.forEach(cb => {
+            const amount = Number(cb.getAttribute('data-amount') || 0);
+            totalAmount += amount;
+            paymentsToInsert.push({
+                typist_id: cb.value,
+                amount: amount,
+                created_at: nowIso
+            });
+        });
+
+        if (!confirm(`آیا از تسویه گروهی ${checkedboxes.length} نفر به مبلغ کل ${formatNumber(totalAmount)} ریال مطمئن هستید؟`)) return;
+
+        try {
+            const client = getDb();
+            const { error } = await client.from('payments').insert(paymentsToInsert);
+            if (error) throw error;
+
+            showAlert(`تسویه گروهی برای ${checkedboxes.length} مقرر به مبلغ ${formatNumber(totalAmount)} ریال با موفقیت ثبت شد.`);
+            await fetchAllDataForAdmin();
+        } catch (err) {
+            console.error('Bulk Settlement Error:', err);
+            showAlert('خطا در ثبت تسویه گروهی.', true);
+        }
+    }
+
+    // ----------------------------------------------------------------------
+    // ALL RECORDS TABLE & EXCEL EXPORT (خروجی اکسل گزارشات)
+    // ----------------------------------------------------------------------
+    function renderAdminAllRecordsTable(filterTypistId = null) {
+        currentRecordFilterTypistId = filterTypistId;
+        const tbody = document.getElementById('adminAllRecordsTable');
+        tbody.innerHTML = '';
+
+        let recordsToShow = globalReports;
+        if (filterTypistId) {
+            recordsToShow = globalReports.filter(r => isRecordBelongsToTypist(r, filterTypistId));
+        }
+
+        if (recordsToShow.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center text-slate-400">هیچ کارکردی ثبت نشده است.</td></tr>`;
+            return;
+        }
+
+        recordsToShow.forEach(r => {
+            const typist = globalTypists.find(t => isRecordBelongsToTypist(r, t.id));
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+            tr.innerHTML = `
+                <td class="px-4 py-3 text-xs font-mono dir-ltr text-right">${formatJalali(getRecordDate(r))}</td>
+                <td class="px-4 py-3 font-medium text-slate-800">${typist ? getTypistName(typist) : 'مقرر حذف شده'}</td>
+                <td class="px-4 py-3 text-xs text-indigo-700">${r.title || (typist ? typist.title : '---')}</td>
+                <td class="px-4 py-3 font-bold text-indigo-600 text-xs">${formatNumber(getRecordWordsCount(r))} کلمه</td>
+                <td class="px-4 py-3 text-xs">${formatNumber(getRecordPageCount(r))} صفحه</td>
+                <td class="px-4 py-3 text-center">
+                    <button onclick="deleteWorkRecord('${r.id}')" class="p-1 text-red-600 hover:bg-red-50 rounded"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function exportAllRecordsExcel() {
+        let recordsToExport = globalReports;
+        let fileNamePrefix = "All_Work_Records";
+
+        if (currentRecordFilterTypistId) {
+            recordsToExport = globalReports.filter(r => isRecordBelongsToTypist(r, currentRecordFilterTypistId));
+            const t = globalTypists.find(item => String(item.id) === String(currentRecordFilterTypistId));
+            if (t) fileNamePrefix = `Records_${getTypistName(t).replace(/\s+/g, '_')}`;
+        }
+
+        if (!recordsToExport || recordsToExport.length === 0) {
+            showAlert('هیچ گزارش کارکردی برای خروجی موجود نیست.', true);
+            return;
+        }
+
+        const headers = ['ردیف', 'تاریخ ثبت (شمسی)', 'نام مقرر', 'کد ملی', 'موضوع پروژه', 'تعداد کلمات', 'تعداد صفحات'];
+        const rows = [headers];
+
+        recordsToExport.forEach((r, index) => {
+            const typist = globalTypists.find(t => isRecordBelongsToTypist(r, t.id));
+            rows.push([
+                index + 1,
+                formatJalali(getRecordDate(r)),
+                typist ? getTypistName(typist) : 'مقرر حذف شده',
+                typist ? String(getTypistNationalId(typist)) : '---',
+                r.title || (typist ? typist.title : 'کارکرد عادی'),
+                getRecordWordsCount(r),
+                getRecordPageCount(r)
+            ]);
+        });
+
+        if (typeof XLSX !== 'undefined') {
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+                const cellRef = XLSX.utils.encode_cell({ r: R, c: 3 }); // National Code Column
+                if (ws[cellRef]) { ws[cellRef].t = 's'; ws[cellRef].z = '@'; }
+            }
+            if (!ws['!views']) ws['!views'] = [];
+            ws['!views'].push({ RTL: true });
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "گزارشات کارکرد");
+            const dateStr = getTodayJalaliString().replace(/\//g, '-');
+            XLSX.writeFile(wb, `${fileNamePrefix}_${dateStr}.xlsx`);
+        } else {
+            showAlert('کتابخانه خروجی اکسل بارگیری نشده است.', true);
+        }
+    }
+
+    // ----------------------------------------------------------------------
+    // AGGREGATED REPORTS TABLE RENDERING & FILTERING
     // ----------------------------------------------------------------------
     function renderAdminAggregatedTable(typistsList = globalTypists) {
         const tbody = document.getElementById('adminAggregatedTable');
@@ -1015,7 +1234,7 @@
     function resetRecordsFilter() {
         const badge = document.getElementById('recordsFilterBadge');
         if (badge) badge.classList.add('hidden');
-        renderAdminAllRecordsTable();
+        renderAdminAllRecordsTable(null);
     }
 
     function exportAggregatedExcel() {
@@ -1070,81 +1289,9 @@
         renderAdminTypistsTable(filtered);
     }
 
-    function renderAdminPayrollTable() {
-        const tbody = document.getElementById('adminPayrollTable');
-        tbody.innerHTML = '';
-        globalTypists.forEach(t => {
-            const myRecords = globalReports.filter(r => isRecordBelongsToTypist(r, t.id));
-            const totalWords = myRecords.reduce((sum, r) => sum + getRecordWordsCount(r), 0);
-            const totalPages = myRecords.reduce((sum, r) => sum + getRecordPageCount(r), 0);
-            const wordRate = Number(t.rate_per_word !== undefined && t.rate_per_word !== null ? t.rate_per_word : (t.default_word_rate || 15));
-            const pageRate = Number(t.page_rate !== undefined && t.page_rate !== null ? t.page_rate : (t.default_page_rate || 0));
-            const myPayments = globalPayments.filter(p => String(p.typist_id) === String(t.id));
-            const totalPaid = myPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-
-            let grossAmount = 0;
-            myRecords.forEach(r => {
-                const w = getRecordWordsCount(r);
-                const p = getRecordPageCount(r);
-                if (w > 0 && wordRate > 0) grossAmount += w * wordRate;
-                else if (p > 0 && pageRate > 0) grossAmount += p * pageRate;
-                else if (w > 0) grossAmount += w * wordRate;
-                else grossAmount += p * pageRate;
-            });
-            const netPayable = grossAmount - totalPaid;
-
-            const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
-            tr.innerHTML = `
-                <td class="px-4 py-3 font-bold text-slate-800">${getTypistName(t)}</td>
-                <td class="px-4 py-3 text-xs font-mono"><div>شبا: ${t.sheba_number || t.iban || '---'}</div><div class="text-slate-400 mt-1">کدملی: ${getTypistNationalId(t)}</div></td>
-                <td class="px-4 py-3 font-semibold text-indigo-600 text-xs">${formatNumber(totalWords)} کلمه <span class="text-slate-500 font-normal">(${formatNumber(totalPages)} صفحه)</span></td>
-                <td class="px-4 py-3 text-xs font-mono">${formatNumber(wordRate)} / ${formatNumber(pageRate)}</td>
-                <td class="px-4 py-3 font-semibold text-emerald-700 text-xs">${formatNumber(grossAmount)} ریال</td>
-                <td class="px-4 py-3 font-semibold text-rose-600 text-xs">${formatNumber(totalPaid)} ریال</td>
-                <td class="px-4 py-3 font-black text-indigo-700 text-sm">${formatNumber(netPayable)} ریال</td>
-                <td class="px-4 py-3 text-center">
-                    <button onclick="settleTypistPayroll('${t.id}', ${netPayable})" class="bg-indigo-100 text-indigo-800 hover:bg-indigo-200 text-xs px-3 py-1.5 rounded-lg font-bold transition">ثبت تسویه</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    }
-
-    function renderAdminAllRecordsTable(filterTypistId = null) {
-        const tbody = document.getElementById('adminAllRecordsTable');
-        tbody.innerHTML = '';
-
-        let recordsToShow = globalReports;
-        if (filterTypistId) {
-            recordsToShow = globalReports.filter(r => isRecordBelongsToTypist(r, filterTypistId));
-        }
-
-        if (recordsToShow.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center text-slate-400">هیچ کارکردی ثبت نشده است.</td></tr>`;
-            return;
-        }
-
-        recordsToShow.forEach(r => {
-            const typist = globalTypists.find(t => isRecordBelongsToTypist(r, t.id));
-            const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
-            tr.innerHTML = `
-                <td class="px-4 py-3 text-xs font-mono dir-ltr text-right">${formatJalali(getRecordDate(r))}</td>
-                <td class="px-4 py-3 font-medium text-slate-800">${typist ? getTypistName(typist) : 'مقرر حذف شده'}</td>
-                <td class="px-4 py-3 text-xs text-indigo-700">${r.title || (typist ? typist.title : '---')}</td>
-                <td class="px-4 py-3 font-bold text-indigo-600 text-xs">${formatNumber(getRecordWordsCount(r))} کلمه</td>
-                <td class="px-4 py-3 text-xs">${formatNumber(getRecordPageCount(r))} صفحه</td>
-                <td class="px-4 py-3 text-center">
-                    <button onclick="deleteWorkRecord('${r.id}')" class="p-1 text-red-600 hover:bg-red-50 rounded"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    }
-
+    // TAB SWITCHER (ترتیب جدید)
     function switchAdminTab(tabName) {
-        ['typists', 'aggregated', 'payroll', 'records'].forEach(t => {
+        ['typists', 'payroll', 'records', 'aggregated'].forEach(t => {
             const btn = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}Btn`);
             const content = document.getElementById(`admin${t.charAt(0).toUpperCase() + t.slice(1)}Tab`);
             if (t === tabName) {
